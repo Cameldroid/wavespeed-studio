@@ -1,0 +1,2062 @@
+{
+  "bytedance/seedance-2.5/image-to-video": {
+    "base_price_micro": 360000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794582442440
+  },
+  "bytedance/seedance-2.5/image-to-video-turbo": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525133927
+  },
+  "bytedance/seedance-2.5-flash/image-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"720p\" ? 1 : 0.5) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134029
+  },
+  "bytedance/seedance-2.0/image-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794582463279
+  },
+  "bytedance/seedance-2.0-mini/image-to-video": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": 0.5 * (base_price * (resolution = \"4k\" ? 10 : (resolution = \"1080p\" ? 5 : (resolution = \"720p\" ? 2 : 1))) * duration)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535423435
+  },
+  "bytedance/seedance-v1-pro-fast/image-to-video": {
+    "base_price_micro": 12000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (resolution = \"480p\") ? (base_price * duration) : (resolution = \"720p\") ? (base_price * duration * 2) : (base_price * duration * 4)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525133947
+  },
+  "minimax/h3/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"768p\" ? 1 : 1.4)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134027
+  },
+  "minimax/h3-highspeed/image-to-video": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134032
+  },
+  "minimax/h3-lite/image-to-video": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"480p\" ? 0.625 : 1) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525133985
+  },
+  "minimax/hailuo-2.3/fast": {
+    "base_price_micro": 190000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 320000: 190000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525133991
+  },
+  "minimax/hailuo-2.3/i2v-standard": {
+    "base_price_micro": 280000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 560000: 280000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134136
+  },
+  "minimax/hailuo-02/fast": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 150000: 100000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134146
+  },
+  "alibaba/wan-3.0/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794610204664
+  },
+  "alibaba/wan-3.0-prime/image-to-video": {
+    "base_price_micro": 150000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134186
+  },
+  "alibaba/wan-2.7/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"1080p\") ? 1.5 : 1) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794588587210
+  },
+  "alibaba/wan-2.7/image-to-video-pro": {
+    "base_price_micro": 140000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ((resolution = \"4k\") ? 180000 : (resolution = \"2k\") ? 160000 : base_price) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134170
+  },
+  "alibaba/wan-2.6/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"1080p\") ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134184
+  },
+  "alibaba/wan-2.5/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"720p\") ? 1 : (resolution = \"1080p\") ? 1.5 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134175
+  },
+  "kwaivgi/kling-v4.0/image-to-video": {
+    "base_price_micro": 157000,
+    "discount_rate": 85,
+    "formula": "{\"total_price\": (resolution = \"1080p\" ? 235000 : base_price) * ($exists(duration) ? duration : 5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134182
+  },
+  "kwaivgi/kling-v4.0-flash/image-to-video": {
+    "base_price_micro": 94000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * ($exists(duration) ? duration : 5)}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134190
+  },
+  "kwaivgi/kling-v3.0-std/image-to-video": {
+    "base_price_micro": 84000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (sound ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "sound"
+    ],
+    "fetched_at": 1794525134268
+  },
+  "kwaivgi/kling-v2.6-std/image-to-video": {
+    "base_price_micro": 42000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134259
+  },
+  "google/gemini-omni-1.2-flash/image-to-video": {
+    "base_price_micro": 70000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration ? duration : 8) * (resolution = \"360p\" ? 23000 : resolution = \"1080p\" ? 105000 : resolution = \"4k\" ? 210000 : base_price)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134302
+  },
+  "vidu/q4/image-to-video": {
+    "base_price_micro": 95000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (base_price * 10 / 19) * duration * ((resolution=\"720p\") ? 1.9 : (resolution=\"1080p\") ? 2.4 : (resolution=\"2k\") ? 3.8 : (resolution=\"4k\") ? 7.8 : 0.9 ) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134307
+  },
+  "vidu/q3/image-to-video": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":duration*((resolution=\"540p\")?70000:(resolution=\"720p\")?base_price:(resolution=\"1080p\")?160000:70000) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134299
+  },
+  "vidu/q2-pro/image-to-video-fast": {
+    "base_price_micro": 16000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($d := duration; resolution = \"720p\" ? ($d >= 1 and $d <= 8 ? 30000 + 10000 * $d : 0) : resolution = \"1080p\" ? ($d >= 1 and $d <= 8 ? 60000 + 20000 * $d : 0) : 80000)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134293
+  },
+  "x-ai/grok-imagine-video-v1.5/image-to-video": {
+    "base_price_micro": 140000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (resolution = \"480p\" ? 80000 : resolution = \"720p\" ? base_price : 250000) * $min([duration, 15]) + 10000}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134287
+  },
+  "x-ai/grok-imagine-video/image-to-video": {
+    "base_price_micro": 50000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134309
+  },
+  "wavespeed-ai/open-video/image-to-video": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": $min([duration, 20]) * base_price * (resolution = \"1080p\" ? 3 : resolution = \"720p\" ? 2 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134312
+  },
+  "black-forest-labs/flux-3/image-to-video": {
+    "base_price_micro": 170000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([$ceil($number(duration)), 20]) * ($lowercase($string(resolution)) = \"1080p\" ? 29 / 17 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134304
+  },
+  "bytedance/seedance-2.5/text-to-video": {
+    "base_price_micro": 360000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($reference_duration := $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]); 110000 * $scale * ($max([2, $reference_duration]) + (duration ? duration : $max([4, $reference_duration])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134413
+  },
+  "bytedance/seedance-2.5-flash/text-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($scale := (resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($reference_duration := $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]); 75000 * $scale * ($max([2, $reference_duration]) + (duration ? duration : $max([4, $reference_duration])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134428
+  },
+  "bytedance/seedance-2.5/video-edit": {
+    "base_price_micro": 220000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 5 : resolution = \"1080p\" ? 2.5 : resolution = \"720p\" ? 1 : 0.5); $source := $min([$ceil(get_duration(video, min=4, max=30, total=30)), 30]); base_price * $scale * ($max([4, $source]) * 2))}",
+    "price_inputs": [
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134431
+  },
+  "alibaba/wan-3.0/text-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134446
+  },
+  "alibaba/wan-3.0-prime/text-to-video": {
+    "base_price_micro": 150000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134438
+  },
+  "alibaba/wan-2.5/text-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((size = \"1280*720\" or size = \"720*1280\") ? 1 : (size = \"1920*1080\" or size = \"1080*1920\") ? 1.5 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "size"
+    ],
+    "fetched_at": 1794525134419
+  },
+  "kwaivgi/kling-v4.0/text-to-video": {
+    "base_price_micro": 157000,
+    "discount_rate": 85,
+    "formula": "{\"total_price\": (resolution = \"1080p\" ? 235000 : base_price) * ($exists(duration) ? duration : 5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134423
+  },
+  "google/gemini-omni-1.2-flash/text-to-video": {
+    "base_price_micro": 70000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration ? duration : 8) * (resolution = \"360p\" ? 23000 : resolution = \"1080p\" ? 105000 : resolution = \"4k\" ? 210000 : base_price)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134442
+  },
+  "google/gemini-omni-1.2-flash/video-edit": {
+    "base_price_micro": 84000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video)), 10]); $output := $max([3, $source]); 20000 * $source + $output * (resolution = \"360p\" ? 28000 : resolution = \"1080p\" ? 126000 : resolution = \"4k\" ? 252000 : base_price))}",
+    "price_inputs": [
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134444
+  },
+  "bytedance/seedream-v5.5/edit": {
+    "base_price_micro": 28000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": (resolution = \"2k\" ? 35000 : 20000) + 8000 * $count(images)}",
+    "price_inputs": [
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794651324874
+  },
+  "bytedance/seedream-v5.0-pro/edit": {
+    "base_price_micro": 45000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (resolution = \"2k\" ? 90000 : 45000) + 3000 * $max([0, $count(images) - 1])}",
+    "price_inputs": [
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794525134573
+  },
+  "bytedance/seedream-v5.0-flash/edit": {
+    "base_price_micro": 27000,
+    "discount_rate": 90,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134555
+  },
+  "bytedance/seedream-v4.5/edit": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134523
+  },
+  "minimax/h3-image/edit": {
+    "base_price_micro": 38000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (resolution = \"4k\" ? 90000 : 30000) + 8000 * $count(images)}",
+    "price_inputs": [
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794584956939
+  },
+  "openai/gpt-image-2.6-flare/edit": {
+    "base_price_micro": 65000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 100000 : (resolution = \"2k\" ? 60000 : 30000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 210000 : (resolution = \"2k\" ? 120000 : 60000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 380000 : (resolution = \"2k\" ? 210000 : 110000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 850000 : (resolution = \"2k\" ? 470000 : 250000)) : (resolution = \"4k\" ? 180000 : (resolution = \"2k\" ? 100000 : 50000)))))) + ($count(images) * 15000) + ((($exists(mask_image) and mask_image != \"\") or ($exists(markup_image) and markup_image != \"\")) ? 15000 : 0)}",
+    "price_inputs": [
+      "images",
+      "markup_image",
+      "mask_image",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525134552
+  },
+  "wavespeed-ai/z-image-turbo/image-to-image": {
+    "base_price_micro": 5000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794604553307
+  },
+  "wavespeed-ai/flux-schnell": {
+    "base_price_micro": 3000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * num_images}",
+    "price_inputs": [
+      "num_images",
+      "size"
+    ],
+    "fetched_at": 1794525134558
+  },
+  "bytedance/seedream-v5.5": {
+    "base_price_micro": 20000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": (resolution = \"2k\" ? 35000 : 20000)}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794651229148
+  },
+  "bytedance/seedream-v5.0-pro": {
+    "base_price_micro": 45000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (resolution = \"2k\" ? 90000 : 45000)}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525134570
+  },
+  "bytedance/seedream-v5.0-flash": {
+    "base_price_micro": 27000,
+    "discount_rate": 90,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134545
+  },
+  "minimax/h3-image/text-to-image": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (resolution = \"4k\" ? 90000 : 30000)}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525134643
+  },
+  "openai/gpt-image-2.6-flare/text-to-image": {
+    "base_price_micro": 50000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 100000 : (resolution = \"2k\" ? 60000 : 30000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 210000 : (resolution = \"2k\" ? 120000 : 60000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 380000 : (resolution = \"2k\" ? 210000 : 110000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 850000 : (resolution = \"2k\" ? 470000 : 250000)) : (resolution = \"4k\" ? 180000 : (resolution = \"2k\" ? 100000 : 50000)))))) + (output_format = \"svg\" ? 20000 : 0)}",
+    "price_inputs": [
+      "output_format",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525134674
+  },
+  "wavespeed-ai/z-image/turbo": {
+    "base_price_micro": 5000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134647
+  },
+  "google/nano-banana-2.1/text-to-image": {
+    "base_price_micro": 40000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (resolution = \"4k\" ? 135000 : (resolution = \"2k\" ? 60000 : base_price)) + (enable_web_search ? 14000 : 0) + (enable_image_search ? 14000 : 0)}",
+    "price_inputs": [
+      "enable_image_search",
+      "enable_web_search",
+      "resolution"
+    ],
+    "fetched_at": 1794525134695
+  },
+  "google/veo3.1/image-to-video": {
+    "base_price_micro": 400000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 8]) * (resolution = \"4k\" ? (generate_audio ? 1.5 : 1) : (generate_audio ? 1 : 0.5))}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525134683
+  },
+  "google/veo3.1-fast/image-to-video": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 8]) * (resolution = \"4k\" ? (generate_audio ? 2 : 5 / 3) : (generate_audio ? 1 : 2 / 3))}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525134669
+  },
+  "google/veo3.1-lite/image-to-video": {
+    "base_price_micro": 50000,
+    "discount_rate": 100,
+    "formula": "{ \"total_price\": base_price * ((resolution = \"1080p\"? 1.6 : 1) * duration) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134680
+  },
+  "google/veo3.1/text-to-video": {
+    "base_price_micro": 400000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 8]) * (resolution = \"4k\" ? (generate_audio ? 1.5 : 1) : (generate_audio ? 1 : 0.5))}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525134688
+  },
+  "bytedance/seedance-2.0-mini/image-to-video-turbo": {
+    "base_price_micro": 80000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134692
+  },
+  "bytedance/seedance-2.0-mini/text-to-video": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": 0.5 * ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 75000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : base_price * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134700
+  },
+  "recraft-ai/recraft-v4.1-flash/text-to-image": {
+    "base_price_micro": 8000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794577527518
+  },
+  "recraft-ai/recraft-v4.1-pro/text-to-image": {
+    "base_price_micro": 250000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134804
+  },
+  "recraft-ai/recraft-v4.1/text-to-image": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134872
+  },
+  "minimax/hailuo-2.3/i2v-pro": {
+    "base_price_micro": 490000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134801
+  },
+  "minimax/hailuo-2.3/t2v-standard": {
+    "base_price_micro": 280000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 560000 : 280000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525134842
+  },
+  "vidu/q3-turbo/image-to-video": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":duration*((resolution=\"540p\")?40000:(resolution=\"720p\")?60000:(resolution=\"1080p\")?80000:base_price)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134808
+  },
+  "vidu/q3-pro/image-to-video": {
+    "base_price_micro": 125000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution=\"720p\") ? 1 : (resolution=\"1080p\") ? 1.2 : 0.4 ) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525134837
+  },
+  "bytedance/seedream-v5.0-lite": {
+    "base_price_micro": 35000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525134861
+  },
+  "openai/gpt-image-2.6-sunburst/text-to-image": {
+    "base_price_micro": 50000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 100000 : (resolution = \"2k\" ? 60000 : 30000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 210000 : (resolution = \"2k\" ? 120000 : 60000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 380000 : (resolution = \"2k\" ? 210000 : 110000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 850000 : (resolution = \"2k\" ? 470000 : 250000)) : (resolution = \"4k\" ? 180000 : (resolution = \"2k\" ? 100000 : 50000)))))) + (output_format = \"svg\" ? 20000 : 0)}",
+    "price_inputs": [
+      "output_format",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525134864
+  },
+  "openai/gpt-image-2.6-sunburst/edit": {
+    "base_price_micro": 65000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 100000 : (resolution = \"2k\" ? 60000 : 30000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 210000 : (resolution = \"2k\" ? 120000 : 60000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 380000 : (resolution = \"2k\" ? 210000 : 110000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 850000 : (resolution = \"2k\" ? 470000 : 250000)) : (resolution = \"4k\" ? 180000 : (resolution = \"2k\" ? 100000 : 50000)))))) + ($count(images) * 15000) + ((($exists(mask_image) and mask_image != \"\") or ($exists(markup_image) and markup_image != \"\")) ? 15000 : 0)}",
+    "price_inputs": [
+      "images",
+      "markup_image",
+      "mask_image",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525134868
+  },
+  "google/nano-banana-2.1/edit": {
+    "base_price_micro": 40000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (resolution = \"4k\" ? 135000 : (resolution = \"2k\" ? 60000 : base_price)) + (enable_web_search ? 14000 : 0) + (enable_image_search ? 14000 : 0) + 2000 * $count(images)}",
+    "price_inputs": [
+      "enable_image_search",
+      "enable_web_search",
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794525134932
+  },
+  "bytedance/seedance-2.5/talking-avatar": {
+    "base_price_micro": 220000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": $max([4, $min([$ceil(get_duration(audio)), 120])]) * base_price * (resolution = \"480p\" ? 1 : 2)}",
+    "price_inputs": [
+      "audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525134934
+  },
+  "bytedance/seedance-2.5/motion-control": {
+    "base_price_micro": 1100000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $source := $min([$ceil(get_duration(video, min=4, max=30, total=30)), 30]); 110000 * $scale * ($max([4, $source]) * 2))}",
+    "price_inputs": [
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134936
+  },
+  "bytedance/seedance-2.5/video-edit-turbo": {
+    "base_price_micro": 240000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=4, max=30, total=30)), 30]); $output := $max([4, $source]); ((base_price - 20000) / 2) * ($max([4, $source]) + $output) + (resolution = \"1080p\" ? 40000 : 20000) * $output)}",
+    "price_inputs": [
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134969
+  },
+  "bytedance/seedance-2.5/video-extend": {
+    "base_price_micro": 660000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (base_price / 6) * (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1) * ($max([2, $min([$ceil(get_duration(video, min=2, max=30, total=30)), 30])]) + (duration ? duration : 5))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134967
+  },
+  "bytedance/seedance-2.5/reference-to-video": {
+    "base_price_micro": 360000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($reference_duration := $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]); 110000 * $scale * ($max([2, $reference_duration]) + (duration ? duration : $max([4, $reference_duration])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134957
+  },
+  "alibaba/wan-3.0-prime/reference-to-video": {
+    "base_price_micro": 450000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": (base_price / 3) * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * ($min([duration, 30]) + $ceil($min([get_duration(reference_videos, min=1, max=15, total=15), 15])))}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134965
+  },
+  "wavespeed-ai/openjutsu/object-swap": {
+    "base_price_micro": 100000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": ($b := $max([3, $min([$ceil(get_duration(video)), 15])]); base_price * $b * 2 * (resolution = \"1080p\" ? 2 : resolution = \"540p\" ? 0.85 : resolution = \"480p\" ? 0.75 : 1) + (image ? 20000 : 0))}",
+    "price_inputs": [
+      "image",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134972
+  },
+  "alibaba/wan-3.0/reference-to-video": {
+    "base_price_micro": 300000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": (base_price / 3) * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * ($min([duration, 30]) + $ceil($min([get_duration(reference_videos, min=1, max=15, total=15), 15])))}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525134956
+  },
+  "wavespeed-ai/openjutsu/character-swap": {
+    "base_price_micro": 100000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": ($b := $max([3, $min([$ceil(get_duration(video)), 15])]); base_price * $b * 2 * (resolution = \"1080p\" ? 2 : resolution = \"540p\" ? 0.85 : resolution = \"480p\" ? 0.75 : 1) + 20000 * $count(images))}",
+    "price_inputs": [
+      "images",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525134989
+  },
+  "bytedance/seedance-2.5/text-to-video-turbo": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 110000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135076
+  },
+  "bytedance/seedance-2.5/reference-to-video-turbo": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 110000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135059
+  },
+  "kwaivgi/kling-v4.0/reference-to-video": {
+    "base_price_micro": 157000,
+    "discount_rate": 85,
+    "formula": "{\"total_price\": ($hd := resolution = \"1080p\"; $d := $exists(duration) ? duration : 5; $v := $exists(videos) ? $ceil($min([get_duration(videos, min=3, max=30, total=30), 30])) : 0; $v > 0 ? ($hd ? 141000 : 94000) * ($d + $max([$d, $v])) : ($hd ? 235000 : base_price) * $d)}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "videos"
+    ],
+    "fetched_at": 1794525135086
+  },
+  "kwaivgi/kling-v4.0/video-edit": {
+    "base_price_micro": 188000,
+    "discount_rate": 85,
+    "formula": "{\"total_price\": ($hd := resolution = \"1080p\"; $v := $ceil($min([get_duration(video, min=3, max=30, total=30), 30])); $d := $exists(duration) ? duration : $v; ($hd ? 1.5 : 1) * (base_price / 2) * ($d + $max([$d, $v])))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135053
+  },
+  "kwaivgi/kling-v4.0/video-extend": {
+    "base_price_micro": 157000,
+    "discount_rate": 85,
+    "formula": "{\"total_price\": (resolution = \"1080p\" ? 235000 : base_price) * ($exists(duration) ? duration : 5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135079
+  },
+  "wavespeed-ai/minimax-h3/image-to-video": {
+    "base_price_micro": 80000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794651319501
+  },
+  "wavespeed-ai/minimax-h3/reference-to-video": {
+    "base_price_micro": 300000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": (base_price / 3) * ($min([duration, 15]) + $ceil($min([get_duration(reference_videos), 15]))) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5) + 20000 * $count(reference_images) + 20000 * $count(reference_audios)}",
+    "price_inputs": [
+      "duration",
+      "reference_audios",
+      "reference_images",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794588363125
+  },
+  "wavespeed-ai/minimax-h3/text-to-video": {
+    "base_price_micro": 80000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794651320335
+  },
+  "wavespeed-ai/minimax-h3/video-edit": {
+    "base_price_micro": 100000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": ($src := $ceil($min([get_duration(video), 15])); base_price * ($min([(duration ? duration : $max([$src, 3])), 15]) + $src) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5) + 20000 * $count(reference_images) + 20000 * $count(reference_audios))}",
+    "price_inputs": [
+      "duration",
+      "reference_audios",
+      "reference_images",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135083
+  },
+  "wavespeed-ai/minimax-h3/video-extend": {
+    "base_price_micro": 80000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135097
+  },
+  "wavespeed-ai/minimax-h3-singularity/image-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135244
+  },
+  "wavespeed-ai/minimax-h3-singularity/reference-to-video": {
+    "base_price_micro": 300000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": (base_price / 3) * ($min([duration, 15]) + $ceil($min([get_duration(reference_videos), 15]))) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5) + 20000 * $count(reference_images) + 20000 * $count(reference_audios)}",
+    "price_inputs": [
+      "duration",
+      "reference_audios",
+      "reference_images",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135212
+  },
+  "wavespeed-ai/minimax-h3/controlnet-union": {
+    "base_price_micro": 200000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $max([$ceil($min([get_duration(video), 15])), 3]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5) + 20000 * $count(reference_images) + 20000 * $count(reference_audios)}",
+    "price_inputs": [
+      "reference_audios",
+      "reference_images",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135219
+  },
+  "bytedance/seedance-2.0-mini/video-edit": {
+    "base_price_micro": 75000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 5 : resolution = \"1080p\" ? 2.5 : resolution = \"720p\" ? 1 : 0.5); $source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); base_price * $scale * ($max([2, $source]) + (duration ? duration : $max([4, $source]))))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135241
+  },
+  "bytedance/seedance-2.0-mini/video-edit-turbo": {
+    "base_price_micro": 95000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); $output := (duration ? duration : $max([4, $source])); ((base_price - 20000) / 2) * ($max([2, $source]) + $output) + (resolution = \"1080p\" ? 40000 : 20000) * $output)}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135238
+  },
+  "openai/gpt-image-2/edit": {
+    "base_price_micro": 70000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 40000 : (resolution = \"2k\" ? 30000 : 20000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 730000 : (resolution = \"2k\" ? 410000 : 230000)) : (resolution = \"4k\" ? 190000 : (resolution = \"2k\" ? 110000 : 70000)))) + (($count(images) - 1) * 12000)}",
+    "price_inputs": [
+      "images",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525135224
+  },
+  "bytedance/seedream-v5.5/layer-decomposition": {
+    "base_price_micro": 600000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": (max_images ? max_images : 30) * (resolution = \"2k\" ? 35000 : 20000)}",
+    "price_inputs": [
+      "max_images",
+      "resolution"
+    ],
+    "fetched_at": 1794525135231
+  },
+  "bytedance/seedance-2.0-mini/reference-to-video": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": 0.5 * ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 75000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : base_price * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135227
+  },
+  "openai/gpt-image-2/text-to-image": {
+    "base_price_micro": 60000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 30000 : (resolution = \"2k\" ? 20000 : 10000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 720000 : (resolution = \"2k\" ? 400000 : 220000)) : (resolution = \"4k\" ? 180000 : (resolution = \"2k\" ? 100000 : 60000))))}",
+    "price_inputs": [
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525135217
+  },
+  "bytedance/seedance-2.0/video-edit": {
+    "base_price_micro": 150000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 5 : resolution = \"1080p\" ? 2.5 : resolution = \"720p\" ? 1 : 0.5); $source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); base_price * $scale * ($max([2, $source]) + (duration ? duration : $max([4, $source]))))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135247
+  },
+  "bytedance/seedance-2.0/video-edit-turbo": {
+    "base_price_micro": 170000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); $output := (duration ? duration : $max([4, $source])); ((base_price - 20000) / 2) * ($max([2, $source]) + $output) + (resolution = \"1080p\" ? 40000 : 20000) * $output)}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135303
+  },
+  "bytedance/seedance-2.0-fast/video-edit-turbo": {
+    "base_price_micro": 150000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); $output := (duration ? duration : $max([4, $source])); ((base_price - 20000) / 2) * ($max([2, $source]) + $output) + (resolution = \"1080p\" ? 40000 : 20000) * $output)}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135312
+  },
+  "bytedance/seedance-2.0-fast/video-edit": {
+    "base_price_micro": 130000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 5 : resolution = \"1080p\" ? 2.5 : resolution = \"720p\" ? 1 : 0.5); $source := $min([$ceil(get_duration(video, min=2, max=15, total=15)), 15]); base_price * $scale * ($max([2, $source]) + (duration ? duration : $max([4, $source]))))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525135322
+  },
+  "bytedance/seedance-2.0/video-extend": {
+    "base_price_micro": 240000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135309
+  },
+  "bytedance/seedance-2.0-mini/video-extend": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": 0.5 * (base_price * (resolution = \"4k\" ? 10 : (resolution = \"1080p\" ? 5 : (resolution = \"720p\" ? 2 : 1))) * duration)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135333
+  },
+  "bytedance/seedance-2.0-fast/video-extend": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135324
+  },
+  "bytedance/seedance-2.0/text-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 75000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135356
+  },
+  "bytedance/seedance-2.0/reference-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 75000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135317
+  },
+  "bytedance/seedance-2.0-fast/image-to-video": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135319
+  },
+  "bytedance/seedance-2.0-fast/text-to-video": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 65000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135335
+  },
+  "bytedance/seedance-2.0-fast/reference-to-video": {
+    "base_price_micro": 200000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($scale := (resolution = \"4k\" ? 10 : resolution = \"1080p\" ? 5 : resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($ref := $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]); 65000 * $scale * ($max([2, $ref]) + (duration ? duration : $max([4, $ref])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135407
+  },
+  "google/nano-banana-pro/edit": {
+    "base_price_micro": 140000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"2k\" ? 1 : (resolution = \"4k\" ? 12/7 : 1))}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525135410
+  },
+  "google/nano-banana-2/edit": {
+    "base_price_micro": 70000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((resolution = \"0.5k\" ? 45000 : base_price * (resolution = \"2k\" ? 1.5 : (resolution = \"4k\" ? 2 : 1))) + (enable_web_search ? 14000 : 0) + (enable_image_search ? 14000 : 0))  }",
+    "price_inputs": [
+      "enable_image_search",
+      "enable_web_search",
+      "resolution"
+    ],
+    "fetched_at": 1794525135445
+  },
+  "bytedance/seedance-2.0/image-to-video-turbo": {
+    "base_price_micro": 140000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135413
+  },
+  "bytedance/seedance-2.0/text-to-video-turbo": {
+    "base_price_micro": 140000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 75000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135450
+  },
+  "bytedance/seedance-2.0-mini/text-to-video-turbo": {
+    "base_price_micro": 80000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 37500 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135429
+  },
+  "bytedance/seedance-2.0/reference-to-video-turbo": {
+    "base_price_micro": 140000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 75000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135454
+  },
+  "bytedance/seedance-2.0-mini/reference-to-video-turbo": {
+    "base_price_micro": 80000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 37500 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135433
+  },
+  "bytedance/seedance-2.0-fast/image-to-video-turbo": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525135437
+  },
+  "bytedance/seedance-2.0-fast/text-to-video-turbo": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 65000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135448
+  },
+  "bytedance/seedance-2.0-fast/reference-to-video-turbo": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ($input := $count(reference_videos) > 0 ? $min([$ceil(get_duration(reference_videos, min=2, max=15, total=15)), 15]) : 0; $upscale := resolution = \"1080p\" ? 40000 : 20000; $count(reference_videos) > 0 ? 65000 * ($input + duration) + $upscale * duration : (base_price + (resolution = \"1080p\" ? 20000 : 0)) * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525135518
+  },
+  "google/nano-banana-pro/text-to-image": {
+    "base_price_micro": 140000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"2k\" ? 1 : (resolution = \"4k\" ? 12/7 : 1))}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525135513
+  },
+  "google/nano-banana-2/text-to-image": {
+    "base_price_micro": 70000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": ((resolution = \"0.5k\" ? 45000 : base_price * (resolution = \"2k\" ? 1.5 : (resolution = \"4k\" ? 2 : 1))) + (enable_web_search ? 14000 : 0) + (enable_image_search ? 14000 : 0)) }",
+    "price_inputs": [
+      "enable_image_search",
+      "enable_web_search",
+      "resolution"
+    ],
+    "fetched_at": 1794525135531
+  },
+  "openai/gpt-image-2.5-sunburst/text-to-image": {
+    "base_price_micro": 24000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 30000 : (resolution = \"2k\" ? 20000 : 10000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 270000 : (resolution = \"2k\" ? 150000 : 90000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 480000 : (resolution = \"2k\" ? 270000 : 160000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 1000000 : (resolution = \"2k\" ? 600000 : 360000)) : (resolution = \"4k\" ? 70000 : (resolution = \"2k\" ? 40000 : 24000))))))}",
+    "price_inputs": [
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525135520
+  },
+  "openai/gpt-image-2.5-sunburst/edit": {
+    "base_price_micro": 39000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 45000 : (resolution = \"2k\" ? 35000 : 25000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 285000 : (resolution = \"2k\" ? 165000 : 105000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 495000 : (resolution = \"2k\" ? 285000 : 175000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 1015000 : (resolution = \"2k\" ? 615000 : 375000)) : (resolution = \"4k\" ? 85000 : (resolution = \"2k\" ? 55000 : 39000)))))) + (($count(images) - 1) * 15000) + (($exists(mask_image) and mask_image != \"\") ? 15000 : 0)}",
+    "price_inputs": [
+      "images",
+      "mask_image",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525135549
+  },
+  "wavespeed-ai/wan-2.2/i2v-480p": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525135539
+  },
+  "wavespeed-ai/wan-2.2/i2v-720p": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525135562
+  },
+  "wavespeed-ai/wan-2.2/t2v-480p": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration",
+      "size"
+    ],
+    "fetched_at": 1794525135534
+  },
+  "wavespeed-ai/wan-2.2/t2v-720p": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration",
+      "size"
+    ],
+    "fetched_at": 1794525135543
+  },
+  "wavespeed-ai/feynobg": {
+    "base_price_micro": 1000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794606108558
+  },
+  "wavespeed-ai/flux-dev": {
+    "base_price_micro": 12000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * num_images}",
+    "price_inputs": [
+      "num_images",
+      "size"
+    ],
+    "fetched_at": 1794525135601
+  },
+  "wavespeed-ai/minimax-h3-image/text-to-image": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 6 : (resolution = \"3k\" ? 4 : (resolution = \"2k\" ? 2 : (resolution = \"1.5k\" ? 1.5 : 1))))}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794577064617
+  },
+  "wavespeed-ai/minimax-h3/image-edit": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"2k\" ? 3 : (resolution = \"1.5k\" ? 2 : 1)) + 5000 * $max([0, $count(images) - 1])}",
+    "price_inputs": [
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794535413105
+  },
+  "wavespeed-ai/minimax-h3/text-to-image": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"2k\" ? 3 : (resolution = \"1.5k\" ? 2 : 1))}",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525136430
+  },
+  "wavespeed-ai/minimax-h3-image/edit": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 6 : (resolution = \"3k\" ? 4 : (resolution = \"2k\" ? 2 : (resolution = \"1.5k\" ? 1.5 : 1)))) + 10000 * $max([0, $count(images) - 1])}",
+    "price_inputs": [
+      "images",
+      "resolution"
+    ],
+    "fetched_at": 1794584941147
+  },
+  "minimax/hailuo-02/i2v-standard": {
+    "base_price_micro": 280000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 560000 : 280000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525136530
+  },
+  "bytedance/seedance-v1.5-pro/image-to-video": {
+    "base_price_micro": 52000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": duration * base_price * ( resolution = \"720p\" ? 1 : resolution = \"1080p\" ? 2 : 6/13 ) * ( generate_audio ? 1 : 0.5 ) }",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525136642
+  },
+  "minimax/hailuo-02/i2v-pro": {
+    "base_price_micro": 490000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525136260
+  },
+  "minimax/hailuo-2.3/fast-pro": {
+    "base_price_micro": 330000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525136545
+  },
+  "minimax/h3-lite/text-to-video": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"480p\" ? 0.625 : 1) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525136177
+  },
+  "wavespeed-ai/ltx-2.3/image-to-video": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (resolution = \"720p\" ? 1 : resolution = \"480p\" ? 2/3 : 4/3)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535415736
+  },
+  "minimax/hailuo-2.3/t2v-pro": {
+    "base_price_micro": 490000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137280
+  },
+  "wavespeed-ai/wan-2.2/image-to-video": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"720p\") ? 2 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535416853
+  },
+  "minimax/h3/text-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"768p\" ? 1 : 1.4)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137097
+  },
+  "minimax/hailuo-02/t2v-standard": {
+    "base_price_micro": 280000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 560000 : 280000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137044
+  },
+  "openai/gpt-image-2.5-flare/text-to-image": {
+    "base_price_micro": 24000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 30000 : (resolution = \"2k\" ? 20000 : 10000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 270000 : (resolution = \"2k\" ? 150000 : 90000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 480000 : (resolution = \"2k\" ? 270000 : 160000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 1000000 : (resolution = \"2k\" ? 600000 : 360000)) : (resolution = \"4k\" ? 70000 : (resolution = \"2k\" ? 40000 : 24000))))))}",
+    "price_inputs": [
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525136704
+  },
+  "openai/gpt-image-2.5-flare/edit": {
+    "base_price_micro": 39000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ((quality = \"low\") ? (resolution = \"4k\" ? 45000 : (resolution = \"2k\" ? 35000 : 25000)) : ((quality = \"high\") ? (resolution = \"4k\" ? 285000 : (resolution = \"2k\" ? 165000 : 105000)) : ((quality = \"xhigh\") ? (resolution = \"4k\" ? 495000 : (resolution = \"2k\" ? 285000 : 175000)) : ((quality = \"max\") ? (resolution = \"4k\" ? 1015000 : (resolution = \"2k\" ? 615000 : 375000)) : (resolution = \"4k\" ? 85000 : (resolution = \"2k\" ? 55000 : 39000)))))) + (($count(images) - 1) * 15000) + (($exists(mask_image) and mask_image != \"\") ? 15000 : 0)}",
+    "price_inputs": [
+      "images",
+      "mask_image",
+      "quality",
+      "resolution"
+    ],
+    "fetched_at": 1794525136748
+  },
+  "minimax/h3/reference-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"768p\" ? 1 : 1.4) * ($min([duration, 15]) + $ceil($min([get_duration(reference_videos, min=2, max=15, total=15), 15]))) + ($count(reference_images) > 5 ? 50000 * ($count(reference_images) - 5) : 0)}",
+    "price_inputs": [
+      "duration",
+      "reference_images",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525136712
+  },
+  "minimax/h3-lite/reference-to-video": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"480p\" ? 0.625 : 1) * ($min([duration, 15]) + $ceil($min([get_duration(reference_videos, min=2, max=15, total=15), 15]))) + 20000 * $max([0, $count(reference_images) - 5])}",
+    "price_inputs": [
+      "duration",
+      "reference_images",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525136709
+  },
+  "minimax/h3-highspeed/text-to-video": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525136726
+  },
+  "minimax/h3-highspeed/reference-to-video": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * ($min([duration, 15]) + $ceil($min([get_duration(reference_videos, min=2, max=15, total=15), 15]))) + 30000 * $max([0, $count(reference_images) - 5])}",
+    "price_inputs": [
+      "duration",
+      "reference_images",
+      "reference_videos"
+    ],
+    "fetched_at": 1794525137318
+  },
+  "minimax/hailuo-02/t2v-pro": {
+    "base_price_micro": 500000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137324
+  },
+  "minimax/hailuo-02/pro": {
+    "base_price_micro": 500000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137347
+  },
+  "minimax/hailuo-02/standard": {
+    "base_price_micro": 280000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (duration = 10) ? 560000 : 280000}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137374
+  },
+  "minimax/image-01/text-to-image": {
+    "base_price_micro": 3500,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * num_images}",
+    "price_inputs": [
+      "num_images",
+      "size"
+    ],
+    "fetched_at": 1794525137387
+  },
+  "minimax/image-01/image-to-image": {
+    "base_price_micro": 3500,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * num_images}",
+    "price_inputs": [
+      "num_images",
+      "size"
+    ],
+    "fetched_at": 1794525137344
+  },
+  "bytedance/seedance-2.5-flash/reference-to-video": {
+    "base_price_micro": 240000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($scale := (resolution = \"720p\" ? 2 : 1); $count(reference_videos) > 0 ? ($reference_duration := $min([$ceil(get_duration(reference_videos, min=2, max=30, total=30)), 30]); 75000 * $scale * ($max([2, $reference_duration]) + (duration ? duration : $max([4, $reference_duration])))) : (base_price / 2) * $scale * duration)}",
+    "price_inputs": [
+      "duration",
+      "reference_videos",
+      "resolution"
+    ],
+    "fetched_at": 1794525137405
+  },
+  "bytedance/seedance-2.5-flash/video-edit": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($scale := (resolution = \"720p\" ? 1 : 0.5); $source := $min([$ceil(get_duration(video, min=4, max=30, total=30)), 30]); base_price * $scale * ($max([4, $source]) * 2))}",
+    "price_inputs": [
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525137354
+  },
+  "bytedance/seedance-v1.5-pro/text-to-video": {
+    "base_price_micro": 52000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": duration * base_price * ( resolution = \"720p\" ? 1 : resolution = \"1080p\" ? 2 : 6/13 ) * ( generate_audio ? 1 : 0.5 ) }",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137351
+  },
+  "bytedance/seedance-v1.5-pro/image-to-video-fast": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ( resolution = \"720p\" ? 1 : 1.5 ) * ( generate_audio ? 1:0.5 )}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137368
+  },
+  "bytedance/seedance-v1.5-pro/text-to-video-fast": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ( resolution = \"720p\" ? 1 : 1.5 ) * ( generate_audio ? 1:0.5 )}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137445
+  },
+  "bytedance/seedance-v1-pro-fast/text-to-video": {
+    "base_price_micro": 12000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": (resolution = \"480p\") ? (base_price * duration) : (resolution = \"720p\") ? (base_price * duration * 2) : (base_price * duration * 4)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137451
+  },
+  "bytedance/seedance-v1-lite-i2v-480p": {
+    "base_price_micro": 16000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137459
+  },
+  "bytedance/seedance-v1-lite-i2v-720p": {
+    "base_price_micro": 32000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137490
+  },
+  "bytedance/seedance-v1-lite-i2v-1080p": {
+    "base_price_micro": 90000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137495
+  },
+  "bytedance/seedance-v1-pro-i2v-480p": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137482
+  },
+  "bytedance/seedance-v1-pro-i2v-720p": {
+    "base_price_micro": 60000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137503
+  },
+  "bytedance/seedance-v1-pro-i2v-1080p": {
+    "base_price_micro": 120000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137480
+  },
+  "bytedance/seedream-v5.0-lite/edit": {
+    "base_price_micro": 35000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137487
+  },
+  "bytedance/seedream-v4.5": {
+    "base_price_micro": 40000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137492
+  },
+  "bytedance/seedream-v4": {
+    "base_price_micro": 27000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137599
+  },
+  "bytedance/seedream-v4/edit": {
+    "base_price_micro": 27000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137573
+  },
+  "alibaba/wan-3.0/video-edit": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=1, max=15, total=15)), 15]); $output := $min([duration ? duration : $max([2, $source]), 15]); base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * ($source + $output))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525137566
+  },
+  "alibaba/wan-3.0/video-extend": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137618
+  },
+  "alibaba/wan-3.0-prime/video-edit": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($source := $min([$ceil(get_duration(video, min=1, max=15, total=15)), 15]); $output := $min([duration ? duration : $max([2, $source]), 15]); base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * ($source + $output))}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525137609
+  },
+  "alibaba/wan-3.0-prime/video-extend": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137568
+  },
+  "alibaba/wan-2.7/text-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (resolution = \"1080p\" ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137612
+  },
+  "alibaba/wan-2.7/reference-to-video": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (duration + (($count(reference_videos) + $count(reference_images) + (image ? 1 : 0)) > 0 ? 5 : 0)) * (resolution = \"1080p\" ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "image",
+      "reference_images",
+      "reference_videos",
+      "resolution",
+      "videos"
+    ],
+    "fetched_at": 1794525137563
+  },
+  "alibaba/wan-2.7/video-edit": {
+    "base_price_micro": 200000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * ((duration = 0) ? $min([$max([$ceil(get_duration(video)), 2]), 10]) : $min([$max([duration, 2]), 10])) * ((resolution = \"1080p\") ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution",
+      "video"
+    ],
+    "fetched_at": 1794525137580
+  },
+  "alibaba/wan-2.7/image-edit": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137606
+  },
+  "alibaba/wan-2.7/image-edit-pro": {
+    "base_price_micro": 75000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794585049492
+  },
+  "alibaba/wan-2.7/text-to-image": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137666
+  },
+  "alibaba/wan-2.7/text-to-image-pro": {
+    "base_price_micro": 75000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794525137692
+  },
+  "kwaivgi/kling-v4.0-flash/text-to-video": {
+    "base_price_micro": 94000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * ($exists(duration) ? duration : 5)}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137703
+  },
+  "kwaivgi/kling-v4.0-flash/reference-to-video": {
+    "base_price_micro": 94000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": ($d := $exists(duration) ? duration : 5; ($exists(videos) and $count(videos) > 0) ? 126000 * $d : base_price * $d)}",
+    "price_inputs": [
+      "duration",
+      "videos"
+    ],
+    "fetched_at": 1794525137713
+  },
+  "kwaivgi/kling-v4.0-flash/video-edit": {
+    "base_price_micro": 126000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": 126000 * $ceil($min([get_duration(video, min=3, max=20, total=20), 20]))}",
+    "price_inputs": [
+      "video"
+    ],
+    "fetched_at": 1794525137675
+  },
+  "kwaivgi/kling-v3.0-pro/image-to-video": {
+    "base_price_micro": 112000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (sound ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "sound"
+    ],
+    "fetched_at": 1794525137727
+  },
+  "kwaivgi/kling-v3.0-pro/text-to-video": {
+    "base_price_micro": 112000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (sound ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "sound"
+    ],
+    "fetched_at": 1794525137696
+  },
+  "kwaivgi/kling-v3.0-std/text-to-video": {
+    "base_price_micro": 84000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (sound ? 1.5 : 1)}",
+    "price_inputs": [
+      "duration",
+      "sound"
+    ],
+    "fetched_at": 1794525137689
+  },
+  "kwaivgi/kling-v3-turbo-std/image-to-video": {
+    "base_price_micro": 112000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137707
+  },
+  "kwaivgi/kling-v3-turbo-pro/image-to-video": {
+    "base_price_micro": 140000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794525137786
+  },
+  "google/veo3.1/reference-to-video": {
+    "base_price_micro": 3200000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? (generate_audio ? 1.5 : 1) : (generate_audio ? 1 : 0.5))}",
+    "price_inputs": [
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137789
+  },
+  "google/veo3.1-fast/text-to-video": {
+    "base_price_micro": 150000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * $min([duration, 8]) * (resolution = \"4k\" ? (generate_audio ? 2 : 5 / 3) : (generate_audio ? 1 : 2 / 3))}",
+    "price_inputs": [
+      "duration",
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137796
+  },
+  "google/veo3.1-fast/reference-to-video": {
+    "base_price_micro": 640000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * (generate_audio ? (resolution = \"1080p\" ? 1.5 : 1.25) : (resolution = \"1080p\" ? 1.25 : 1))}",
+    "price_inputs": [
+      "generate_audio",
+      "resolution"
+    ],
+    "fetched_at": 1794525137808
+  },
+  "google/veo3.1-lite/text-to-video": {
+    "base_price_micro": 50000,
+    "discount_rate": 100,
+    "formula": "{ \"total_price\": base_price * ((resolution = \"1080p\"? 1.6 : 1) * duration) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794525137810
+  },
+  "google/veo3.1-lite/start-end-to-video": {
+    "base_price_micro": 400000,
+    "discount_rate": 100,
+    "formula": "{ \"total_price\": base_price * ((resolution = \"1080p\"? 1.6 : 1)) }",
+    "price_inputs": [
+      "resolution"
+    ],
+    "fetched_at": 1794525137800
+  },
+  "wavespeed-ai/minimax-h3/image-to-video-spicy": {
+    "base_price_micro": 80000,
+    "discount_rate": 50,
+    "formula": "{\"total_price\": base_price * $min([duration, 15]) * (resolution = \"1080p\" ? 2 : resolution = \"768p\" ? 1 : resolution = \"540p\" ? 0.75 : 0.5)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794610206673,
+    "inherited_from": "wavespeed-ai/minimax-h3/image-to-video"
+  },
+  "wavespeed-ai/wan-2.2/i2v-480p-ultra-fast": {
+    "base_price_micro": 10000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration}",
+    "price_inputs": [
+      "duration"
+    ],
+    "fetched_at": 1794604409008
+  },
+  "wavespeed-ai/ltx-2.3-spicy/image-to-video": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * (resolution = \"480p\" ? 1 : resolution = \"720p\" ? 1.5 : 2)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535415736,
+    "inherited_from": "wavespeed-ai/ltx-2.3/image-to-video"
+  },
+  "alibaba/wan-3.0/image-to-video-spicy": {
+    "base_price_micro": 100000,
+    "discount_rate": 95,
+    "formula": "{\"total_price\": base_price * (resolution = \"1080p\" ? 2 : (resolution = \"480p\" ? 0.5 : 1)) * $min([$max([$ceil(duration), 2]), 30])}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794582424250,
+    "inherited_from": "alibaba/wan-3.0/image-to-video"
+  },
+  "bytedance/seedance-2.5/image-to-video-spicy": {
+    "base_price_micro": 360000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": base_price * (resolution = \"4k\" ? 5 : (resolution = \"1080p\" ? 2.5 : (resolution = \"720p\" ? 1 : 0.5))) * duration}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794582442440,
+    "inherited_from": "bytedance/seedance-2.5/image-to-video"
+  },
+  "wavespeed-ai/flux-2-klein-4b/edit": {
+    "base_price_micro": 12000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794535408934
+  },
+  "wavespeed-ai/qwen-image/edit-2511": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794535409679
+  },
+  "wavespeed-ai/qwen-image/edit-plus": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794606230996
+  },
+  "wavespeed-ai/wan-2.2/image-to-image": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "",
+    "price_inputs": [],
+    "fetched_at": 1794535411119
+  },
+  "wavespeed-ai/flux-kontext-dev-ultra-fast": {
+    "base_price_micro": 20000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\":base_price * num_images}",
+    "price_inputs": [
+      "num_images",
+      "size"
+    ],
+    "fetched_at": 1794535411765
+  },
+  "wavespeed-ai/wan-2.2-spicy/image-to-video": {
+    "base_price_micro": 30000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"720p\") ? 2 : 1)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535416853,
+    "inherited_from": "wavespeed-ai/wan-2.2/image-to-video"
+  },
+  "bytedance/seedance-2.0-mini/image-to-video-spicy": {
+    "base_price_micro": 120000,
+    "discount_rate": 90,
+    "formula": "{\"total_price\": 0.5 * (base_price * (resolution = \"4k\" ? 10 : (resolution = \"1080p\" ? 5 : (resolution = \"720p\" ? 2 : 1))) * duration)}",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794535423435,
+    "inherited_from": "bytedance/seedance-2.0-mini/image-to-video"
+  },
+  "alibaba/wan-2.7/image-to-video-spicy": {
+    "base_price_micro": 100000,
+    "discount_rate": 100,
+    "formula": "{\"total_price\": base_price * duration * ((resolution = \"1080p\") ? 1.5 : 1) }",
+    "price_inputs": [
+      "duration",
+      "resolution"
+    ],
+    "fetched_at": 1794588587210,
+    "inherited_from": "alibaba/wan-2.7/image-to-video"
+  }
+}

@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WaveSpeed Studio — AI Image & Video Studio</title>
+  <link rel="stylesheet" href="style.css?v=20261113h">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body data-theme="obsidian-pro" data-density="compact">
+  <div class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h1>WaveSpeed <span>Studio</span></h1>
+          <span class="badge-tag">Multimodal Hub</span>
+        </div>
+      </div>
+
+      <!-- Studio Mode Switcher -->
+      <nav class="mode-tabs" aria-label="Studio Mode">
+        <button class="mode-btn active" data-category="image-gen" title="Text to Image models">
+          <span class="icon">🎨</span> <span class="mode-label">Text → Image</span>
+        </button>
+        <button class="mode-btn" data-category="image-edit" title="Image Edit & Inpainting models">
+          <span class="icon">🖌️</span> <span class="mode-label">Image Edit</span>
+        </button>
+        <button class="mode-btn" data-category="image-to-video" title="Animate image to video">
+          <span class="icon">🎞️</span> <span class="mode-label">Image → Video</span>
+        </button>
+        <button class="mode-btn" data-category="video-gen" title="Text to Video, Video Edit & Extend">
+          <span class="icon">🎬</span> <span class="mode-label">Video &amp; Extend</span>
+        </button>
+        <button class="mode-btn" data-category="utility" title="Upscale, Background Removal & Tools">
+          <span class="icon">✂️</span> <span class="mode-label">Tools</span>
+        </button>
+      </nav>
+
+      <!-- Topbar Actions -->
+      <div class="topbar-actions">
+        <div class="theme-picker-wrap">
+          <button type="button" class="settings-btn" id="themeMenuBtn" title="Switch Studio theme, density & viewer layout">
+            <span class="icon">🎨</span> <span class="action-label">Design</span>
+          </button>
+          <div class="theme-popover" id="themePopover" style="display: none;">
+            <div class="theme-pop-section">
+              <div class="theme-pop-title">Studio Palette</div>
+              <div class="theme-swatches" id="themeSwatches">
+                <button type="button" class="theme-swatch-btn active" data-theme-choice="obsidian-pro">
+                  <span class="swatch-dot" style="background: linear-gradient(135deg, #6366f1, #06b6d4);"></span>
+                  <span>Obsidian Pro</span>
+                </button>
+                <button type="button" class="theme-swatch-btn" data-theme-choice="midnight-glass">
+                  <span class="swatch-dot" style="background: linear-gradient(135deg, #8b5cf6, #38bdf8);"></span>
+                  <span>Midnight Glass</span>
+                </button>
+                <button type="button" class="theme-swatch-btn" data-theme-choice="velvet-ember">
+                  <span class="swatch-dot" style="background: linear-gradient(135deg, #f43f5e, #f59e0b);"></span>
+                  <span>Velvet Ember</span>
+                </button>
+                <button type="button" class="theme-swatch-btn" data-theme-choice="carbon-mono">
+                  <span class="swatch-dot" style="background: linear-gradient(135deg, #10b981, #e4e4e7);"></span>
+                  <span>Carbon Neutral</span>
+                </button>
+              </div>
+            </div>
+            <div class="theme-pop-section">
+              <div class="theme-pop-title">UI Density</div>
+              <div class="segmented-control" id="densitySwitch">
+                <button type="button" class="seg-btn active" data-density-choice="compact">Compact</button>
+                <button type="button" class="seg-btn" data-density-choice="comfortable">Comfort</button>
+              </div>
+            </div>
+            <div class="theme-pop-section">
+              <div class="theme-pop-title">Viewer Stage</div>
+              <div class="segmented-control" id="viewerHeightSwitch">
+                <button type="button" class="seg-btn active" data-stage-choice="tall">Cinema</button>
+                <button type="button" class="seg-btn" data-stage-choice="split">Balanced</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="settings-btn" id="syncPricesBtn" title="Force live sync of WaveSpeed catalog prices, discounts, and RSC formulas">
+          <span class="icon">💲</span> <span id="syncPricesLabel">Sync</span>
+        </button>
+
+        <button class="settings-btn" id="openOutputsFolderBtn" title="Open local outputs folder">
+          <span class="icon">📂</span> <span class="action-label">Outputs</span>
+        </button>
+
+        <button class="settings-btn" id="openHistoryDbBtn" title="Browse full SQLite database of prompts, outputs, parameters & failed runs">
+          <span class="icon">🗄️</span> <span class="action-label">History</span>
+        </button>
+
+        <button class="settings-btn" id="openAdvisorBtn" title="Recommended models for Undressing, Explicit Animation & Live I2I vs I2V Budget Table">
+          <span class="icon">🎯</span> <span class="action-label">Best For</span>
+        </button>
+
+        <button class="settings-btn" id="apiKeyModalBtn" title="API Key & Spend Guard settings">
+          <span class="icon">🔑</span> <span class="action-label">Key</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Studio Workspace -->
+    <main class="studio-layout" id="studioLayout">
+      <!-- Left Configuration Panel -->
+      <aside class="control-panel" id="controlPanel">
+        <!-- Balance Card on Left Below Multimodal Hub -->
+        <div class="balance-card sidebar-balance-card" id="balanceCard" title="Live WaveSpeed API balance">
+          <div class="balance-card-top">
+            <div class="balance-left">
+              <span class="balance-label">WaveSpeed Balance</span>
+              <span class="balance-amount" id="balanceValue">Loading...</span>
+            </div>
+            <button class="icon-btn-tiny" id="refreshBalanceBtn" title="Refresh balance & sync live prices">🔄 Sync</button>
+          </div>
+          <div class="balance-projection-line" id="sidebarBalanceProjection">Select a model to preview balance after run</div>
+        </div>
+
+        <!-- Model Selection Section -->
+        <section class="section-box">
+          <div class="section-header">
+            <h3>Select Model</h3>
+            <span class="model-count-badge" id="modelsCountBadge">0 models</span>
+          </div>
+
+          <!-- Searchable Autocomplete Combobox -->
+          <div class="combobox-wrapper" id="modelCombobox">
+            <div class="combobox-input-container">
+              <span class="combobox-search-icon">🔍</span>
+              <input 
+                type="text" 
+                id="modelAutocompleteInput" 
+                class="combobox-input" 
+                placeholder="Search models in this tab (e.g. h3, flux, wan)..." 
+                autocomplete="off"
+              >
+              <button type="button" class="combobox-clear-btn" id="comboboxClearBtn" style="display: none;">✕</button>
+              <button type="button" class="combobox-toggle-btn" id="comboboxToggleBtn" title="Toggle dropdown">▼</button>
+            </div>
+
+            <!-- Autocomplete Floating Dropdown Menu -->
+            <div class="combobox-dropdown" id="comboboxDropdown" style="display: none;">
+              <div class="combobox-filter-chips">
+                <button type="button" class="chip-filter-btn active" data-filter="tab">This Tab Only</button>
+                <button type="button" class="chip-filter-btn" data-filter="spicy">🌶️ Spicy / NSFW</button>
+                <button type="button" class="chip-filter-btn" data-filter="affordable">✅ Fits My Balance</button>
+                <button type="button" class="chip-filter-btn" data-filter="cheap">⚡ Under $0.05</button>
+                <button type="button" class="chip-filter-btn" data-filter="all">All Models</button>
+              </div>
+              <div class="combobox-list" id="comboboxList">
+                <!-- Dynamically populated options -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden fallback select for compatibility -->
+          <select id="modelSelect" style="display: none;"></select>
+
+          <!-- Selected Model Detail Box -->
+          <div class="selected-model-info" id="selectedModelInfo">
+            <div class="model-info-header">
+              <span class="model-title" id="infoModelTitle">—</span>
+              <span class="price-pill" id="infoModelPrice">$0.000 / run</span>
+            </div>
+            <div class="price-breakdown-bar" id="infoPriceBreakdown" style="display: none;"></div>
+            <div class="model-advice-banner" id="infoUseAdvice" style="display: none;"></div>
+            <p class="model-desc" id="infoModelDesc">Select a model to view capabilities and schema.</p>
+            <div class="model-tags" id="infoModelTags"></div>
+          </div>
+        </section>
+
+        <!-- Dynamic Inputs Section -->
+        <section class="section-box" id="inputsSection">
+          <div class="section-header">
+            <h3>Prompt & Media Inputs</h3>
+          </div>
+
+          <!-- Text Prompt -->
+          <div class="input-group" id="promptGroup">
+            <div class="input-header">
+              <label for="promptInput">Prompt <span class="required">*</span></label>
+              <span class="subtext">Describe what you want to create or edit</span>
+            </div>
+            <textarea id="promptInput" rows="4" placeholder="Enter detailed prompt..."></textarea>
+            <div class="prompt-chips">
+              <button type="button" class="chip-btn" data-add="photorealistic, 8k, cinematic lighting">✨ Cinematic</button>
+              <button type="button" class="chip-btn" data-add="cyberpunk, neon, detailed">🌆 Cyberpunk</button>
+              <button type="button" class="chip-btn" data-add="studio portrait, soft shadow, sharp focus">📸 Portrait</button>
+              <button type="button" class="chip-btn" data-add="anime style, vibrant colors, makoto shinkai">🎨 Anime</button>
+              <span id="videoMotionChips" class="video-motion-chips" style="display: none;">
+                <button type="button" class="chip-btn chip-motion" data-add="natural fluid motion, realistic physics">🌊 Fluid Motion</button>
+                <button type="button" class="chip-btn chip-motion" data-add="subtle handheld camera, intimate close-up">🎥 Handheld</button>
+                <button type="button" class="chip-btn chip-motion" data-add="slow push-in camera, steady tripod">📷 Slow Push-In</button>
+                <button type="button" class="chip-btn chip-motion" data-add="slow motion, smooth fabric movement">🐢 Slow-Mo</button>
+              </span>
+              <div id="customPromptChips" class="custom-prompt-chips"></div>
+              <button type="button" class="chip-btn chip-save-preset" id="savePresetChipBtn" title="Save current prompt as a reusable chip">+ Save Preset</button>
+            </div>
+            <div class="custom-chip-creator" id="customChipCreator" style="display: none;">
+              <input type="text" id="customChipLabelInput" placeholder="Preset chip name (e.g. Undress Slow)..." maxlength="36">
+              <button type="button" class="btn-sm" id="confirmSaveChipBtn">Save</button>
+              <button type="button" class="btn-secondary-sm" id="cancelSaveChipBtn">Cancel</button>
+            </div>
+          </div>
+
+          <!-- Negative Prompt (for Wan / V2V / models exposing negative_prompt) -->
+          <div class="input-group" id="negativePromptGroup" style="display: none;">
+            <div class="input-header">
+              <label for="negativePromptInput">Negative Prompt</label>
+              <span class="subtext">What to avoid (blur, morphing, extra limbs...)</span>
+            </div>
+            <textarea id="negativePromptInput" rows="2" placeholder="Optional things to avoid in generation..."></textarea>
+          </div>
+
+          <!-- Image Upload / Edit Target -->
+          <div class="input-group" id="imageInputGroup">
+            <div class="input-header">
+              <label>Source Image <span id="imgRequiredBadge" class="required">*</span></label>
+              <span class="subtext">Upload, drag & drop, or paste image URL</span>
+            </div>
+
+            <div class="upload-dropzone" id="imageDropzone">
+              <input type="file" id="imageFileInput" accept="image/*" class="file-hidden">
+              <div class="dropzone-content" id="dropzonePrompt">
+                <span class="drop-icon">📁</span>
+                <p>Drag & drop image here, or <span class="browse-link">browse</span></p>
+                <small>Supports PNG, JPG, WEBP</small>
+              </div>
+              <div class="dropzone-preview" id="imagePreviewContainer" style="display: none;">
+                <img id="imagePreview" alt="Upload preview">
+                <button type="button" class="remove-upload-btn" id="removeImageBtn">✕</button>
+              </div>
+            </div>
+
+            <div class="url-input-row">
+              <input type="text" id="imageUrlInput" placeholder="Or paste direct image URL...">
+              <button type="button" class="btn-sm" id="loadUrlBtn">Load</button>
+            </div>
+          </div>
+
+          <!-- Optional Last Frame Image (End Frame for I2V / Interpolation models) -->
+          <div class="input-group" id="lastImageGroup" style="display: none;">
+            <div class="input-header">
+              <label>Optional End Frame (Last Image)</label>
+              <span class="subtext">Target pose/frame to transition into by video end</span>
+            </div>
+
+            <div class="upload-dropzone upload-dropzone-compact" id="lastImageDropzone">
+              <input type="file" id="lastImageFileInput" accept="image/*" class="file-hidden">
+              <div class="dropzone-content" id="lastDropzonePrompt">
+                <span class="drop-icon">🏁</span>
+                <p>Optional end-frame image, or <span class="browse-link">browse</span></p>
+              </div>
+              <div class="dropzone-preview" id="lastImagePreviewContainer" style="display: none;">
+                <img id="lastImagePreview" alt="End frame preview">
+                <button type="button" class="remove-upload-btn" id="removeLastImageBtn">✕</button>
+              </div>
+            </div>
+
+            <div class="url-input-row">
+              <input type="text" id="lastImageUrlInput" placeholder="Or paste end-frame image URL...">
+              <button type="button" class="btn-sm" id="loadLastUrlBtn">Load</button>
+            </div>
+          </div>
+
+          <!-- Inpainting Mask Canvas Editor -->
+          <div class="input-group" id="maskCanvasGroup" style="display: none;">
+            <div class="input-header">
+              <label>Inpainting Mask Editor</label>
+              <span class="subtext">Brush over the area to modify (white = edit)</span>
+            </div>
+            <div class="canvas-wrapper">
+              <div class="canvas-container" id="canvasContainer">
+                <canvas id="maskCanvas"></canvas>
+              </div>
+              <div class="canvas-toolbar">
+                <label>Brush Size: <input type="range" id="brushSize" min="5" max="80" value="30"></label>
+                <button type="button" class="btn-sm" id="clearMaskBtn">Clear Mask</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Upload / Target (for Video Edit models) -->
+          <div class="input-group" id="videoInputGroup" style="display: none;">
+            <div class="input-header">
+              <label>Source Video <span class="required">*</span></label>
+              <span class="subtext">Upload or link video for editing</span>
+            </div>
+            <input type="file" id="videoFileInput" accept="video/mp4,video/webm" class="file-hidden">
+            <div class="upload-dropzone" id="videoDropzone">
+              <span class="drop-icon">🎥</span>
+              <p>Click or drag video file here</p>
+            </div>
+            <input type="text" id="videoUrlInput" class="mt-2" placeholder="Or paste video URL...">
+          </div>
+
+          <!-- Multi-Image List (for Models like MiniMax H3 / Reference-to-Video) -->
+          <div class="input-group" id="multiImageGroup" style="display: none;">
+            <div class="input-header">
+              <label>Reference Images (Up to 16)</label>
+              <span class="subtext">Add additional reference images</span>
+            </div>
+            <div class="multi-img-grid" id="multiImgGrid"></div>
+            <button type="button" class="btn-secondary-sm" id="addMoreImagesBtn">+ Add Image</button>
+            <input type="file" id="multiFileInput" accept="image/*" multiple class="file-hidden">
+          </div>
+
+          <!-- Reference Videos (for reference-to-video models like MiniMax H3 / Seedance / Wan 3.0) -->
+          <div class="input-group" id="refVideosGroup" style="display: none;">
+            <div class="input-header">
+              <label>Reference Video URL(s)</label>
+              <span class="subtext">Motion or subject reference clip (one URL per line or upload)</span>
+            </div>
+            <textarea id="refVideosInput" rows="2" placeholder="Paste reference video URL(s), or use active output video..."></textarea>
+          </div>
+        </section>
+
+        <!-- Generation Settings Section -->
+        <section class="section-box" id="settingsSection">
+          <div class="section-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+            <h3>Parameters</h3>
+            <label class="economy-toggle-pill" title="Defaults Image-to-Video, Image Edit, and Video Edit to smallest resolution/size/quality and silent audio so you can afford more video seconds">
+              <input type="checkbox" id="economyDefaultsCheckbox" checked>
+              <span>💸 Cheapest Non-Duration Defaults</span>
+            </label>
+          </div>
+          <small id="economyModeHint" style="display: block; color: var(--accent-emerald); font-size: 0.72rem; margin-bottom: 10px;">Auto-selecting lowest resolution/size/quality & silent audio on Video/Edit models (you control seconds).</small>
+
+          <!-- Aspect Ratio Picker -->
+          <div class="param-row" id="aspectRatioRow">
+            <label>Aspect Ratio</label>
+            <div class="ratio-pill-group" id="ratioPills">
+              <button type="button" class="ratio-pill active" data-ratio="1:1">1:1 Square</button>
+              <button type="button" class="ratio-pill" data-ratio="16:9">16:9 Wide</button>
+              <button type="button" class="ratio-pill" data-ratio="9:16">9:16 Portrait</button>
+              <button type="button" class="ratio-pill" data-ratio="4:3">4:3 Standard</button>
+              <button type="button" class="ratio-pill" data-ratio="3:2">3:2 Classic</button>
+            </div>
+          </div>
+
+          <!-- Size / Resolution & Duration -->
+          <div class="param-grid">
+            <div class="param-col" id="resolutionCol">
+              <label for="resolutionSelect">Output Resolution</label>
+              <select id="resolutionSelect">
+                <!-- Dynamically populated according to selected model -->
+              </select>
+            </div>
+
+            <div class="param-col" id="outputFormatCol">
+              <label for="outputFormatSelect">Format</label>
+              <select id="outputFormatSelect">
+                <option value="jpeg">JPEG</option>
+                <option value="png" selected>PNG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Video Duration (for video models) -->
+          <div class="param-row" id="durationRow" style="display: none;">
+            <div class="slider-header">
+              <label for="durationSelect">Video Duration (seconds)</label>
+              <span class="subtext" style="color: var(--accent-emerald);">Shorter saves credits</span>
+            </div>
+            <select id="durationSelect">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <!-- Pixel Dimensions (for models like Flux / Z-Image) -->
+          <div class="param-row" id="sizeRow" style="display: none;">
+            <label for="sizeSelect">Dimensions / Size</label>
+            <select id="sizeSelect">
+              <option value="512*512">512 × 512 (Fast Economy - Saves Tokens)</option>
+              <option value="768*768">768 × 768 (Balanced)</option>
+              <option value="1024*1024" selected>1024 × 1024 (Standard High-Res)</option>
+              <option value="1280*720">1280 × 720 (16:9 Landscape)</option>
+              <option value="720*1280">720 × 1280 (9:16 Portrait)</option>
+            </select>
+          </div>
+
+          <!-- Quality Tier (for models like GPT Image 2.6 Flare) -->
+          <div class="param-row" id="qualityRow" style="display: none;">
+            <label for="qualitySelect">Quality Tier</label>
+            <select id="qualitySelect">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <!-- Number of Images (for models exposing num_images) -->
+          <div class="param-row" id="numImagesRow" style="display: none;">
+            <div class="slider-header">
+              <label for="numImagesSelect">Number of Images</label>
+              <span class="subtext" style="color: var(--accent-cyan);">Multiplies run cost</span>
+            </div>
+            <select id="numImagesSelect">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <!-- Audio / Sound Toggle (for video models) -->
+          <div class="param-row" id="audioRow" style="display: none;">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="audioCheckbox" checked>
+              <span>Generate Synchronized Audio</span>
+              <span class="subtext" id="audioCostHint" style="margin-left: auto;">Included</span>
+            </label>
+          </div>
+
+          <!-- Strength Slider (for image-to-image) -->
+          <div class="param-row" id="strengthRow" style="display: none;">
+            <div class="slider-header">
+              <label for="strengthSlider">Transform Strength</label>
+              <span id="strengthValueLabel">0.70</span>
+            </div>
+            <input type="range" id="strengthSlider" min="0.05" max="1.0" step="0.05" value="0.70">
+          </div>
+
+          <!-- Extra Motion / Camera / Shot Controls (shown only if model schema includes them) -->
+          <div class="param-row" id="advancedMotionGroup" style="display: none;">
+            <div class="param-grid">
+              <div class="param-col" id="movementAmpCol" style="display: none;">
+                <label for="movementAmpSelect">Motion Amplitude</label>
+                <select id="movementAmpSelect"></select>
+              </div>
+              <div class="param-col" id="shotTypeCol" style="display: none;">
+                <label for="shotTypeSelect">Shot Type</label>
+                <select id="shotTypeSelect"></select>
+              </div>
+              <div class="param-col" id="presetCol" style="display: none;">
+                <label for="presetSelect">Style / Preset</label>
+                <select id="presetSelect"></select>
+              </div>
+            </div>
+            <label class="checkbox-label" id="cameraFixedCol" style="display: none; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+              <input type="checkbox" id="cameraFixedCheckbox">
+              <span>Lock Camera (camera_fixed)</span>
+            </label>
+          </div>
+
+          <!-- Seed -->
+          <div class="param-row">
+            <div class="slider-header">
+              <label for="seedInput">Seed (Random: -1)</label>
+              <button type="button" class="btn-link" id="randomizeSeedBtn">🎲 Random</button>
+            </div>
+            <input type="number" id="seedInput" value="-1" placeholder="-1">
+          </div>
+        </section>
+
+        <!-- Big Launch Button & Live Affordability + Pre-Flight Safety Shield -->
+        <div class="action-footer">
+          <div class="safety-shield-banner" id="safetyShieldBanner" style="display: none;">
+            <span id="safetyShieldText"></span>
+            <button type="button" class="safety-switch-btn" id="safetySwitchBtn" style="display: none;">Switch to Uncensored</button>
+          </div>
+          <div class="affordability-banner" id="affordabilityBanner" style="display: none;"></div>
+          <button type="button" class="primary-launch-btn" id="generateBtn" title="Shortcut: Ctrl + Enter">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-label" id="btnLabel">Run Generation</span>
+            <span class="btn-price" id="btnPriceBadge">• $0.000</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Draggable Splitter Divider -->
+      <div class="layout-resizer" id="layoutResizer" title="Click & drag to resize panel width">
+        <div class="resizer-handle"></div>
+      </div>
+
+      <!-- Right Output & Gallery Workspace -->
+      <section class="workspace-panel" id="workspacePanel">
+        <!-- Live Concurrent Execution Monitor (Parallel Multi-Generation) -->
+        <div class="execution-card" id="executionCard" style="display: none;">
+          <div class="exec-header">
+            <div class="exec-status-row">
+              <span class="status-pulse-dot" id="execPulseDot"></span>
+              <span class="exec-status-title" id="execStatusTitle">Active Generations</span>
+              <span class="exec-count-badge" id="activeJobsCountBadge">0 running</span>
+              <span class="exec-timer" id="execTimer" style="display: none;">0.0s</span>
+            </div>
+            <button type="button" class="btn-cancel" id="cancelTaskBtn">Clear All</button>
+          </div>
+          <div class="progress-bar-container" id="execLegacyProgressWrap" style="display: none;">
+            <div class="progress-bar" id="execProgressBar"></div>
+          </div>
+          <p class="exec-details" id="execDetails" style="display: none;">Contacting WaveSpeed inference cluster...</p>
+          <div class="active-jobs-list" id="activeJobsList"></div>
+        </div>
+
+        <!-- Main Display Viewer -->
+        <div class="viewer-card">
+          <div class="viewer-toolbar">
+            <div class="viewer-title-group">
+              <span class="viewer-title">Active Output</span>
+              <span class="viewer-cost-badge" id="viewerCostBadge" style="display: none;"></span>
+            </div>
+            <div class="viewer-actions" id="viewerActions" style="display: none;">
+              <button type="button" class="btn-action-tool" id="fullscreenVideoBtn" title="Watch in native fullscreen (Shortcut: F)" style="display: none;">
+                ⛶ Fullscreen
+              </button>
+              <button type="button" class="btn-action-tool" id="beforeAfterToggleBtn" title="Interactive split-wipe compare against input image" style="display: none;">
+                🌓 Before / After
+              </button>
+              <button type="button" class="btn-action-tool" id="grabFrameEditBtn" title="Capture paused/current video frame ($0.00) and send straight to Image Edit" style="display: none;">
+                📸 Frame → Edit
+              </button>
+              <button type="button" class="btn-action-tool" id="grabLastFrameI2VBtn" title="Extract crisp last frame ($0.00) and load into Image-to-Video to continue cleanly" style="display: none;">
+                ⏭️ Last → I2V
+              </button>
+              <button type="button" class="btn-action-tool" id="extendVideoBtn" title="Continue/extend this clip in Video Gen / Edit" style="display: none;">
+                ⏩ Extend Video
+              </button>
+              <button type="button" class="btn-action-tool" id="sendToVideoBtn" title="Animate this image into video">
+                🎞️ Animate to Video
+              </button>
+              <button type="button" class="btn-action-tool" id="sendToEditBtn" title="Send this output to image editor">
+                🖌️ Send to Edit
+              </button>
+              <button type="button" class="btn-action-tool" id="reuseActiveBtn" title="Restore this output's model, prompt & parameters">
+                ♻️ Reuse Setup
+              </button>
+              <button type="button" class="btn-action-tool" id="showInFolderBtn" title="Browse saved outputs & select this file" style="display: none;">
+                📂 Browse Folder
+              </button>
+              <button type="button" class="btn-action-tool" id="openContainingFolderBtn" title="Open the folder containing this output & copy folder path" style="display: none;">
+                📁 Open Folder
+              </button>
+              <button type="button" class="btn-action-tool" id="downloadOutputBtn" title="Download output file">
+                ⬇️ Download
+              </button>
+              <button type="button" class="btn-action-tool" id="copyUrlBtn" title="Copy public URL">
+                🔗 Copy Link
+              </button>
+            </div>
+          </div>
+          <div class="local-save-banner" id="localSaveBanner" style="display: none;"></div>
+
+          <div class="viewer-body" id="viewerBody">
+            <div class="viewer-placeholder" id="viewerPlaceholder">
+              <div class="placeholder-icon">🎨</div>
+              <h3>Ready to Generate or Edit</h3>
+              <p>Select a model on the left, configure prompt &amp; media, and press <strong>Ctrl+Enter</strong> (or click Run). Launch multiple jobs concurrently anytime.</p>
+            </div>
+            <div class="media-container" id="mediaContainer" style="display: none;">
+              <img id="outputImageViewer" alt="Generated visual" style="display: none;">
+              <video id="outputVideoViewer" controls playsinline preload="auto" autoplay loop style="display: none;"></video>
+              <div class="before-after-stage" id="beforeAfterStage" style="display: none;">
+                <img class="ba-img ba-after" id="baAfterImg" alt="Edited Output">
+                <div class="ba-before-clip" id="baBeforeClip">
+                  <img class="ba-img ba-before" id="baBeforeImg" alt="Original Input">
+                </div>
+                <span class="ba-pill ba-pill-before">BEFORE</span>
+                <span class="ba-pill ba-pill-after">AFTER</span>
+                <div class="ba-divider" id="baDivider">
+                  <div class="ba-handle" title="Drag left/right to compare">⇄</div>
+                </div>
+              </div>
+            </div>
+            <div class="viewer-shortcuts-hint">
+              <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> Run</span>
+              <span><kbd>←</kbd> <kbd>→</kbd> Step Outputs</span>
+              <span><kbd>Space</kbd> Play/Pause</span>
+              <span><kbd>F</kbd> Fullscreen</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generation History Gallery -->
+        <div class="history-card">
+          <div class="history-header">
+            <div>
+              <h3>Saved Outputs & Session History</h3>
+              <small style="color: var(--text-sub); font-family: var(--font-mono); font-size: 0.72rem;" id="outputsPathLabel">Auto-saved to ./outputs</small>
+            </div>
+            <div class="history-controls">
+              <div class="history-filter-pills" id="historyGalleryFilterPills">
+                <button type="button" class="history-filter-btn active" data-filter="all">All</button>
+                <button type="button" class="history-filter-btn" data-filter="images">🖼️ Images</button>
+                <button type="button" class="history-filter-btn" data-filter="videos">🎬 Videos</button>
+              </div>
+              <div class="history-filter-pills" id="gallerySizePills" title="Change card density & size">
+                <button type="button" class="history-filter-btn" data-gsize="sm">S</button>
+                <button type="button" class="history-filter-btn active" data-gsize="md">M</button>
+                <button type="button" class="history-filter-btn" data-gsize="lg">L</button>
+              </div>
+              <button type="button" class="btn-secondary-sm" id="toggleBulkSelectBtn" title="Select multiple outputs to bulk delete">☑️ Select</button>
+              <button type="button" class="btn-secondary-sm btn-danger-outline" id="bulkDeleteSelectedBtn" style="display: none;">🗑️ Delete Selected (<span id="bulkSelectedCount">0</span>)</button>
+              <button type="button" class="btn-secondary-sm" id="openCompareBtn" title="Compare 2–4 pinned or recent outputs side by side">⚖️ Compare <span id="compareCountBadge"></span></button>
+              <button type="button" class="btn-secondary-sm" id="openHistoryDbSectionBtn">🗄️ Full Database</button>
+              <button type="button" class="btn-secondary-sm" id="openOutputsHistoryBtn">📂 Open Outputs Folder</button>
+              <button type="button" class="btn-secondary-sm" id="clearHistoryBtn">Clear View</button>
+            </div>
+          </div>
+
+          <div class="gallery-grid" id="historyGallery">
+            <div class="empty-gallery">No previous outputs in this session yet.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- API Key Settings Modal -->
+    <div class="modal-backdrop" id="apiKeyModal" style="display: none;">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>WaveSpeed API Settings</h3>
+          <button type="button" class="close-modal-btn" id="closeModalBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">Your API key is used for all image generation, editing, and video requests.</p>
+          <div class="input-group">
+            <label for="apiKeyInput">WaveSpeed API Key</label>
+            <input type="password" id="apiKeyInput" value="" placeholder="wsk_live_... (saved locally to .studio-config.json)">
+          </div>
+          <div class="input-group">
+            <label for="accountDiscountInput">Extra Account Tier Override (%) — Optional</label>
+            <input type="number" id="accountDiscountInput" value="0" min="0" max="90" placeholder="0 (Uses live WaveSpeed model discounts automatically)">
+            <small style="color: var(--text-sub); font-size: 0.72rem;">Live WaveSpeed model promotions (e.g. 5%, 10%, 15% OFF) are fetched automatically. Leave at 0 unless you have an extra enterprise tier discount.</small>
+          </div>
+          <div class="input-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="spendGuardEnabledInput" checked>
+              <span>Enable Accidental Spend Guard Confirmation</span>
+            </label>
+            <label for="spendGuardThresholdInput" style="margin-top: 4px;">Confirm runs exceeding ($ USD)</label>
+            <input type="number" id="spendGuardThresholdInput" value="0.50" min="0" max="100" step="0.05" placeholder="0.50">
+            <small style="color: var(--text-sub); font-size: 0.72rem;">Prompts for confirmation before submitting any generation above this price (default $0.50) or exceeding your balance.</small>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelModalBtn">Cancel</button>
+            <button type="button" class="btn-primary" id="saveApiKeyBtn">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Accidental Spend Guard Confirmation Modal -->
+    <div class="modal-backdrop" id="spendConfirmModal" style="display: none;">
+      <div class="modal-box spend-confirm-box">
+        <div class="modal-header">
+          <h3>⚠️ Confirm High-Cost Generation</h3>
+          <button type="button" class="close-modal-btn" id="closeSpendModalBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text" id="spendConfirmHeadline">This run exceeds your Spend Guard threshold.</p>
+          <div class="spend-summary-grid" id="spendConfirmDetails"></div>
+          <div class="spend-warning-note" id="spendConfirmWarning" style="display: none;"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelSpendBtn">Cancel (Keep Balance)</button>
+            <button type="button" class="btn-primary btn-danger" id="confirmSpendBtn">Confirm & Run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved Outputs Folder Browser Modal -->
+    <div class="modal-backdrop" id="outputsModal" style="display: none;">
+      <div class="modal-box outputs-modal-box">
+        <div class="modal-header">
+          <h3>📂 Saved Outputs Folder</h3>
+          <button type="button" class="close-modal-btn" id="closeOutputsModalBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="outputs-path-bar">
+            <code class="outputs-path-code" id="outputsFolderPathCode">./outputs</code>
+            <div class="outputs-path-actions">
+              <button type="button" class="btn-secondary" id="copyOutputsPathBtn">📋 Copy Path</button>
+              <a class="btn-secondary" id="openContainingFolderTabBtn" href="/outputs/" target="_blank" rel="noopener" style="text-decoration: none; display: inline-flex; align-items: center;">🌐 Open Folder in Tab</a>
+              <button type="button" class="btn-secondary" id="retryExplorerBtn">📂 Open Explorer</button>
+            </div>
+          </div>
+          <p class="outputs-modal-status" id="outputsModalStatus"></p>
+          <div class="outputs-modal-summary" id="outputsSummaryText">Loading saved files...</div>
+          <div class="outputs-file-list" id="outputsFileList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Generation & Prompt SQLite Database Modal -->
+    <div class="modal-backdrop" id="historyDbModal" style="display: none;">
+      <div class="modal-box history-db-modal-box">
+        <div class="modal-header">
+          <h3>🗄️ Full Prompt & Generation Database</h3>
+          <button type="button" class="close-modal-btn" id="closeHistoryDbModalBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="history-db-stats-bar" id="historyDbStatsBar">Loading database stats...</div>
+          <div class="history-db-toolbar">
+            <input type="text" id="historySearchInput" class="history-search-input" placeholder="Search prompts, models, errors (FTS5)...">
+            <select id="historyModelFilterSelect" class="history-filter-select">
+              <option value="all">All Models</option>
+            </select>
+            <select id="historyStatusFilterSelect" class="history-filter-select">
+              <option value="all">All Statuses</option>
+              <option value="completed">Completed ✓</option>
+              <option value="failed_group">Failed / Blocked ✕</option>
+            </select>
+            <select id="historyTypeFilterSelect" class="history-filter-select">
+              <option value="all">All Types</option>
+              <option value="video">Videos 🎬</option>
+              <option value="image">Images 🖼️</option>
+              <option value="favorite">⭐ Favorites Only</option>
+            </select>
+            <button type="button" class="btn-secondary" id="historyResyncBtn" title="Rescan outputs & logs into SQLite">🔄 Sync Disk</button>
+            <button type="button" class="btn-secondary" id="historyExportCsvBtn" title="Download CSV database export">⬇️ CSV</button>
+            <button type="button" class="btn-secondary" id="historyExportJsonBtn" title="Download JSON database export">⬇️ JSON</button>
+          </div>
+          <div class="history-db-list" id="historyDbList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Best-For Advisor & Live I2I vs I2V Comparison Modal -->
+    <div class="modal-backdrop" id="advisorModal" style="display: none;">
+      <div class="modal-box advisor-modal-box">
+        <div class="modal-header">
+          <h3>🎯 Best-For Model Advisor &amp; Live I2I vs I2V Budget Table</h3>
+          <button type="button" class="close-modal-btn" id="closeAdvisorModalBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="advisor-budget-bar" id="advisorBudgetSummary">Calculating live budget options...</div>
+          <div class="advisor-pick-grid" id="advisorQuickPicks"></div>
+          <div class="advisor-table-wrap">
+            <table class="advisor-table">
+              <thead>
+                <tr>
+                  <th>Mode</th>
+                  <th>Model</th>
+                  <th>Cheapest Rate</th>
+                  <th>Your Balance Buys</th>
+                  <th>Best Use / Safety Note</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="advisorComparisonBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side-by-Side A/B Model Compare Modal -->
+    <div class="modal-backdrop" id="compareModal" style="display: none;">
+      <div class="modal-box compare-modal-box">
+        <div class="modal-header">
+          <div>
+            <h3>⚖️ Side-by-Side A/B Output Compare</h3>
+            <small id="compareSubtitle" style="color: var(--text-sub);">Pin 2–4 cards with ⚖️ or view latest outputs side by side</small>
+          </div>
+          <div class="compare-header-actions">
+            <button type="button" class="btn-secondary-sm" id="syncPlayCompareVideosBtn" style="display: none;">▶️ Play All Videos Together</button>
+            <button type="button" class="btn-secondary-sm" id="clearComparePinsBtn">Clear Pins</button>
+            <button type="button" class="close-modal-btn" id="closeCompareModalBtn">✕</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="compare-grid" id="compareGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
+  <script src="app.js?v=20261113h"></script>
+</body>
+</html>

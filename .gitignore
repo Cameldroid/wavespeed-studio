@@ -1,0 +1,27 @@
+# Secrets & Local Runtime Config
+.env
+.env.*
+!.env.example
+.studio-config.json
+
+# Generated Media, Metadata, Databases & Logs
+outputs/
+database/*.sqlite
+database/*.sqlite-wal
+database/*.sqlite-shm
+database/*.db
+logs/
+
+# Private / Optional Local Scratch
+Inspo/
+handovers/
+project-updates/
+
+# Dependencies & OS / Editor Artifacts
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak

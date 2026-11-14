@@ -1,0 +1,23 @@
+{
+  "name": "wavespeed-studio",
+  "version": "1.0.0",
+  "description": "Local-first Web Studio for WaveSpeed AI image generation, image editing, and video workflows with live RSC pricing formulas, SQLite history, and local asset auto-saving.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scripts/verify_studio_isolated.js",
+    "sync-prices": "node scripts/sync_pricing_formulas.js"
+  },
+  "keywords": [
+    "wavespeed",
+    "ai",
+    "image-generation",
+    "image-editing",
+    "video-generation",
+    "sqlite"
+  ],
+  "license": "MIT"
+}
