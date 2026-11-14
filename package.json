@@ -1,6 +1,6 @@
 {
   "name": "wavespeed-studio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Cameldroid",
   "description": "Local-first Web Studio for WaveSpeed AI image generation, image editing, and video workflows with live RSC pricing formulas, SQLite history, and local asset auto-saving.",
   "main": "electron/main.js",
@@ -62,6 +62,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "WaveSpeed Studio"

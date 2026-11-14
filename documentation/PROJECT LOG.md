@@ -9,6 +9,7 @@ Note Modified Date:
   - "2026-11-14T08:58:44-03:00"
   - "2026-11-14T13:49:12-03:00"
   - "2026-11-14T15:21:45-03:00"
+  - "2026-11-14T15:36:03-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -99,3 +100,14 @@ Note Modified Date:
   - `npm test` (`ALL_ISOLATED_TESTS_PASSED`).
   - Dual Electron `--smoke-test` (`SMOKE1=0` default + `SMOKE2=0` `softwareGraphicsMode: true`, `DB_OK=True`) and secret scan (`ZERO_SECRET_HITS`) passed.
 - **Next Action:** Push `main` and tag `v1.0.1` so GitHub Actions builds and publishes updated installers.
+
+
+# 2026-11-14T15:36:03-03:00 — In-App Update Check, Graphics Diagnostics & Seamless Upgrade Config (`v1.0.2`)
+
+- **Summary:** Verified NSIS upgrade-in-place behavior (`HKCU\Software\77ead6d5-548f-54a6-b3e1-946daa575e20\InstallLocation`), explicitly preserved AppData across NSIS operations, and added in-app update checking + GPU decoder diagnostics (`v1.0.2`).
+- **Changes Applied:**
+  - `package.json`: Set `"deleteAppDataOnUninstall": false` inside `"nsis"` and bumped version to `1.0.2`.
+  - `electron/main.js`: Added `Help -> Check for Updates...` (checks GitHub Releases API or opens Releases page directly while Private, explaining in-place NSIS upgrades preserve settings/DB) and `Help -> Graphics & Decoder Diagnostics` (displays live `app.getGPUFeatureStatus()` + `app.getGPUInfo('basic')` inside the desktop session).
+- **Verification (Zero Live API Spend):**
+  - `node --check electron/main.js`, `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Electron `--smoke-test` (`SMOKE=0 DB_OK=True`), and secret scan (`ZERO_SECRET_HITS`) passed.
+- **Next Action:** Push `main` and tag `v1.0.2` to publish updated Windows installers on GitHub Releases.
