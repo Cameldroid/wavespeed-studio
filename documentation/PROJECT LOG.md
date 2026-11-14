@@ -8,6 +8,7 @@ Note Modified Date:
   - "2026-11-14T08:42:43-03:00"
   - "2026-11-14T08:58:44-03:00"
   - "2026-11-14T13:49:12-03:00"
+  - "2026-11-14T15:21:45-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -84,3 +85,17 @@ Note Modified Date:
   - `README.md`: Documented customizable **Outputs Save Folder** in Settings.
 - **Verification:** `npm test` (`ALL_ISOLATED_TESTS_PASSED`); committing, pushing `main`, pushing tag `v1.0.0`, and monitoring the GitHub Actions `Build and Release` workflow to completion.
 - **Next Action:** Switch `Cameldroid/wavespeed-studio` visibility from Private to Public in GitHub repository settings whenever ready to share Releases with external users (kept Private by default).
+
+
+# 2026-11-14T15:21:45-03:00 — Fix Chromium GPU/Video Rainbow Block Corruption (`v1.0.1`)
+
+- **Summary:** Diagnosed rainbow checkerboard macroblock artifacts in Output viewer/gallery `<video>` and GPU-rasterized images (occurring on both `localhost` browsers and Electron on Intel HD Graphics 520 `31.0.101.2115` + NVIDIA 940M hybrid GPUs while external media files played cleanly), applied Electron GPU decoder/rasterization mitigations, hardened `/outputs/*` Range streaming, and bumped version to `1.0.1`.
+- **Changes Applied:**
+  - `electron/main.js`: Added startup switches `disable-accelerated-video-decode` and `disable-gpu-rasterization` before `app.whenReady()`, plus `View -> Software Graphics Mode (Fix GPU Artifacts / Restart)` menu checkbox persisted in `.studio-config.json` (`softwareGraphicsMode` -> `app.disableHardwareAcceleration()`).
+  - `server.js`: Added `HEAD` support, proper suffix/bounds `Range` parsing, and `res.on('close')` stream cleanup on `/outputs/*`, and exported `saveStudioConfig`.
+  - `package.json`: Bumped version to `1.0.1`.
+- **Verification (Zero Live API Spend):**
+  - `node --check` passed on `server.js` and `electron/main.js`.
+  - `npm test` (`ALL_ISOLATED_TESTS_PASSED`).
+  - Dual Electron `--smoke-test` (`SMOKE1=0` default + `SMOKE2=0` `softwareGraphicsMode: true`, `DB_OK=True`) and secret scan (`ZERO_SECRET_HITS`) passed.
+- **Next Action:** Push `main` and tag `v1.0.1` so GitHub Actions builds and publishes updated installers.

@@ -1514,20 +1514,43 @@ const server = http.createServer(async (req, res) => {
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
         const stat = fs.statSync(outPath);
         const total = stat.size;
+        const streamFile = (readOpts) => {
+          if (req.method === 'HEAD') return res.end();
+          const stream = fs.createReadStream(outPath, readOpts);
+          const cleanup = () => {
+            if (!stream.destroyed) stream.destroy();
+          };
+          res.on('close', cleanup);
+          stream.on('error', () => {
+            if (!res.headersSent) res.writeHead(500);
+            if (!res.writableEnded) res.end();
+          });
+          return stream.pipe(res);
+        };
         const range = req.headers.range;
-        if (range) {
-          const parts = range.replace(/bytes=/, '').split('-');
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-          if (!isNaN(start) && !isNaN(end) && start <= end && end < total) {
-            const chunkSize = (end - start) + 1;
-            res.writeHead(206, {
-              'Content-Range': `bytes ${start}-${end}/${total}`,
-              'Accept-Ranges': 'bytes',
-              'Content-Length': chunkSize,
-              'Content-Type': contentType
-            });
-            return fs.createReadStream(outPath, { start, end }).pipe(res);
+        if (range && total > 0) {
+          const match = /^bytes=(\d*)-(\d*)$/i.exec(range.trim());
+          if (match) {
+            let start = match[1] ? parseInt(match[1], 10) : NaN;
+            let end = match[2] ? parseInt(match[2], 10) : NaN;
+            if (isNaN(start) && !isNaN(end)) {
+              start = Math.max(0, total - end);
+              end = total - 1;
+            } else if (!isNaN(start) && isNaN(end)) {
+              end = total - 1;
+            } else if (!isNaN(start) && !isNaN(end)) {
+              end = Math.min(end, total - 1);
+            }
+            if (!isNaN(start) && !isNaN(end) && start >= 0 && start <= end && end < total) {
+              const chunkSize = (end - start) + 1;
+              res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${total}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunkSize,
+                'Content-Type': contentType
+              });
+              return streamFile({ start, end });
+            }
           }
           res.writeHead(416, { 'Content-Range': `bytes */${total}` });
           return res.end();
@@ -1537,7 +1560,7 @@ const server = http.createServer(async (req, res) => {
           'Content-Length': total,
           'Accept-Ranges': 'bytes'
         });
-        return fs.createReadStream(outPath).pipe(res);
+        return streamFile();
       }
     }
 
@@ -1659,6 +1682,7 @@ module.exports = {
   OUTPUTS_META_DIR,
   getOutputsDir: () => OUTPUTS_DIR,
   applyOutputsDir,
+  saveStudioConfig,
   GENERATIONS_LOG_FILE,
   savedTasksMap
 };

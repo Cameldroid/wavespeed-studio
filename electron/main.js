@@ -20,7 +20,26 @@ if (!process.env.WAVESPEED_OUTPUTS_DIR) {
   process.env.WAVESPEED_OUTPUTS_DIR = path.join(app.getPath('documents'), 'WaveSpeed Studio', 'outputs');
 }
 
-const { startServer, stopServer, getOutputsDir, USER_DATA_DIR } = require('../server');
+function readSoftwareGraphicsPref(userDataDir) {
+  try {
+    const cfgPath = path.join(userDataDir, '.studio-config.json');
+    if (!fs.existsSync(cfgPath)) return false;
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) || {};
+    return Boolean(cfg.softwareGraphicsMode);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Mitigate Chromium D3D11VideoDecoder & Skia GPU-rasterization rainbow block corruption
+// seen on hybrid/Intel iGPU drivers while keeping UI compositing responsive.
+app.commandLine.appendSwitch('disable-accelerated-video-decode');
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+if (readSoftwareGraphicsPref(process.env.WAVESPEED_USER_DATA_DIR)) {
+  app.disableHardwareAcceleration();
+}
+
+const { startServer, stopServer, getOutputsDir, saveStudioConfig, USER_DATA_DIR } = require('../server');
 
 let mainWindow = null;
 let serverUrl = null;
@@ -79,7 +98,19 @@ function buildAppMenu() {
         { role: 'zoomIn' },
         { role: 'zoomOut' },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'togglefullscreen' },
+        { type: 'separator' },
+        {
+          label: 'Software Graphics Mode (Fix GPU Artifacts / Restart)',
+          type: 'checkbox',
+          checked: readSoftwareGraphicsPref(USER_DATA_DIR),
+          click: async (menuItem) => {
+            saveStudioConfig({ softwareGraphicsMode: Boolean(menuItem.checked) });
+            await shutdownCleanly();
+            app.relaunch();
+            app.exit(0);
+          }
+        }
       ]
     },
     {
