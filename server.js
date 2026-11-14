@@ -57,32 +57,35 @@ const initialConfig = loadStudioConfig();
 const PORT = (process.env.PORT !== undefined && process.env.PORT !== '') ? Number(process.env.PORT) : 3000;
 let API_KEY = (process.env.WAVESPEED_API_KEY || initialConfig.apiKey || '').trim();
 
-const OUTPUTS_DIR = process.env.WAVESPEED_OUTPUTS_DIR
-  ? path.resolve(process.env.WAVESPEED_OUTPUTS_DIR)
-  : (initialConfig.outputsDir ? path.resolve(initialConfig.outputsDir) : path.join(USER_DATA_DIR, 'outputs'));
-const OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
-const OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
-const OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
+let OUTPUTS_DIR = initialConfig.outputsDir
+  ? path.resolve(initialConfig.outputsDir)
+  : (process.env.WAVESPEED_OUTPUTS_DIR ? path.resolve(process.env.WAVESPEED_OUTPUTS_DIR) : path.join(USER_DATA_DIR, 'outputs'));
+let OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
+let OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
+let OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
 const LOGS_DIR = path.join(USER_DATA_DIR, 'logs');
 const DATABASE_DIR = path.join(USER_DATA_DIR, 'database');
 const SERVER_LOG_FILE = path.join(LOGS_DIR, 'server.log');
 const GENERATIONS_LOG_FILE = path.join(LOGS_DIR, 'generations.jsonl');
 const HISTORY_DB_FILE = path.join(DATABASE_DIR, 'studio_history.sqlite');
 
-// Ensure writable runtime directories exist
-[
-  USER_DATA_DIR,
-  OUTPUTS_DIR,
-  OUTPUTS_IMAGES_DIR,
-  OUTPUTS_VIDEOS_DIR,
-  OUTPUTS_META_DIR,
-  LOGS_DIR,
-  DATABASE_DIR
-].forEach(dir => {
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch (e) {}
-});
+function ensureRuntimeDirs() {
+  [
+    USER_DATA_DIR,
+    OUTPUTS_DIR,
+    OUTPUTS_IMAGES_DIR,
+    OUTPUTS_VIDEOS_DIR,
+    OUTPUTS_META_DIR,
+    LOGS_DIR,
+    DATABASE_DIR
+  ].forEach(dir => {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (e) {}
+  });
+}
+
+ensureRuntimeDirs();
 
 let historyDb = null;
 try {
@@ -96,6 +99,23 @@ try {
   });
 } catch (e) {
   console.error('Failed to initialize SQLite history database:', e.message);
+}
+
+function applyOutputsDir(nextDir) {
+  const resolved = path.resolve(String(nextDir || '').trim());
+  OUTPUTS_DIR = resolved;
+  OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
+  OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
+  OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
+  ensureRuntimeDirs();
+  if (historyDb && typeof historyDb.setOutputsDirs === 'function') {
+    historyDb.setOutputsDirs({
+      outputsMetaDir: OUTPUTS_META_DIR,
+      outputsImagesDir: OUTPUTS_IMAGES_DIR,
+      outputsVideosDir: OUTPUTS_VIDEOS_DIR
+    });
+  }
+  return OUTPUTS_DIR;
 }
 
 function logServerEvent(level, message, meta = null) {
@@ -1359,18 +1379,52 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/config' && req.method === 'POST') {
       const body = await parseJsonBody(req);
+      let updatedApiKey = false;
+      let updatedOutputsDir = false;
+
       if (typeof body.apiKey === 'string') {
         API_KEY = body.apiKey.trim();
         saveStudioConfig({ apiKey: API_KEY });
         cachedModels = null;
+        updatedApiKey = true;
         logServerEvent('INFO', API_KEY ? 'API Key updated and saved to .studio-config.json' : 'API Key cleared via studio settings');
-        return sendJson(res, 200, {
-          success: true,
-          hasApiKey: Boolean(API_KEY),
-          message: API_KEY ? 'API key updated' : 'API key cleared'
-        });
       }
-      return sendJson(res, 400, { error: 'apiKey required' });
+
+      if (typeof body.outputsDir === 'string' && body.outputsDir.trim()) {
+        const nextOutputsDir = path.resolve(body.outputsDir.trim());
+        const stat = fs.existsSync(nextOutputsDir) ? fs.statSync(nextOutputsDir) : null;
+        if (stat && !stat.isDirectory()) {
+          return sendJson(res, 400, { error: 'outputsDir path exists and is not a directory' });
+        }
+        applyOutputsDir(nextOutputsDir);
+        saveStudioConfig({ outputsDir: OUTPUTS_DIR });
+        updatedOutputsDir = true;
+        if (historyDb && typeof historyDb.syncFromExistingFiles === 'function') {
+          try {
+            historyDb.syncFromExistingFiles({ rebuild: true });
+          } catch (syncErr) {
+            logServerEvent('WARN', 'Failed to re-sync SQLite outputs after folder change', { error: syncErr.message });
+          }
+        }
+        logServerEvent('INFO', 'Outputs folder updated and saved to .studio-config.json', { outputsDir: OUTPUTS_DIR });
+      }
+
+      if (!updatedApiKey && !updatedOutputsDir) {
+        return sendJson(res, 400, { error: 'apiKey or outputsDir required' });
+      }
+
+      const messages = [];
+      if (updatedApiKey) messages.push(API_KEY ? 'API key updated' : 'API key cleared');
+      if (updatedOutputsDir) messages.push('Outputs folder updated');
+
+      return sendJson(res, 200, {
+        success: true,
+        hasApiKey: Boolean(API_KEY),
+        outputsDir: OUTPUTS_DIR,
+        updatedApiKey,
+        updatedOutputsDir,
+        message: messages.join(' & ')
+      });
     }
 
     if (pathname === '/api/config' && req.method === 'GET') {
@@ -1603,6 +1657,8 @@ module.exports = {
   OUTPUTS_IMAGES_DIR,
   OUTPUTS_VIDEOS_DIR,
   OUTPUTS_META_DIR,
+  getOutputsDir: () => OUTPUTS_DIR,
+  applyOutputsDir,
   GENERATIONS_LOG_FILE,
   savedTasksMap
 };

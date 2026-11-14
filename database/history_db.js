@@ -618,6 +618,12 @@ function createHistoryDatabase(options = {}) {
     return { deleted: changes > 0, changes, task_ids: resolvedTaskIds };
   }
 
+  function setOutputsDirs(nextDirs = {}) {
+    if (nextDirs.outputsMetaDir) options.outputsMetaDir = nextDirs.outputsMetaDir;
+    if (nextDirs.outputsImagesDir) options.outputsImagesDir = nextDirs.outputsImagesDir;
+    if (nextDirs.outputsVideosDir) options.outputsVideosDir = nextDirs.outputsVideosDir;
+  }
+
   function close() {
     try {
       db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
@@ -628,6 +634,7 @@ function createHistoryDatabase(options = {}) {
   return {
     db,
     dbPath,
+    setOutputsDirs,
     close,
     recordSubmission,
     recordOutputs,

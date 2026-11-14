@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 
 const IS_SMOKE_TEST = process.argv.includes('--smoke-test');
 const PREFERRED_PORT = Number(process.env.WAVESPEED_ELECTRON_PORT || 38442);
@@ -20,7 +20,7 @@ if (!process.env.WAVESPEED_OUTPUTS_DIR) {
   process.env.WAVESPEED_OUTPUTS_DIR = path.join(app.getPath('documents'), 'WaveSpeed Studio', 'outputs');
 }
 
-const { startServer, stopServer, OUTPUTS_DIR, USER_DATA_DIR } = require('../server');
+const { startServer, stopServer, getOutputsDir, USER_DATA_DIR } = require('../server');
 
 let mainWindow = null;
 let serverUrl = null;
@@ -46,7 +46,7 @@ function buildAppMenu() {
       submenu: [
         {
           label: 'Open Outputs Folder',
-          click: () => shell.openPath(OUTPUTS_DIR)
+          click: () => shell.openPath(getOutputsDir())
         },
         {
           label: 'Open App Data Folder',
@@ -121,7 +121,7 @@ function createWindow(url) {
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     if (/^https?:\/\//i.test(targetUrl)) {
       if (serverUrl && targetUrl.startsWith(serverUrl + '/outputs/')) {
-        shell.openPath(OUTPUTS_DIR);
+        shell.openPath(getOutputsDir());
       } else {
         shell.openExternal(targetUrl);
       }
@@ -153,6 +153,19 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   try {
+    ipcMain.handle('studio:select-outputs-folder', async (_event, currentDir) => {
+      const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+      const result = await dialog.showOpenDialog(targetWindow, {
+        title: 'Select Outputs Save Folder',
+        defaultPath: (typeof currentDir === 'string' && currentDir.trim()) ? currentDir.trim() : getOutputsDir(),
+        properties: ['openDirectory', 'createDirectory']
+      });
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { canceled: true };
+      }
+      return { canceled: false, path: result.filePaths[0] };
+    });
+
     buildAppMenu();
     const { port } = await startServer({
       host: '127.0.0.1',

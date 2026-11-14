@@ -112,7 +112,9 @@
     numImagesRow: document.getElementById('numImagesRow'),
     numImagesSelect: document.getElementById('numImagesSelect'),
     audioRow: document.getElementById('audioRow'),
+    audioToggleLabel: document.getElementById('audioToggleLabel'),
     audioCheckbox: document.getElementById('audioCheckbox'),
+    audioLabelText: document.getElementById('audioLabelText'),
     audioCostHint: document.getElementById('audioCostHint'),
     outputFormatSelect: document.getElementById('outputFormatSelect'),
     strengthRow: document.getElementById('strengthRow'),
@@ -152,6 +154,8 @@
     cancelModalBtn: document.getElementById('cancelModalBtn'),
     saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
     apiKeyInput: document.getElementById('apiKeyInput'),
+    outputsDirInput: document.getElementById('outputsDirInput'),
+    browseOutputsDirBtn: document.getElementById('browseOutputsDirBtn'),
     spendGuardEnabledInput: document.getElementById('spendGuardEnabledInput'),
     spendGuardThresholdInput: document.getElementById('spendGuardThresholdInput'),
     spendConfirmModal: document.getElementById('spendConfirmModal'),
@@ -386,6 +390,23 @@
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
+  function applyOutputsDirUi(nextDir) {
+    if (!nextDir || typeof nextDir !== 'string') return;
+    state.outputsDir = nextDir;
+    if (el.outputsPathLabel) {
+      el.outputsPathLabel.textContent = `Auto-saved to ${nextDir}`;
+    }
+    if (el.openOutputsFolderBtn) {
+      el.openOutputsFolderBtn.title = `Open outputs folder (${nextDir})`;
+    }
+    if (el.outputsFolderPathCode) {
+      el.outputsFolderPathCode.textContent = nextDir;
+    }
+    if (el.outputsDirInput && document.activeElement !== el.outputsDirInput) {
+      el.outputsDirInput.value = nextDir;
+    }
+  }
+
   function openApiKeyModal(isOnboarding = false) {
     if (!el.apiKeyModal) return;
     const titleEl = document.getElementById('apiKeyModalTitle');
@@ -402,6 +423,9 @@
     }
     if (el.cancelModalBtn) {
       el.cancelModalBtn.textContent = isOnboarding ? 'Browse Models First' : 'Cancel';
+    }
+    if (el.outputsDirInput) {
+      el.outputsDirInput.value = state.outputsDir || '';
     }
     const discountInput = document.getElementById('accountDiscountInput');
     if (discountInput) discountInput.value = state.accountDiscount;
@@ -421,7 +445,7 @@
       if (cfgRes && cfgRes.ok) {
         const cfg = await cfgRes.json().catch(() => null);
         if (cfg && cfg.outputsDir) {
-          state.outputsDir = cfg.outputsDir;
+          applyOutputsDirUi(cfg.outputsDir);
         }
         if (cfg && cfg.hasApiKey === false) {
           state.balance = null;
@@ -541,6 +565,44 @@
     return escapeHtml(text).replace(regex, '<span class="combobox-highlight">$1</span>');
   }
 
+  const AUDIO_SCHEMA_KEYS = ['generate_audio', 'sound', 'save_audio', 'keep_audio', 'keep_original_sound'];
+
+  function getAudioSchemaKey(props) {
+    if (!props || typeof props !== 'object') return null;
+    for (const key of AUDIO_SCHEMA_KEYS) {
+      if (key in props && !props[key]?.['x-hidden']) {
+        return key;
+      }
+    }
+    return null;
+  }
+
+  function isVideoTabModel(model) {
+    if (!model) return false;
+    return Boolean(model.isImageToVideo || model.isTextToVideoOrEdit);
+  }
+
+  function updateAudioControlHint(model, audioKey, props) {
+    if (!el.audioCostHint || !el.audioRow) return;
+    if (audioKey) {
+      const affectsPrice = Boolean(model?.formula && new RegExp(`\\b${audioKey}\\b`).test(model.formula));
+      el.audioCostHint.textContent = affectsPrice ? 'Uncheck saves 33–50%' : 'Same price (uncheck for silent)';
+      el.audioCostHint.style.color = affectsPrice ? 'var(--accent-emerald)' : 'var(--text-sub)';
+    } else if (isVideoTabModel(model)) {
+      const noSchema = !props || Object.keys(props).length === 0;
+      el.audioCostHint.textContent = noSchema ? 'Enter API key to load toggles' : 'Fixed audio / no toggle on model API';
+      el.audioCostHint.style.color = 'var(--text-sub)';
+    }
+  }
+
+  function readAudioParamValue(props, key) {
+    const activeAudioKey = getAudioSchemaKey(props);
+    if (activeAudioKey === key && el.audioCheckbox) {
+      return Boolean(el.audioCheckbox.checked);
+    }
+    return Boolean(props?.[key]?.default ?? false);
+  }
+
   // Evaluate exact WaveSpeed JSONata pricing formula (in micro-dollars -> returns USD)
   function evaluateWaveSpeedFormula(formulaStr, basePriceMicro, params = {}) {
     if (!formulaStr || !formulaStr.trim()) {
@@ -576,6 +638,9 @@
         num_images: Number(params.num_images ?? 1),
         sound: Boolean(params.sound ?? false),
         generate_audio: Boolean(params.generate_audio ?? false),
+        save_audio: Boolean(params.save_audio ?? false),
+        keep_audio: Boolean(params.keep_audio ?? false),
+        keep_original_sound: Boolean(params.keep_original_sound ?? false),
         enable_web_search: Boolean(params.enable_web_search ?? false),
         enable_image_search: Boolean(params.enable_image_search ?? false),
         images: Array.isArray(params.images) ? params.images : ['img1'],
@@ -828,12 +893,11 @@
     const fmtVal = ('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect?.value)
       ? el.outputFormatSelect.value
       : (props.output_format?.default || 'png');
-    const genAudioVal = ('generate_audio' in props && !props.generate_audio['x-hidden'] && el.audioCheckbox)
-      ? Boolean(el.audioCheckbox.checked)
-      : Boolean(props.generate_audio?.default ?? false);
-    const soundVal = ('sound' in props && !props.sound['x-hidden'] && el.audioCheckbox)
-      ? Boolean(el.audioCheckbox.checked)
-      : Boolean(props.sound?.default ?? false);
+    const genAudioVal = readAudioParamValue(props, 'generate_audio');
+    const soundVal = readAudioParamValue(props, 'sound');
+    const saveAudioVal = readAudioParamValue(props, 'save_audio');
+    const keepAudioVal = readAudioParamValue(props, 'keep_audio');
+    const keepOrigSoundVal = readAudioParamValue(props, 'keep_original_sound');
     const imgCount = getPlannedInputImageCount();
     const dummyImgs = buildDummyImageArray(imgCount);
     const refImgs = ('reference_images' in props) ? dummyImgs : [];
@@ -852,6 +916,9 @@
       output_format: fmtVal,
       generate_audio: genAudioVal,
       sound: soundVal,
+      save_audio: saveAudioVal,
+      keep_audio: keepAudioVal,
+      keep_original_sound: keepOrigSoundVal,
       images: dummyImgs,
       reference_images: refImgs,
       mask_image: maskVal
@@ -910,12 +977,11 @@
       : (props.quality?.type === 'number' ? parseFloat(rawQual) : rawQual);
     const curNumImgs = ('num_images' in props && !props.num_images['x-hidden'] && el.numImagesSelect?.value) ? parseInt(el.numImagesSelect.value, 10) : (props.num_images?.default ?? 1);
     const curFmt = ('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect?.value) ? el.outputFormatSelect.value : (props.output_format?.default || 'png');
-    const curGenAudio = ('generate_audio' in props && !props.generate_audio['x-hidden'] && el.audioCheckbox)
-      ? Boolean(el.audioCheckbox.checked)
-      : Boolean(props.generate_audio?.default ?? false);
-    const curSound = ('sound' in props && !props.sound['x-hidden'] && el.audioCheckbox)
-      ? Boolean(el.audioCheckbox.checked)
-      : Boolean(props.sound?.default ?? false);
+    const curGenAudio = readAudioParamValue(props, 'generate_audio');
+    const curSound = readAudioParamValue(props, 'sound');
+    const curSaveAudio = readAudioParamValue(props, 'save_audio');
+    const curKeepAudio = readAudioParamValue(props, 'keep_audio');
+    const curKeepOrigSound = readAudioParamValue(props, 'keep_original_sound');
     const curDummyImgs = buildDummyImageArray(getPlannedInputImageCount());
     const curRefImgs = ('reference_images' in props) ? curDummyImgs : [];
     const curMask = ('mask_image' in props && (state.hasDrawnMask || model.schema?.required?.includes('mask_image'))) ? 'mask.png' : '';
@@ -933,6 +999,9 @@
       output_format: curFmt,
       generate_audio: curGenAudio,
       sound: curSound,
+      save_audio: curSaveAudio,
+      keep_audio: curKeepAudio,
+      keep_original_sound: curKeepOrigSound,
       images: curDummyImgs,
       reference_images: curRefImgs,
       mask_image: curMask
@@ -1226,11 +1295,7 @@
 
     // Update live option labels in dropdowns and audio cost hint
     refreshParameterOptionPrices(model);
-    if (el.audioCostHint && el.audioRow && el.audioRow.style.display !== 'none') {
-      const affectsPrice = (model.formula || '').includes('generate_audio') || (model.formula || '').includes('sound');
-      el.audioCostHint.textContent = affectsPrice ? 'Uncheck to save credits' : 'Included free';
-      el.audioCostHint.style.color = affectsPrice ? 'var(--accent-emerald)' : 'var(--text-sub)';
-    }
+    updateAudioControlHint(model, getAudioSchemaKey(model.schema?.properties || {}), model.schema?.properties || {});
 
     const cleanTitle = model.name || model.model_id;
     el.infoModelTitle.innerHTML = `${escapeHtml(cleanTitle)} ${model.isPinned ? '<span class="badge-pinned">⭐ Top Pick</span>' : ''}`;
@@ -1656,24 +1721,42 @@
       el.numImagesRow.style.display = 'none';
     }
 
-    // 12. Synchronized Audio / Sound Toggle (default OFF in Economy Mode to save credits)
-    const hasAudioProp = ('generate_audio' in props && !props.generate_audio['x-hidden']) ||
-                         ('sound' in props && !props.sound['x-hidden']);
-    if (hasAudioProp && el.audioRow && el.audioCheckbox) {
-      el.audioRow.style.display = 'block';
-      const audioProp = ('generate_audio' in props && !props.generate_audio['x-hidden'])
-        ? props.generate_audio
-        : props.sound;
-      el.audioCheckbox.checked = useEconomyDefaults
-        ? false
-        : (audioProp?.default !== undefined ? Boolean(audioProp.default) : false);
-      const affectsPrice = (model.formula || '').includes('generate_audio') || (model.formula || '').includes('sound');
-      if (el.audioCostHint) {
-        el.audioCostHint.textContent = affectsPrice ? 'Uncheck to save credits' : 'Included free';
-        el.audioCostHint.style.color = affectsPrice ? 'var(--accent-emerald)' : 'var(--text-sub)';
+    // 12. Synchronized Audio / Sound Toggle (always visible on video models so support/savings are clear)
+    const audioKey = getAudioSchemaKey(props);
+    if (el.audioRow && el.audioCheckbox) {
+      if (audioKey) {
+        const audioProp = props[audioKey];
+        el.audioRow.style.display = 'block';
+        el.audioCheckbox.disabled = false;
+        if (el.audioToggleLabel) {
+          el.audioToggleLabel.style.opacity = '1';
+          el.audioToggleLabel.style.cursor = 'pointer';
+        }
+        if (el.audioLabelText) {
+          el.audioLabelText.textContent = (audioKey === 'keep_audio' || audioKey === 'keep_original_sound')
+            ? 'Keep Source Audio'
+            : 'Generate Synchronized Audio';
+        }
+        el.audioCheckbox.checked = useEconomyDefaults
+          ? false
+          : (audioProp?.default !== undefined ? Boolean(audioProp.default) : false);
+        updateAudioControlHint(model, audioKey, props);
+      } else if (isVideoTabModel(model)) {
+        el.audioRow.style.display = 'block';
+        el.audioCheckbox.checked = false;
+        el.audioCheckbox.disabled = true;
+        if (el.audioToggleLabel) {
+          el.audioToggleLabel.style.opacity = '0.68';
+          el.audioToggleLabel.style.cursor = 'not-allowed';
+        }
+        if (el.audioLabelText) {
+          el.audioLabelText.textContent = 'Audio Control';
+        }
+        updateAudioControlHint(model, null, props);
+      } else {
+        el.audioRow.style.display = 'none';
+        el.audioCheckbox.disabled = false;
       }
-    } else if (el.audioRow) {
-      el.audioRow.style.display = 'none';
     }
 
     // 13. Output Format (Dynamically populated from schema enum)
@@ -1816,7 +1899,7 @@
       if ('duration' in props && !props.duration['x-hidden']) paramParts.push(`${pricing.durVal}s`);
       if ('quality' in props && !props.quality['x-hidden']) paramParts.push(`quality: ${pricing.qualVal}`);
       if ('num_images' in props && !props.num_images['x-hidden']) paramParts.push(`${pricing.numImagesVal} img`);
-      if (('generate_audio' in props && !props.generate_audio['x-hidden']) || ('sound' in props && !props.sound['x-hidden'])) {
+      if (getAudioSchemaKey(props)) {
         paramParts.push(el.audioCheckbox?.checked ? 'audio: ON' : 'audio: OFF');
       }
 
@@ -1994,11 +2077,9 @@
     if ('num_images' in props && !props.num_images['x-hidden'] && el.numImagesSelect && el.numImagesSelect.value) {
       payload.num_images = parseInt(el.numImagesSelect.value, 10);
     }
-    if ('generate_audio' in props && !props.generate_audio['x-hidden'] && el.audioCheckbox) {
-      payload.generate_audio = Boolean(el.audioCheckbox.checked);
-    }
-    if ('sound' in props && !props.sound['x-hidden'] && el.audioCheckbox) {
-      payload.sound = Boolean(el.audioCheckbox.checked);
+    const activeAudioKey = getAudioSchemaKey(props);
+    if (activeAudioKey && el.audioCheckbox) {
+      payload[activeAudioKey] = Boolean(el.audioCheckbox.checked);
     }
     if ('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect && el.outputFormatSelect.value) {
       payload.output_format = el.outputFormatSelect.value;
@@ -2532,10 +2613,7 @@
       const res = await fetch('/api/outputs');
       const json = await res.json();
       if (json.outputs_dir) {
-        state.outputsDir = json.outputs_dir;
-        if (el.outputsPathLabel) {
-          el.outputsPathLabel.textContent = `Auto-saved to ${json.outputs_dir}`;
-        }
+        applyOutputsDirUi(json.outputs_dir);
       }
       if (Array.isArray(json.data) && json.data.length > 0) {
         let changed = false;
@@ -2910,8 +2988,11 @@
           pill.classList.add('active');
         }
       }
-      if (el.audioCheckbox && (params.generate_audio !== undefined || params.sound !== undefined)) {
-        el.audioCheckbox.checked = Boolean(params.generate_audio ?? params.sound);
+      if (el.audioCheckbox) {
+        const savedAudioKey = AUDIO_SCHEMA_KEYS.find(k => params[k] !== undefined);
+        if (savedAudioKey) {
+          el.audioCheckbox.checked = Boolean(params[savedAudioKey]);
+        }
       }
       if (state.selectedModel) updateModelInfo(state.selectedModel);
       showToast(`Loaded recipe from ${item.model_id || 'history'}`, 'good');
@@ -4492,8 +4573,20 @@
     });
     el.closeModalBtn.addEventListener('click', () => el.apiKeyModal.style.display = 'none');
     el.cancelModalBtn.addEventListener('click', () => el.apiKeyModal.style.display = 'none');
+    if (el.browseOutputsDirBtn && window.waveSpeedDesktop?.selectOutputsFolder) {
+      el.browseOutputsDirBtn.style.display = 'inline-flex';
+      el.browseOutputsDirBtn.addEventListener('click', async () => {
+        const currentVal = el.outputsDirInput?.value?.trim() || state.outputsDir || '';
+        const picked = await window.waveSpeedDesktop.selectOutputsFolder(currentVal);
+        if (picked && !picked.canceled && picked.path && el.outputsDirInput) {
+          el.outputsDirInput.value = picked.path;
+        }
+      });
+    }
     el.saveApiKeyBtn.addEventListener('click', async () => {
       const newKey = el.apiKeyInput.value.trim();
+      const requestedOutputsDir = el.outputsDirInput ? el.outputsDirInput.value.trim() : '';
+      const outputsDirChanged = Boolean(requestedOutputsDir && requestedOutputsDir !== state.outputsDir);
       const discountInput = document.getElementById('accountDiscountInput');
       if (discountInput) {
         state.accountDiscount = parseInt(discountInput.value || '0', 10);
@@ -4511,16 +4604,36 @@
         }
       }
 
-      if (newKey) {
-        await fetch('/api/config', {
+      if (newKey || outputsDirChanged) {
+        const configPayload = {};
+        if (newKey) configPayload.apiKey = newKey;
+        if (outputsDirChanged) configPayload.outputsDir = requestedOutputsDir;
+        const cfgRes = await fetch('/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: newKey })
+          body: JSON.stringify(configPayload)
         });
+        const cfgData = await cfgRes.json().catch(() => ({}));
+        if (!cfgRes.ok) {
+          if (typeof showToast === 'function') {
+            showToast(cfgData.error || 'Failed to update settings.', 'warn');
+          }
+          return;
+        }
+        if (cfgData.outputsDir) {
+          applyOutputsDirUi(cfgData.outputsDir);
+        }
+        if (typeof showToast === 'function' && cfgData.message) {
+          showToast(cfgData.message, 'good');
+        }
       }
       el.apiKeyModal.style.display = 'none';
       if (newKey) {
+        el.apiKeyInput.value = '';
         await fetchModels();
+      }
+      if (outputsDirChanged) {
+        await fetchSavedOutputs();
       }
       if (state.selectedModel) updateModelInfo(state.selectedModel);
       filterAndRenderAutocomplete();

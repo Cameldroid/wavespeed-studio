@@ -6,6 +6,7 @@ Note Modified Date:
   - "2026-11-14T07:49:36-03:00"
   - "2026-11-14T08:06:13-03:00"
   - "2026-11-14T08:42:43-03:00"
+  - "2026-11-14T08:58:44-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -58,3 +59,17 @@ Note Modified Date:
   - Built Windows installers cleanly via `npx electron-builder --win nsis msi --publish never`: `dist/WaveSpeed Studio Setup 1.0.0.exe` (`121,606,684` bytes) and `dist/WaveSpeed Studio 1.0.0.msi` (`127,131,648` bytes).
   - Packaged executable `dist\win-unpacked\WaveSpeed Studio.exe --smoke-test` exited `0`, initialized SQLite DB in temp `USER_DATA_DIR`, and rendered SPA cleanly.
 - **Next Action:** Push commit to `main` (triggering GitHub Actions `test` CI) and optionally push a `v1.0.0` tag whenever ready to publish an automated GitHub Release with `.exe` and `.msi` installers.
+
+
+# 2026-11-14T08:58:44-03:00 — Configurable Outputs Folder & Transparent Video Audio Controls
+
+- **Summary:** Added a user-configurable **Outputs Save Folder** setting (with native Electron folder picker) persisted across restarts, and upgraded video audio controls across all models so audio toggle availability and cost impact are always visible on video tabs.
+- **Changes Applied:**
+  - `server.js`, `database/history_db.js`, `electron/preload.js`, `electron/main.js`: Updated `POST /api/config` to accept `outputsDir`, persist it to `.studio-config.json`, update active output directories and SQLite DB sync (`setOutputsDirs`), expose `getOutputsDir()`, and register the `studio:select-outputs-folder` native dialog IPC handler.
+  - `public/index.html` & `public/app.js`: Added `#outputsDirInput` and `#browseOutputsDirBtn` to Settings (`#apiKeyModal`), added `getAudioSchemaKey()` supporting `generate_audio`, `sound`, `save_audio`, `keep_audio`, and `keep_original_sound`, and kept `#audioRow` visible on all video-tab models (showing `"Uncheck saves 33–50%"` when pricing formula uses the toggle, `"Same price (uncheck for silent)"` when free, `"Fixed audio / no toggle on model API"` disabled state when absent, or `"Enter API key to load toggles"` when unauthenticated).
+- **Verification (Zero Live API Spend):**
+  - `node --check` passed on `server.js`, `database/history_db.js`, `public/app.js`, `electron/main.js`, `electron/preload.js`, and `scripts/generate_icon.js`.
+  - `npm test` (`scripts/verify_studio_isolated.js`): Exited `0` (`ALL_ISOLATED_TESTS_PASSED`).
+  - Dynamic `POST /api/config` `outputsDir` persistence test (`CONFIG_OUTPUTS_DIR_TEST_OK`) and secret/personal-path scan (`ZERO_SECRET_HITS`) passed.
+  - Electron dev smoke test (`DEV_SMOKE_EXIT=0 DB_EXISTS=True`), Windows installer rebuild (`npm run dist:win` -> `WaveSpeed Studio Setup 1.0.0.exe` `121,608,301` bytes + `WaveSpeed Studio 1.0.0.msi` `127,127,552` bytes), and packaged `WaveSpeed Studio.exe --smoke-test` (`PKG_EXIT=0 DB_CREATED=True`) passed.
+- **Next Action:** Push to `origin/main` and publish a `v1.0.0` release tag whenever ready to attach `.exe` and `.msi` installers on GitHub Releases.
