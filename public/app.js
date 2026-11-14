@@ -386,6 +386,33 @@
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
+  function openApiKeyModal(isOnboarding = false) {
+    if (!el.apiKeyModal) return;
+    const titleEl = document.getElementById('apiKeyModalTitle');
+    const introEl = document.getElementById('apiKeyModalIntro');
+    if (titleEl) {
+      titleEl.textContent = isOnboarding
+        ? '🔑 Welcome — Enter Your WaveSpeed API Key'
+        : 'WaveSpeed API Settings';
+    }
+    if (introEl) {
+      introEl.innerHTML = isOnboarding
+        ? 'Paste your personal WaveSpeed API key below to check your balance and start generating. It stays 100% local in <code>.studio-config.json</code>.'
+        : 'Your API key is saved only on your computer (<code>.studio-config.json</code>) and used directly for WaveSpeed image and video requests.';
+    }
+    if (el.cancelModalBtn) {
+      el.cancelModalBtn.textContent = isOnboarding ? 'Browse Models First' : 'Cancel';
+    }
+    const discountInput = document.getElementById('accountDiscountInput');
+    if (discountInput) discountInput.value = state.accountDiscount;
+    if (el.spendGuardEnabledInput) el.spendGuardEnabledInput.checked = state.spendGuardEnabled;
+    if (el.spendGuardThresholdInput) el.spendGuardThresholdInput.value = state.spendGuardThreshold.toFixed(2);
+    el.apiKeyModal.style.display = 'flex';
+    if (typeof el.apiKeyInput?.focus === 'function') {
+      setTimeout(() => el.apiKeyInput?.focus?.(), 60);
+    }
+  }
+
   // Fetch Balance
   async function fetchBalance() {
     try {
@@ -400,6 +427,10 @@
           state.balance = null;
           el.balanceValue.textContent = 'No Key';
           updateSidebarBalanceProjection();
+          if (!state.promptedForApiKey) {
+            state.promptedForApiKey = true;
+            openApiKeyModal(true);
+          }
           return;
         }
       }
@@ -409,6 +440,10 @@
         state.balance = null;
         el.balanceValue.textContent = 'No Key';
         updateSidebarBalanceProjection();
+        if (!state.promptedForApiKey) {
+          state.promptedForApiKey = true;
+          openApiKeyModal(true);
+        }
         return;
       }
       if (data.data && typeof data.data.balance !== 'undefined') {
@@ -4450,11 +4485,7 @@
 
     // API Key & Settings Modal
     el.apiKeyModalBtn.addEventListener('click', () => {
-      const discountInput = document.getElementById('accountDiscountInput');
-      if (discountInput) discountInput.value = state.accountDiscount;
-      if (el.spendGuardEnabledInput) el.spendGuardEnabledInput.checked = state.spendGuardEnabled;
-      if (el.spendGuardThresholdInput) el.spendGuardThresholdInput.value = state.spendGuardThreshold.toFixed(2);
-      el.apiKeyModal.style.display = 'flex';
+      openApiKeyModal(false);
     });
     el.closeModalBtn.addEventListener('click', () => el.apiKeyModal.style.display = 'none');
     el.cancelModalBtn.addEventListener('click', () => el.apiKeyModal.style.display = 'none');

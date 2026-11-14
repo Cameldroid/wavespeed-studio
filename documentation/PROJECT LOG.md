@@ -4,6 +4,7 @@ Note Creation Date: "2026-11-14T07:41:58-03:00"
 Note Modified Date:
   - "2026-11-14T07:41:58-03:00"
   - "2026-11-14T07:49:36-03:00"
+  - "2026-11-14T08:06:13-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -30,3 +31,13 @@ Note Modified Date:
   - `npm test`: Exited `0` (`ALL_ISOLATED_TESTS_PASSED`, 209 models x 7 resolutions matrix, simulated DOM, SQLite FTS5 CRUD, mock HTTP `/outputs/*` & traversal tests).
   - Unauthenticated port 3099 smoke test: `hasApiKey=False`, `/api/outputs` count `0`, `/api/balance` returned `401`, `/api/models` returned `762` curated models.
 - **Next Action:** Initialize Git (`main` branch) and push initial commit to private GitHub repo `Cameldroid/wavespeed-studio`.
+
+
+# 2026-11-14T08:06:13-03:00 — First-Run API Key Onboarding Modal & Dashboard Link
+
+- **Summary:** Updated the Studio UI so first-time users without an API key automatically see an API key prompt on startup with a clickable link to generate their WaveSpeed key.
+- **Changes (`public/index.html`, `public/app.js`):**
+  - Added clickable `https://wavespeed.ai/accesskey` link (`#apiKeyGetLink`) and concise step-by-step instructions directly inside the API Settings modal.
+  - Added `openApiKeyModal(isOnboarding)` in `public/app.js` and auto-opened it once on initial load whenever `/api/config` reports `hasApiKey === false` (or `/api/balance` returns `401`), while keeping `"Browse Models First"` dismissal optional.
+- **Verification:** `node --check public/app.js` and `npm test` (`ALL_ISOLATED_TESTS_PASSED`) passed after edits with zero live API spend.
+- **Next Action:** Decide on desktop packaging format (e.g., Electron `.exe`/`.msi` installer vs portable bundle) if distributing to non-technical users.
