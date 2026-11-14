@@ -19,7 +19,7 @@ No Node.js, Git, or terminal required:
 2. Run the installer. *(Note: Until code-signed, Windows SmartScreen may show "Windows protected your PC" -> click **More info** -> **Run anyway**.)*
 3. Launch **WaveSpeed Studio** from your Desktop or Start Menu — it will prompt for your WaveSpeed API key (`https://wavespeed.ai/accesskey`) on first launch.
    - App settings, logs & SQLite DB stay safely in `%AppData%\WaveSpeed Studio`
-   - Generated images & videos auto-save to `Documents\WaveSpeed Studio\outputs`
+   - Generated images & videos auto-save to `Documents\WaveSpeed Studio\outputs` (customizable anytime in **Settings -> Outputs Save Folder**)
 
 ### Option 2: Run From Source (Developers / macOS / Linux)
 

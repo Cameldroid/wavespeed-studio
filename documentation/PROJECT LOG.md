@@ -7,6 +7,7 @@ Note Modified Date:
   - "2026-11-14T08:06:13-03:00"
   - "2026-11-14T08:42:43-03:00"
   - "2026-11-14T08:58:44-03:00"
+  - "2026-11-14T13:49:12-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -73,3 +74,13 @@ Note Modified Date:
   - Dynamic `POST /api/config` `outputsDir` persistence test (`CONFIG_OUTPUTS_DIR_TEST_OK`) and secret/personal-path scan (`ZERO_SECRET_HITS`) passed.
   - Electron dev smoke test (`DEV_SMOKE_EXIT=0 DB_EXISTS=True`), Windows installer rebuild (`npm run dist:win` -> `WaveSpeed Studio Setup 1.0.0.exe` `121,608,301` bytes + `WaveSpeed Studio 1.0.0.msi` `127,127,552` bytes), and packaged `WaveSpeed Studio.exe --smoke-test` (`PKG_EXIT=0 DB_CREATED=True`) passed.
 - **Next Action:** Push to `origin/main` and publish a `v1.0.0` release tag whenever ready to attach `.exe` and `.msi` installers on GitHub Releases.
+
+
+# 2026-11-14T13:49:12-03:00 — Hardened GitHub Release Pipeline & Tagged `v1.0.0`
+
+- **Summary:** Updated the GitHub Actions release workflow to smoke-test the packaged Windows executable on CI, generate `SHA256SUMS.txt` checksums, and include clear first-time installer notes, then tagged and pushed `v1.0.0` to publish downloadable installers on GitHub Releases.
+- **Changes Applied:**
+  - `.github/workflows/build-release.yml`: Added packaged `WaveSpeed Studio.exe --smoke-test` verification step in `build-windows`, added `SHA256SUMS.txt` generation and artifact/release upload, and enabled `generate_release_notes: true` with user setup instructions (unsigned SmartScreen instructions, `https://wavespeed.ai/accesskey` link, and configurable outputs folder).
+  - `README.md`: Documented customizable **Outputs Save Folder** in Settings.
+- **Verification:** `npm test` (`ALL_ISOLATED_TESTS_PASSED`); committing, pushing `main`, pushing tag `v1.0.0`, and monitoring the GitHub Actions `Build and Release` workflow to completion.
+- **Next Action:** Switch `Cameldroid/wavespeed-studio` visibility from Private to Public in GitHub repository settings whenever ready to share Releases with external users (kept Private by default).

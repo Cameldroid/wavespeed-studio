@@ -49,6 +49,30 @@ jobs:
       - name: Build Windows installers
         run: npx electron-builder --win nsis msi --publish never
 
+      - name: Smoke test packaged executable
+        shell: pwsh
+        run: |
+          $tmpRoot = Join-Path $env:RUNNER_TEMP "ws-ci-smoke"
+          $tmpUser = Join-Path $tmpRoot "userdata"
+          $tmpOut = Join-Path $tmpRoot "outputs"
+          New-Item -ItemType Directory -Force -Path $tmpUser, $tmpOut | Out-Null
+          $env:WAVESPEED_USER_DATA_DIR = $tmpUser
+          $env:WAVESPEED_OUTPUTS_DIR = $tmpOut
+          $env:WAVESPEED_API_KEY = ""
+          $p = Start-Process -FilePath ".\dist\win-unpacked\WaveSpeed Studio.exe" -ArgumentList "--smoke-test" -PassThru -Wait -RedirectStandardOutput "$tmpRoot\out.txt" -RedirectStandardError "$tmpRoot\err.txt"
+          Get-Content "$tmpRoot\out.txt" -ErrorAction SilentlyContinue
+          Get-Content "$tmpRoot\err.txt" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          if (-not (Test-Path "$tmpUser\database\studio_history.sqlite")) { throw "SQLite DB not initialized" }
+
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\*.exe, dist\*.msi | Get-FileHash -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)"
+          } | Out-File -Encoding utf8 -FilePath dist\SHA256SUMS.txt
+          Get-Content dist\SHA256SUMS.txt
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -56,11 +80,24 @@ jobs:
           path: |
             dist/*.exe
             dist/*.msi
+            dist/SHA256SUMS.txt
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
+          body: |
+            ### Windows Desktop Installers (Windows 10/11 x64 — No Node.js Required)
+            - **`WaveSpeed Studio Setup *.exe`** *(Recommended)* — Standard installer wizard with custom install directory, Desktop shortcut, and Start Menu entry.
+            - **`WaveSpeed Studio *.msi`** — Windows Installer package.
+            - **`SHA256SUMS.txt`** — File integrity checksums.
+
+            ### First-Time Setup
+            1. Download and run either installer above. *(Because binaries are not EV code-signed yet, Windows SmartScreen may show "Windows protected your PC" -> click **More info** -> **Run anyway**.)*
+            2. Launch **WaveSpeed Studio** — it will prompt automatically for your WaveSpeed API key (`https://wavespeed.ai/accesskey`).
+            3. Your API key and history DB live locally in `%AppData%\WaveSpeed Studio`; generated images and videos save to `Documents\WaveSpeed Studio\outputs` (changeable anytime in **Settings -> Outputs Save Folder**).
           files: |
             dist/*.exe
             dist/*.msi
+            dist/SHA256SUMS.txt
