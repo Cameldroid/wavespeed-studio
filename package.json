@@ -1,13 +1,18 @@
 {
   "name": "wavespeed-studio",
   "version": "1.0.0",
+  "author": "Cameldroid",
   "description": "Local-first Web Studio for WaveSpeed AI image generation, image editing, and video workflows with live RSC pricing formulas, SQLite history, and local asset auto-saving.",
-  "main": "server.js",
+  "main": "electron/main.js",
   "engines": {
     "node": ">=22.5.0"
   },
   "scripts": {
     "start": "node server.js",
+    "desktop": "electron .",
+    "gen-icon": "node scripts/generate_icon.js",
+    "dist:dir": "electron-builder --win dir --publish never",
+    "dist:win": "electron-builder --win nsis msi --publish never",
     "test": "node scripts/verify_studio_isolated.js",
     "sync-prices": "node scripts/sync_pricing_formulas.js"
   },
@@ -17,7 +22,54 @@
     "image-generation",
     "image-editing",
     "video-generation",
-    "sqlite"
+    "sqlite",
+    "electron"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.cameldroid.wavespeedstudio",
+    "productName": "WaveSpeed Studio",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "electron/**/*",
+      "server.js",
+      "database/history_db.js",
+      "public/**/*",
+      "pricing-formulas.json",
+      "assets/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "asarUnpack": [
+      "public/**/*",
+      "pricing-formulas.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "msi", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WaveSpeed Studio"
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": false,
+      "shortcutName": "WaveSpeed Studio"
+    }
+  }
 }

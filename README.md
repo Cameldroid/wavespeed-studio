@@ -11,31 +11,35 @@ A local-first Web Studio for **WaveSpeed AI** image generation, image editing, m
 - **Local Output Auto-Save & SQLite History:** Every completed generation is automatically saved under `outputs/images/`, `outputs/videos/`, and `outputs/metadata/`, and indexed in a searchable local SQLite database (`database/studio_history.sqlite`) with status filters, pinning, notes, batch compare (2–4 outputs side-by-side), and CSV export.
 - **Zero Lock-In / Zero npm Installs Needed:** Pure Node.js standard library (`node:http`, `node:sqlite`, `node:fs`) + vanilla HTML/CSS/JS frontend.
 
-## Requirements
+## Install & Run
 
-- **Node.js 22.5.0+** (uses built-in `node:sqlite`)
-- A **WaveSpeed AI API key** (`wsk_live_...`)
+### Option 1: Windows Desktop App (`.exe` / `.msi` Installer — Easiest)
+No Node.js, Git, or terminal required:
+1. Download the latest **`WaveSpeed Studio Setup *.exe`** (custom install folder wizard + Desktop shortcut) or **`WaveSpeed Studio *.msi`** from the GitHub **Releases** page.
+2. Run the installer. *(Note: Until code-signed, Windows SmartScreen may show "Windows protected your PC" -> click **More info** -> **Run anyway**.)*
+3. Launch **WaveSpeed Studio** from your Desktop or Start Menu — it will prompt for your WaveSpeed API key (`https://wavespeed.ai/accesskey`) on first launch.
+   - App settings, logs & SQLite DB stay safely in `%AppData%\WaveSpeed Studio`
+   - Generated images & videos auto-save to `Documents\WaveSpeed Studio\outputs`
 
-## Quick Start
+### Option 2: Run From Source (Developers / macOS / Linux)
+
+Requires **Node.js 22.5.0+** (uses built-in `node:sqlite`) and a **WaveSpeed AI API key** (`wsk_live_...`).
 
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/Cameldroid/wavespeed-studio.git
    cd wavespeed-studio
+   npm install
    ```
 
 2. **Configure your API key** (choose either method):
-   - **Option A (`.env` file):**
-     ```bash
-     cp .env.example .env
-     ```
-     Edit `.env` and set `WAVESPEED_API_KEY=wsk_live_...`.
-   - **Option B (In-App Settings UI):**
-     Skip `.env`, start the server, click **🔑 Key** in the topbar, and save your key. It is stored locally in gitignored `.studio-config.json`.
+   - **In-App Prompt:** Start the app and paste your key from https://wavespeed.ai/accesskey (stored locally in gitignored `.studio-config.json`).
+   - **`.env` file:** `cp .env.example .env` and set `WAVESPEED_API_KEY=wsk_live_...`.
 
-3. **Start the Studio:**
-   - **Any OS:** `npm start` (or `node server.js`), then open `http://localhost:3000`.
-   - **Windows one-click:** Double-click `Launch Studio.cmd` (or run `start.bat`) to launch safely and open your browser.
+3. **Launch:**
+   - **Desktop window (Electron):** `npm run desktop`
+   - **Browser / headless server:** `npm start` (opens at `http://localhost:3000`, or double-click `Launch Studio.cmd` on Windows)
+   - **Build Windows installers (`.exe` + `.msi` into `dist/`):** `npm run dist:win`
 
 ## Environment Variables
 

@@ -17,8 +17,9 @@ Inspo/
 handovers/
 project-updates/
 
-# Dependencies & OS / Editor Artifacts
+# Dependencies, Build Artifacts & OS / Editor Artifacts
 node_modules/
+dist/
 npm-debug.log*
 .DS_Store
 Thumbs.db

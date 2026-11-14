@@ -4462,17 +4462,20 @@
       const a = document.createElement('a');
       a.href = targetUrl;
       a.download = `wavespeed_${Date.now()}.${ext}`;
-      a.target = '_blank';
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
     });
 
     // Copy Output URL
-    el.copyUrlBtn.addEventListener('click', () => {
+    el.copyUrlBtn.addEventListener('click', async () => {
       const isImg = el.outputImageViewer.style.display !== 'none';
       const targetUrl = state.activeRemoteUrl || (isImg ? el.outputImageViewer.src : el.outputVideoViewer.src);
       if (targetUrl) {
-        navigator.clipboard.writeText(targetUrl);
-        alert('Output URL copied to clipboard!');
+        const ok = await copyTextSafe(targetUrl);
+        if (typeof showToast === 'function') {
+          showToast(ok ? 'Output URL copied to clipboard.' : 'Could not copy output URL.', ok ? 'success' : 'warn');
+        }
       }
     });
 
@@ -4569,17 +4572,30 @@
         }
       });
     }
+    async function downloadHistoryExport(format) {
+      const qs = buildHistoryQueryParams().toString();
+      const url = `/api/history/export?format=${encodeURIComponent(format)}&${qs}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Export failed (${resp.status})`);
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `wavespeed_studio_history_${Date.now()}.${format === 'json' ? 'json' : 'csv'}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        if (typeof showToast === 'function') showToast(`Export error: ${err.message}`, 'error');
+      }
+    }
     if (el.historyExportCsvBtn) {
-      el.historyExportCsvBtn.addEventListener('click', () => {
-        const qs = buildHistoryQueryParams().toString();
-        window.location.href = `/api/history/export?format=csv&${qs}`;
-      });
+      el.historyExportCsvBtn.addEventListener('click', () => downloadHistoryExport('csv'));
     }
     if (el.historyExportJsonBtn) {
-      el.historyExportJsonBtn.addEventListener('click', () => {
-        const qs = buildHistoryQueryParams().toString();
-        window.location.href = `/api/history/export?format=json&${qs}`;
-      });
+      el.historyExportJsonBtn.addEventListener('click', () => downloadHistoryExport('json'));
     }
 
     // Quick History Gallery Filter Pills (All | Images | Videos)

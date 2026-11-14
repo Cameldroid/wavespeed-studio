@@ -5,6 +5,7 @@ Note Modified Date:
   - "2026-11-14T07:41:58-03:00"
   - "2026-11-14T07:49:36-03:00"
   - "2026-11-14T08:06:13-03:00"
+  - "2026-11-14T08:42:43-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -41,3 +42,19 @@ Note Modified Date:
   - Added `openApiKeyModal(isOnboarding)` in `public/app.js` and auto-opened it once on initial load whenever `/api/config` reports `hasApiKey === false` (or `/api/balance` returns `401`), while keeping `"Browse Models First"` dismissal optional.
 - **Verification:** `node --check public/app.js` and `npm test` (`ALL_ISOLATED_TESTS_PASSED`) passed after edits with zero live API spend.
 - **Next Action:** Decide on desktop packaging format (e.g., Electron `.exe`/`.msi` installer vs portable bundle) if distributing to non-technical users.
+
+
+# 2026-11-14T08:42:43-03:00 — Electron Desktop Wrapper & Windows `.exe` / `.msi` Installers
+
+- **Summary:** Wrapped WaveSpeed Studio in Electron (`^45.3.2`, bundled Node `v24.22.2` with verified native `node:sqlite`) and configured `electron-builder` (`^26.18.0`) to produce standalone Windows NSIS (`.exe`) and Windows Installer (`.msi`) packages alongside automated GitHub Actions CI & Releases.
+- **Key Additions & Changes:**
+  - `electron/main.js` & `electron/preload.js`: Single-instance Electron shell (`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`), external browser routing (`wavespeed.ai/accesskey` via `shell.openExternal`), stable localhost port `38442` with ephemeral fallback, `--smoke-test` mode, and clean WAL-checkpoint shutdown.
+  - `server.js` & `database/history_db.js`: Decoupled read-only resources (`APP_RESOURCES_DIR`) from writable `%AppData%\WaveSpeed Studio` (`USER_DATA_DIR`) and `Documents\WaveSpeed Studio\outputs` (`OUTPUTS_DIR`), fixed `PORT=0`, added `pricing-formulas.json` read-fallback + writable cache, expanded case-insensitive path guards (`isPathInside`), exported `startServer()` / `stopServer()` / `historyDb.close()`, and deferred startup DB sync off the critical boot path.
+  - `public/app.js`: Removed `target="_blank"` download spawns, switched history CSV/JSON exports to `fetch` + `Blob` downloads, and replaced clipboard `alert()` with non-blocking toast.
+  - `scripts/generate_icon.js`, `assets/icon.png`, `assets/icon.ico`: Zero-dependency multi-frame Windows ICO (`16/32/48/256`) and PNG icon assets.
+  - `package.json`, `.gitignore`, `.github/workflows/build-release.yml`, `README.md`: Configured `nsis` (`oneClick: false`, `allowToChangeInstallationDirectory: true`, Desktop & Start Menu shortcuts) + `msi`, ignored `dist/`, and added automated test + Windows release artifact CI workflow.
+- **Verification (Zero Live API Spend):**
+  - Electron `node:sqlite` check: `ELECTRON_NODE v24.22.2 SQLITE_OK function`.
+  - Built Windows installers cleanly via `npx electron-builder --win nsis msi --publish never`: `dist/WaveSpeed Studio Setup 1.0.0.exe` (`121,606,684` bytes) and `dist/WaveSpeed Studio 1.0.0.msi` (`127,131,648` bytes).
+  - Packaged executable `dist\win-unpacked\WaveSpeed Studio.exe --smoke-test` exited `0`, initialized SQLite DB in temp `USER_DATA_DIR`, and rendered SPA cleanly.
+- **Next Action:** Push commit to `main` (triggering GitHub Actions `test` CI) and optionally push a `v1.0.0` tag whenever ready to publish an automated GitHub Release with `.exe` and `.msi` installers.

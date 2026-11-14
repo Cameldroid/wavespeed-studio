@@ -618,9 +618,17 @@ function createHistoryDatabase(options = {}) {
     return { deleted: changes > 0, changes, task_ids: resolvedTaskIds };
   }
 
+  function close() {
+    try {
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+      db.close();
+    } catch (e) {}
+  }
+
   return {
     db,
     dbPath,
+    close,
     recordSubmission,
     recordOutputs,
     recordTaskStatus,

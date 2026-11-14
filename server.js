@@ -5,9 +5,13 @@ const { execFile, spawn } = require('child_process');
 const { createHistoryDatabase } = require('./database/history_db');
 
 const BASE_API = 'https://api.wavespeed.ai';
-const PROJECT_ROOT = process.env.WAVESPEED_STUDIO_ROOT
-  ? path.resolve(process.env.WAVESPEED_STUDIO_ROOT)
+const APP_RESOURCES_DIR = process.env.WAVESPEED_RESOURCES_DIR
+  ? path.resolve(process.env.WAVESPEED_RESOURCES_DIR)
   : __dirname;
+const USER_DATA_DIR = process.env.WAVESPEED_USER_DATA_DIR
+  ? path.resolve(process.env.WAVESPEED_USER_DATA_DIR)
+  : (process.env.WAVESPEED_STUDIO_ROOT ? path.resolve(process.env.WAVESPEED_STUDIO_ROOT) : __dirname);
+const PROJECT_ROOT = USER_DATA_DIR;
 const ENV_FILE = path.join(PROJECT_ROOT, '.env');
 const STUDIO_CONFIG_FILE = path.join(PROJECT_ROOT, '.studio-config.json');
 
@@ -42,6 +46,7 @@ function loadStudioConfig() {
 function saveStudioConfig(partial) {
   const current = loadStudioConfig();
   const next = { ...current, ...partial };
+  fs.mkdirSync(path.dirname(STUDIO_CONFIG_FILE), { recursive: true });
   fs.writeFileSync(STUDIO_CONFIG_FILE, JSON.stringify(next, null, 2));
   return next;
 }
@@ -49,29 +54,30 @@ function saveStudioConfig(partial) {
 loadDotEnv(ENV_FILE);
 const initialConfig = loadStudioConfig();
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = (process.env.PORT !== undefined && process.env.PORT !== '') ? Number(process.env.PORT) : 3000;
 let API_KEY = (process.env.WAVESPEED_API_KEY || initialConfig.apiKey || '').trim();
 
-const OUTPUTS_DIR = path.join(PROJECT_ROOT, 'outputs');
+const OUTPUTS_DIR = process.env.WAVESPEED_OUTPUTS_DIR
+  ? path.resolve(process.env.WAVESPEED_OUTPUTS_DIR)
+  : (initialConfig.outputsDir ? path.resolve(initialConfig.outputsDir) : path.join(USER_DATA_DIR, 'outputs'));
 const OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
 const OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
 const OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
-const LOGS_DIR = path.join(PROJECT_ROOT, 'logs');
-const DATABASE_DIR = path.join(PROJECT_ROOT, 'database');
+const LOGS_DIR = path.join(USER_DATA_DIR, 'logs');
+const DATABASE_DIR = path.join(USER_DATA_DIR, 'database');
 const SERVER_LOG_FILE = path.join(LOGS_DIR, 'server.log');
 const GENERATIONS_LOG_FILE = path.join(LOGS_DIR, 'generations.jsonl');
 const HISTORY_DB_FILE = path.join(DATABASE_DIR, 'studio_history.sqlite');
 
-// Ensure core project directories exist
+// Ensure writable runtime directories exist
 [
+  USER_DATA_DIR,
   OUTPUTS_DIR,
   OUTPUTS_IMAGES_DIR,
   OUTPUTS_VIDEOS_DIR,
   OUTPUTS_META_DIR,
   LOGS_DIR,
-  DATABASE_DIR,
-  path.join(PROJECT_ROOT, 'documentation'),
-  path.join(PROJECT_ROOT, 'scripts')
+  DATABASE_DIR
 ].forEach(dir => {
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -110,15 +116,28 @@ let lastPriceSyncTime = 0;
 const pendingTasksMap = new Map();
 const savedTasksMap = new Map();
 
-const FORMULAS_FILE = path.join(PROJECT_ROOT, 'pricing-formulas.json');
-let pricingFormulasCache = {};
-try {
-  if (fs.existsSync(FORMULAS_FILE)) {
-    pricingFormulasCache = JSON.parse(fs.readFileSync(FORMULAS_FILE, 'utf8'));
+const BUNDLED_FORMULAS_FILE = path.join(APP_RESOURCES_DIR, 'pricing-formulas.json');
+const FORMULAS_FILE = path.join(USER_DATA_DIR, 'pricing-formulas.json');
+function loadPricingFormulas() {
+  let merged = {};
+  try {
+    if (fs.existsSync(BUNDLED_FORMULAS_FILE)) {
+      merged = JSON.parse(fs.readFileSync(BUNDLED_FORMULAS_FILE, 'utf8')) || {};
+    }
+  } catch (e) {
+    logServerEvent('ERROR', 'Failed to load bundled pricing-formulas.json', { error: e.message });
   }
-} catch (e) {
-  logServerEvent('ERROR', 'Failed to load pricing-formulas.json', { error: e.message });
+  if (FORMULAS_FILE !== BUNDLED_FORMULAS_FILE) {
+    try {
+      if (fs.existsSync(FORMULAS_FILE)) {
+        const userCached = JSON.parse(fs.readFileSync(FORMULAS_FILE, 'utf8')) || {};
+        merged = { ...merged, ...userCached };
+      }
+    } catch (e) {}
+  }
+  return merged;
 }
+let pricingFormulasCache = loadPricingFormulas();
 
 function extractJsonObjectAt(str, startIndex) {
   let depth = 0;
@@ -454,6 +473,17 @@ function getCleanModelTitle(modelId) {
   return titles[modelId] || modelId;
 }
 
+function isPathInside(candidatePath, rootDir) {
+  const resolvedCandidate = path.resolve(candidatePath);
+  const resolvedRoot = path.resolve(rootDir);
+  if (process.platform === 'win32') {
+    const c = resolvedCandidate.toLowerCase();
+    const r = resolvedRoot.toLowerCase();
+    return c === r || c.startsWith(r + path.sep);
+  }
+  return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(resolvedRoot + path.sep);
+}
+
 // Fetch all models and enrich with live catalog prices & formulas
 async function getModels(forceRefresh = false) {
   const now = Date.now();
@@ -461,12 +491,8 @@ async function getModels(forceRefresh = false) {
     return cachedModels;
   }
 
-  // Reload pricing-formulas.json if updated on disk
-  try {
-    if (fs.existsSync(FORMULAS_FILE)) {
-      pricingFormulasCache = JSON.parse(fs.readFileSync(FORMULAS_FILE, 'utf8'));
-    }
-  } catch (e) {}
+  // Reload pricing formulas (bundled fallback + user cache) if updated on disk
+  pricingFormulasCache = loadPricingFormulas();
 
   const apiPromise = API_KEY
     ? fetch(`${BASE_API}/api/v3/models`, {
@@ -852,9 +878,10 @@ async function uploadToWavespeed(filename, mimeType, buffer) {
   };
 }
 
-// Automatically upload any local /outputs/... or localhost URLs in payload before sending to WaveSpeed Cloud API
+// Automatically upload any local /outputs/..., localhost URLs, or local files inside OUTPUTS_DIR before sending to WaveSpeed Cloud API
 async function resolveLocalMediaUrl(val) {
   if (!val || typeof val !== 'string') return val;
+  const resolvedOutputsDir = path.resolve(OUTPUTS_DIR);
   let rel = null;
   try {
     if (val.startsWith('/outputs/')) {
@@ -862,15 +889,16 @@ async function resolveLocalMediaUrl(val) {
     } else if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/outputs\//i.test(val)) {
       const u = new URL(val);
       rel = decodeURIComponent(u.pathname.replace(/^\/outputs\//, ''));
+    } else if (path.isAbsolute(val) && isPathInside(val, resolvedOutputsDir)) {
+      rel = path.relative(resolvedOutputsDir, path.resolve(val));
     }
   } catch (e) {
     return val;
   }
   if (!rel) return val;
 
-  const resolvedOutputsDir = path.resolve(OUTPUTS_DIR);
   const localPath = path.resolve(OUTPUTS_DIR, rel);
-  if (!localPath.startsWith(resolvedOutputsDir + path.sep) || !fs.existsSync(localPath)) {
+  if (!isPathInside(localPath, resolvedOutputsDir) || !fs.existsSync(localPath)) {
     return val;
   }
   const buffer = fs.readFileSync(localPath);
@@ -1024,7 +1052,6 @@ const server = http.createServer(async (req, res) => {
       }
 
       const resolvedRoot = path.resolve(OUTPUTS_DIR);
-      const allowedPrefix = resolvedRoot.toLowerCase() + path.sep;
       let resolvedFile = null;
 
       if (rawLocalPath) {
@@ -1032,9 +1059,20 @@ const server = http.createServer(async (req, res) => {
       } else if (localUrl && localUrl.startsWith('/outputs/')) {
         const rel = localUrl.replace(/^\/outputs\//, '').replace(/\//g, path.sep);
         resolvedFile = path.resolve(resolvedRoot, rel);
+      } else if (taskId && fs.existsSync(OUTPUTS_META_DIR)) {
+        for (const f of fs.readdirSync(OUTPUTS_META_DIR)) {
+          if (!f.endsWith('.json')) continue;
+          try {
+            const meta = JSON.parse(fs.readFileSync(path.join(OUTPUTS_META_DIR, f), 'utf8'));
+            if (meta?.task_id === taskId && meta?.local_path) {
+              resolvedFile = path.resolve(meta.local_path);
+              break;
+            }
+          } catch (e) {}
+        }
       }
 
-      if (resolvedFile && !resolvedFile.toLowerCase().startsWith(allowedPrefix)) {
+      if (resolvedFile && !isPathInside(resolvedFile, resolvedRoot)) {
         return sendJson(res, 403, { error: 'Refusing to delete file outside outputs directory' });
       }
 
@@ -1156,17 +1194,17 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/open-folder' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       let targetPath = OUTPUTS_DIR;
-      if (body.target === 'project') targetPath = PROJECT_ROOT;
+      if (body.target === 'project') targetPath = USER_DATA_DIR;
       else if (body.target === 'logs') targetPath = LOGS_DIR;
-      else if (body.target === 'docs') targetPath = path.join(PROJECT_ROOT, 'documentation');
+      else if (body.target === 'docs') targetPath = path.join(APP_RESOURCES_DIR, 'documentation');
       else if (body.target === 'images') targetPath = OUTPUTS_IMAGES_DIR;
       else if (body.target === 'videos') targetPath = OUTPUTS_VIDEOS_DIR;
 
-      const resolvedRoot = path.resolve(PROJECT_ROOT);
+      const allowedRoots = [OUTPUTS_DIR, USER_DATA_DIR, LOGS_DIR, APP_RESOURCES_DIR];
       let resolvedFile = null;
       if (body.filePath && typeof body.filePath === 'string') {
         const candidate = path.resolve(body.filePath);
-        if ((candidate === resolvedRoot || candidate.startsWith(resolvedRoot + path.sep)) && fs.existsSync(candidate)) {
+        if (allowedRoots.some(r => isPathInside(candidate, r)) && fs.existsSync(candidate)) {
           resolvedFile = candidate;
           targetPath = path.dirname(resolvedFile);
         }
@@ -1357,7 +1395,7 @@ const server = http.createServer(async (req, res) => {
       }
       const resolvedOutputsDir = path.resolve(OUTPUTS_DIR);
       const outPath = path.resolve(OUTPUTS_DIR, rel);
-      if (outPath !== resolvedOutputsDir && !outPath.startsWith(resolvedOutputsDir + path.sep)) {
+      if (!isPathInside(outPath, resolvedOutputsDir)) {
         res.writeHead(403);
         return res.end('Forbidden');
       }
@@ -1449,9 +1487,11 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const publicRoot = path.resolve(__dirname, 'public');
+    const publicRoot = process.env.WAVESPEED_PUBLIC_DIR
+      ? path.resolve(process.env.WAVESPEED_PUBLIC_DIR)
+      : path.resolve(APP_RESOURCES_DIR, 'public');
     let filePath = path.resolve(publicRoot, pathname === '/' ? 'index.html' : pathname.replace(/^\//, ''));
-    if (!filePath.startsWith(publicRoot + path.sep)) {
+    if (!isPathInside(filePath, publicRoot)) {
       res.writeHead(403);
       return res.end('Forbidden');
     }
@@ -1480,32 +1520,85 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (require.main === module) {
-  if (historyDb) {
-    try {
-      const syncStats = historyDb.syncFromExistingFiles();
-      logServerEvent('INFO', 'History SQLite database ready', { db_path: HISTORY_DB_FILE, ...syncStats });
-    } catch (e) {
-      logServerEvent('WARN', 'History SQLite initial sync error', { error: e.message });
+function startServer(options = {}) {
+  const targetPort = options.port !== undefined ? Number(options.port) : PORT;
+  const host = options.host || undefined;
+  const fallbackEphemeral = Boolean(options.fallbackEphemeral);
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onListening = () => {
+      if (settled) return;
+      settled = true;
+      server.removeListener('error', onError);
+      const addr = server.address();
+      const boundPort = addr && typeof addr === 'object' ? addr.port : targetPort;
+      logServerEvent('INFO', `WaveSpeed Studio running at http://localhost:${boundPort}`, {
+        project_root: PROJECT_ROOT,
+        user_data_dir: USER_DATA_DIR,
+        outputs_dir: OUTPUTS_DIR,
+        logs_dir: LOGS_DIR,
+        database_dir: DATABASE_DIR
+      });
+      if (historyDb) {
+        setImmediate(() => {
+          try {
+            const syncStats = historyDb.syncFromExistingFiles();
+            logServerEvent('INFO', 'History SQLite database ready', { db_path: HISTORY_DB_FILE, ...syncStats });
+          } catch (e) {
+            logServerEvent('WARN', 'History SQLite initial sync error', { error: e.message });
+          }
+        });
+      }
+      resolve({ server, port: boundPort });
+    };
+
+    const onError = (err) => {
+      if (settled) return;
+      if (err && err.code === 'EADDRINUSE' && fallbackEphemeral && targetPort !== 0) {
+        server.listen(0, host, onListening);
+        return;
+      }
+      settled = true;
+      reject(err);
+    };
+
+    server.once('error', onError);
+    server.listen(targetPort, host, onListening);
+  });
+}
+
+function stopServer() {
+  return new Promise((resolve) => {
+    if (historyDb && typeof historyDb.close === 'function') {
+      try {
+        historyDb.close();
+      } catch (e) {}
     }
-  }
-  server.listen(PORT, () => {
-    logServerEvent('INFO', `WaveSpeed Studio running at http://localhost:${PORT}`, {
-      project_root: PROJECT_ROOT,
-      outputs_dir: OUTPUTS_DIR,
-      logs_dir: LOGS_DIR,
-      database_dir: DATABASE_DIR
-    });
+    if (!server.listening) {
+      return resolve();
+    }
+    server.close(() => resolve());
+  });
+}
+
+if (require.main === module) {
+  startServer().catch((err) => {
+    logServerEvent('ERROR', 'Failed to start server', { error: err.message });
+    process.exit(1);
   });
 }
 
 module.exports = {
   server,
+  startServer,
+  stopServer,
   saveOutputLocally,
   resolveLocalMediaUrl,
   resolvePayloadMedia,
   listSavedOutputs,
   getCleanModelTitle,
+  USER_DATA_DIR,
   OUTPUTS_DIR,
   OUTPUTS_IMAGES_DIR,
   OUTPUTS_VIDEOS_DIR,
