@@ -561,6 +561,7 @@ async function runMockDomAppTests() {
         if (sel === '.ratio-pill.active') return children.find(c => c.classList.contains('active')) || null;
         if (sel === '.input-header label') return makeElement('label');
         if (sel === '.input-header .subtext') return makeElement('span');
+        if (sel === '.active-job-right') return makeElement('div');
         if (sel === 'p') return makeElement('p');
         return null;
       },
@@ -696,6 +697,7 @@ async function runMockDomAppTests() {
   ];
 
   let generateCalls = 0;
+  const capturedGeneratePayloads = [];
   const docListeners = {};
   const storageMap = new Map();
   const mockLocalStorage = {
@@ -751,14 +753,25 @@ async function runMockDomAppTests() {
     navigator: { clipboard: { writeText() {} } },
     FileReader: function () {},
     URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() {} },
-    fetch: async (url) => {
+    fetch: async (url, opts = {}) => {
       if (url === '/api/balance') return { ok: true, json: async () => ({ data: { balance: 5.8797 } }) };
       if (url.startsWith('/api/models')) return { ok: true, json: async () => ({ data: mockModels }) };
       if (url === '/api/outputs') return { ok: true, json: async () => ({ outputs_dir: './outputs', data: [] }) };
       if (url.startsWith('/api/model-pricing')) return { ok: true, json: async () => ({ data: null }) };
       if (url === '/api/generate') {
         generateCalls++;
+        if (opts && opts.body) {
+          capturedGeneratePayloads.push(JSON.parse(opts.body));
+        }
         return { ok: true, json: async () => ({ data: { id: 'mock-task-never-real' } }) };
+      }
+      if (String(url).startsWith('/api/task/')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: { id: 'mock-task-never-real', status: 'completed', outputs: ['https://cdn.example/mock-out.mp4'], local_outputs: [] }
+          })
+        };
       }
       return { ok: false, json: async () => ({}) };
     }
@@ -838,7 +851,7 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('resolutionCol').style.display, 'block');
   assert.strictEqual(elementsById.get('resolutionSelect').value, '1080p');
 
-  // 8. Switch to Video & Edit tab -> verify wan-3.0/video-edit defaults to 480p and exposes Video + Ref Images + Ref Audios + ref chips
+  // 8. Switch to Video & Edit tab -> verify wan-3.0/video-edit defaults to 480p and exposes Video + Ref Images + Ref Audios + ref chips + workflow advisory
   const videoGenTab = modeBtns.find(b => b.dataset.category === 'video-gen');
   videoGenTab.click();
   assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'alibaba/wan-3.0/video-edit');
@@ -848,6 +861,31 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'none');
   assert.strictEqual(elementsById.get('r2vRefChips').style.display, 'contents');
+  assert(elementsById.get('infoUseAdvice').textContent.includes('Image 1'), 'Expected Wan 3.0 Video Edit workflow advice banner');
+
+  // Verify default presets were removed while + Image 1 / + Video 1 / + Audio 1 and + Save Preset remain
+  assert(!html.includes('videoMotionChips'), 'Default video motion presets should be removed');
+  assert(!html.includes('Cinematic'), 'Default Cinematic preset should be removed');
+  assert(!html.includes('Cyberpunk'), 'Default Cyberpunk preset should be removed');
+  assert(!html.includes('Fluid Motion'), 'Default Fluid Motion preset should be removed');
+  assert(html.includes('savePresetChipBtn') && html.includes('+ Image 1') && html.includes('+ Video 1'), 'Keep R2V ref chips and Save Preset button');
+
+  // Verify zero-spend emulated payload submission for Wan 3.0 Video Edit + Reference Image (480p)
+  elementsById.get('promptInput').value = 'Recreate the clip with Image 1 in realistic motion';
+  elementsById.get('videoUrlInput').value = 'https://example.com/source-clip.mp4';
+  elementsById.get('multiImageUrlInput').value = 'https://example.com/ref-person.png';
+  elementsById.get('addMultiImageUrlBtn').click();
+  elementsById.get('generateBtn').click();
+  await new Promise(r => setTimeout(r, 40));
+  assert.strictEqual(generateCalls, 1);
+  assert.strictEqual(capturedGeneratePayloads.length, 1);
+  const wanEditReq = capturedGeneratePayloads[0];
+  assert.strictEqual(wanEditReq.model_id, 'alibaba/wan-3.0/video-edit');
+  assert.strictEqual(wanEditReq.payload.video, 'https://example.com/source-clip.mp4');
+  assert.deepStrictEqual(wanEditReq.payload.reference_images, ['https://example.com/ref-person.png']);
+  assert.strictEqual(wanEditReq.payload.resolution, '480p');
+  assert.strictEqual(wanEditReq.payload.generate_audio, false);
+  elementsById.get('cancelTaskBtn').click();
 
   // Also check face_image single-slot support on wavespeed-ai/video-face-swap
   elementsById.get('comboboxList').children[1].click();
@@ -855,7 +893,7 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Wan 3.0 Video-Edit + Ref Images, face_image swap slot, Video Upscaler target_resolution, bounded onerror fallback)');
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image swap slot, Video Upscaler target_resolution, bounded onerror fallback)');
 }
 
 async function runHistoryDatabaseTests() {

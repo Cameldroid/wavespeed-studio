@@ -864,6 +864,12 @@ textarea:focus {
   background: rgba(139, 92, 246, 0.05);
 }
 
+.input-group.dragover {
+  border-color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.06);
+  border-radius: var(--radius-sm);
+}
+
 .drop-icon {
   font-size: 1.8rem;
   display: block;

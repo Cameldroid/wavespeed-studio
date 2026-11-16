@@ -300,7 +300,6 @@
     safetyShieldBanner: document.getElementById('safetyShieldBanner'),
     safetyShieldText: document.getElementById('safetyShieldText'),
     safetySwitchBtn: document.getElementById('safetySwitchBtn'),
-    videoMotionChips: document.getElementById('videoMotionChips'),
     beforeAfterToggleBtn: document.getElementById('beforeAfterToggleBtn'),
     grabFrameEditBtn: document.getElementById('grabFrameEditBtn'),
     grabLastFrameI2VBtn: document.getElementById('grabLastFrameI2VBtn'),
@@ -1645,10 +1644,6 @@
     if (el.negativePromptGroup) {
       el.negativePromptGroup.style.display = ('negative_prompt' in props && !props.negative_prompt['x-hidden']) ? 'flex' : 'none';
     }
-    if (el.videoMotionChips) {
-      const isVidMode = Boolean(model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit || model.isVideoGen || model.isVideoEdit);
-      el.videoMotionChips.style.display = isVidMode ? 'contents' : 'none';
-    }
     if (el.r2vRefChips) {
       el.r2vRefChips.style.display = (isR2VModel(model) || hasVideoAndImageRefs) ? 'contents' : 'none';
     }
@@ -1767,6 +1762,13 @@
     // 4. Video Input
     if ('video' in props) {
       el.videoInputGroup.style.display = 'flex';
+      const vSub = el.videoInputGroup.querySelector('.input-header .subtext');
+      const midLower = String(model.model_id || '').toLowerCase();
+      if (vSub) {
+        vSub.textContent = midLower.includes('alibaba/wan-3.')
+          ? 'Upload MP4/WEBM/MOV (up to 15s on Wan 3.0; longer clips trim automatically) or paste URL'
+          : 'Upload MP4/WEBM/MOV or paste video URL';
+      }
     } else {
       el.videoInputGroup.style.display = 'none';
     }
@@ -3694,6 +3696,26 @@
       text: '🏢 Official MiniMax H3 Image Edit ($0.038 @ 1K/2K): Upstream MiniMax endpoint (supports up to 16 ref images, stricter moderation, costs +$0.008 more than wavespeed-ai/minimax-h3-image/edit).'
     },
     {
+      match: 'alibaba/wan-3.0/video-edit',
+      tone: 'warn',
+      text: '🎬 Wan 3.0 Video Edit + Reference Images: 1) Upload Source Video (≤15s; longer clips trim automatically) · 2) Attach Reference Image(s) as Image 1 · 3) Describe the subject/scene replacement mentioning "Image 1" (480p is the lowest-cost tier). Note: upstream Wan endpoints still enforce safety moderation.'
+    },
+    {
+      match: 'alibaba/wan-3.0/reference-to-video',
+      tone: 'warn',
+      text: '🧬 Wan 3.0 Reference-to-Video: Attach Reference Image(s) (Image 1...), Reference Video(s) (Video 1...), or Audio (Audio 1...) and refer to them in Prompt (480p is cheapest). Note: upstream Wan endpoints still enforce safety moderation.'
+    },
+    {
+      match: '/video-edit',
+      tone: 'good',
+      text: '🎬 Video Edit + References: 1) Upload Source Video · 2) Attach Reference Image(s) (Image 1, Image 2...) · 3) Describe what to replace or preserve in the clip using "Image 1" (select 480p for lowest cost).'
+    },
+    {
+      match: '/reference-to-video',
+      tone: 'good',
+      text: '🧬 Reference-to-Video (R2V): Attach Reference Image(s) (Image 1), Reference Video(s) (Video 1), or Audio (Audio 1), then reference them in Prompt. Lower resolution (480p) minimizes per-second cost.'
+    },
+    {
       match: 'alibaba/wan-3.0/',
       tone: 'warn',
       text: '⚠️ Upstream Moderation Caution: Even -spicy Wan 3.0 endpoints apply Alibaba safety filtering on certain images/acts AND cost $0.0475/s @ 480p. Prefer wavespeed-ai/minimax-h3/image-to-video-spicy ($0.02/s) or ltx-2.3-spicy ($0.02/s).'
@@ -4856,13 +4878,29 @@
       });
     }
 
-    // Multi-Reference Additional Images (Files + URL)
+    // Multi-Reference Additional Images (Files + URL + Drag-and-Drop)
     if (el.addMoreImagesBtn && el.multiFileInput) {
       el.addMoreImagesBtn.addEventListener('click', () => el.multiFileInput.click());
       el.multiFileInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files.length > 0) {
           addExtraImageFiles(e.target.files);
           e.target.value = '';
+        }
+      });
+    }
+    if (el.multiImageGroup) {
+      el.multiImageGroup.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.multiImageGroup.classList.add('dragover');
+      });
+      el.multiImageGroup.addEventListener('dragleave', () => {
+        el.multiImageGroup.classList.remove('dragover');
+      });
+      el.multiImageGroup.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.multiImageGroup.classList.remove('dragover');
+        if (e.dataTransfer?.files?.length > 0) {
+          addExtraImageFiles(e.dataTransfer.files);
         }
       });
     }

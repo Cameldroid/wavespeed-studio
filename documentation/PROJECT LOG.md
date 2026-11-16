@@ -14,6 +14,7 @@ Note Modified Date:
   - "2026-11-16T00:57:34-03:00"
   - "2026-11-16T01:45:03-03:00"
   - "2026-11-16T01:59:25-03:00"
+  - "2026-11-16T02:20:00-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -161,3 +162,15 @@ Note Modified Date:
   - `package.json`: Bumped version to `1.0.5`.
 - **Verification (Zero Live API Spend):** Re-ran `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Electron `--smoke-test` (`SMOKE=0`), and secret scan (`ZERO_LIVE_SECRET_HITS`).
 - **Next Action:** Push `main` + tag `v1.0.5`; user runs `Launch Desktop.cmd` directly from `D:\Cocoding\wavespeed-studio` or downloads `v1.0.5` from GitHub Releases when sharing with testers.
+
+
+# 2026-11-16T02:20:00-03:00 — Default Preset Removal, Video-Edit + Ref Image Drag-and-Drop & Workflow Guidance, Zero-Spend Emulation (`v1.0.6`)
+
+- **Summary:** Removed all built-in style/motion preset chips across menus while preserving R2V `+ Image 1` / `+ Video 1` / `+ Audio 1` insertion chips and `+ Save Preset`, added explicit step-by-step workflow guidance & drag-and-drop image support for `alibaba/wan-3.0/video-edit` (≤15s clip + Reference Images @ `480p`) and `reference-to-video` models, and verified end-to-end payload construction via zero-spend Playwright + isolated DOM tests (`v1.0.6`).
+- **Changes Applied:**
+  - `public/index.html` & `public/app.js`: Removed default style chips (`Cinematic`, `Cyberpunk`, `Portrait`, `Anime`) and `#videoMotionChips` (`Fluid Motion`, `Handheld`, `Slow Push-In`, `Slow-Mo`), keeping `#r2vRefChips`, `#customPromptChips`, and `#savePresetChipBtn`.
+  - `public/app.js` & `public/style.css`: Added drag-and-drop image upload listeners & `.input-group.dragover` highlight on `#multiImageGroup`; added 15s clip auto-trim subtext on Wan 3.0 video inputs and step-by-step `USE_CASE_ADVISORY_MAP` guidance for `alibaba/wan-3.0/video-edit`, `alibaba/wan-3.0/reference-to-video`, generic `/video-edit`, and `/reference-to-video` models.
+  - `scripts/verify_studio_isolated.js`: Added assertions verifying zero default presets remain and testing full zero-spend emulated `/api/generate` payload capture (`model_id: alibaba/wan-3.0/video-edit`, `video`, `reference_images`, `resolution: 480p`, `generate_audio: false`).
+  - `package.json`: Bumped version to `1.0.6`.
+- **Verification (Zero Live API Spend):** Re-ran `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Chromium Playwright route-mocked E2E check against temporary port `39111` (`0` page errors, `0` clipped tabs, exact `wan-3.0/video-edit` payload captured cleanly), Electron `--smoke-test` (`SMOKE=0`), and live secret scan (`ZERO_LIVE_SECRET_HITS`).
+- **Next Action:** Push `main` + tag `v1.0.6` for GitHub Releases CI and restart local port `3000` daemon so `http://localhost:3000` serves `v1.0.6`.
