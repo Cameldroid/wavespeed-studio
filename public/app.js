@@ -598,6 +598,13 @@
     return null;
   }
 
+  function getSingleImageSchemaKey(props) {
+    if (!props || typeof props !== 'object') return null;
+    if ('image' in props && !props.image?.['x-hidden']) return 'image';
+    if ('face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
+    return null;
+  }
+
   // Fetch Models
   async function fetchModels() {
     try {
@@ -933,7 +940,7 @@
     for (const candidateRes of resEnums) {
       const candidateCost = calculateModelCost(model, {
         resolution: candidateRes,
-        duration: (props.duration?.['x-hidden'] && props.duration?.default === undefined) ? 0 : minDur,
+        duration: (!('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)) ? 0 : minDur,
         size: props.size?.default || '1024*1024',
         quality: cheapestQuality,
         output_format: props.output_format?.default || 'png',
@@ -966,9 +973,10 @@
 
   function getPlannedInputImageCount() {
     const props = state.selectedModel?.schema?.properties || {};
+    const singleKey = getSingleImageSchemaKey(props);
     const hasSingleSlot = Boolean(
       state.selectedModel &&
-      ('image' in props || state.selectedModel.isImageToVideo || (!('images' in props) && !('reference_images' in props)))
+      (singleKey || state.selectedModel.isImageToVideo || (!('images' in props) && !('reference_images' in props)))
     );
     const extraCount = Array.isArray(state.extraImages) ? state.extraImages.length : 0;
     return hasSingleSlot ? Math.max(1, 1 + extraCount) : Math.max(0, extraCount);
@@ -1007,7 +1015,9 @@
     const resVal = (resProp && el.resolutionSelect?.value)
       ? el.resolutionSelect.value
       : (resProp?.default || '720p');
-    const hiddenDurDefault = (props.duration?.['x-hidden'] && props.duration?.default === undefined) ? 0 : (props.duration?.default ?? 5);
+    const hiddenDurDefault = !('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
+      ? 0
+      : (props.duration?.default ?? 5);
     const durVal = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
       ? Number(el.durationSelect.value)
       : hiddenDurDefault;
@@ -1091,6 +1101,10 @@
       }
     } else if ('duration' in props && (model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit)) {
       breakdownText = `Clip tier (${durVal}s): $${calc.finalPrice} total${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+    } else if ('video' in props && (model.isTextToVideoOrEdit || (model.price_inputs || []).includes('video'))) {
+      const srcSec = state.sourceVideoDuration ?? 5;
+      const resLabel = resProp ? ` @ ${resVal}` : '';
+      breakdownText = `Video clip (~${srcSec}s source${resLabel}): $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
     } else if ((model.price_inputs || []).includes('images') || (model.price_inputs || []).includes('reference_images')) {
       const resLabel = resProp ? ` (${resVal})` : '';
       const maskNote = params.mask_image ? ' + mask' : '';
@@ -1122,7 +1136,9 @@
     const resKey = getResolutionSchemaKey(props) || 'resolution';
     const resProp = props[resKey];
     const curRes = (resProp && el.resolutionSelect?.value) ? el.resolutionSelect.value : (resProp?.default || '720p');
-    const hiddenDurDef = (props.duration?.['x-hidden'] && props.duration?.default === undefined) ? 0 : (props.duration?.default ?? 5);
+    const hiddenDurDef = !('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
+      ? 0
+      : (props.duration?.default ?? 5);
     const curDur = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
       ? Number(el.durationSelect.value)
       : hiddenDurDef;
@@ -1607,12 +1623,22 @@
       el.economyModeHint.style.display = useEconomyDefaults ? 'block' : 'none';
     }
 
+    const hasVideoAndImageRefs = Boolean(
+      'video' in props &&
+      (('reference_images' in props && !props.reference_images['x-hidden']) ||
+       ('images' in props && !props.images['x-hidden']))
+    );
+
     // 1. Prompt & Negative Prompt
     if ('prompt' in props && !props.prompt['x-hidden']) {
       el.promptGroup.style.display = 'flex';
-      el.promptInput.placeholder = isR2VModel(model)
-        ? 'Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1...'
-        : 'Enter detailed prompt...';
+      if (isR2VModel(model)) {
+        el.promptInput.placeholder = 'Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1...';
+      } else if (hasVideoAndImageRefs) {
+        el.promptInput.placeholder = 'Describe what to edit in the clip (you can refer to attached references as Image 1, Image 2...)';
+      } else {
+        el.promptInput.placeholder = 'Enter detailed prompt...';
+      }
     } else {
       el.promptGroup.style.display = 'none';
     }
@@ -1624,26 +1650,30 @@
       el.videoMotionChips.style.display = isVidMode ? 'contents' : 'none';
     }
     if (el.r2vRefChips) {
-      el.r2vRefChips.style.display = isR2VModel(model) ? 'contents' : 'none';
+      el.r2vRefChips.style.display = (isR2VModel(model) || hasVideoAndImageRefs) ? 'contents' : 'none';
     }
 
-    // 2. Image Inputs (single Source Image when schema takes `image` or is I2V; pure multi-image arrays use #multiImageGroup directly)
+    // 2. Image Inputs (single Source Image when schema takes `image` / `face_image` or is I2V; pure multi-image arrays use #multiImageGroup directly)
     const multiProp = ('images' in props && !props.images['x-hidden'])
       ? props.images
       : (('reference_images' in props && !props.reference_images['x-hidden'])
         ? props.reference_images
         : ((isR2VModel(model) && 'reference_files' in props && !props.reference_files['x-hidden']) ? props.reference_files : null));
-    const hasSingleImage = 'image' in props || model.isImageToVideo;
+    const singleImgKey = getSingleImageSchemaKey(props);
+    const hasSingleImage = Boolean(singleImgKey || model.isImageToVideo);
     el.imageInputGroup.style.display = hasSingleImage ? 'flex' : 'none';
     if (hasSingleImage) {
       const lbl = el.imageInputGroup.querySelector('.input-header label');
       const sub = el.imageInputGroup.querySelector('.input-header .subtext');
       const reqList = model.schema?.required || [];
-      const isReq = reqList.includes('image') || reqList.includes('images') || reqList.includes('reference_images');
+      const isReq = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images');
       const reqStar = isReq ? ' <span class="required">*</span>' : '';
       if (model.isImageToVideo) {
         if (lbl) lbl.innerHTML = `Image to Animate${reqStar}`;
         if (sub) sub.textContent = 'Upload still image, paste URL, or extract a frame from the Timeline below';
+      } else if (singleImgKey === 'face_image') {
+        if (lbl) lbl.innerHTML = `Reference Face Image${reqStar}`;
+        if (sub) sub.textContent = 'Upload, drag & drop, or paste target image URL';
       } else {
         if (lbl) lbl.innerHTML = `Source Image${reqStar}`;
         if (sub) sub.textContent = 'Upload, drag & drop, or paste image URL';
@@ -2276,7 +2306,8 @@
       if (promptVal) payload.prompt = promptVal;
     }
 
-    const hasSingleImageSlot = 'image' in props || model.isImageToVideo;
+    const singleImageKey = getSingleImageSchemaKey(props);
+    const hasSingleImageSlot = Boolean(singleImageKey || model.isImageToVideo);
     const hasImageInput = hasSingleImageSlot || 'images' in props || 'reference_images' in props || (isR2VModel(model) && 'reference_files' in props);
     const imageUrlSnapshot = hasSingleImageSlot ? (state.sourceImage?.downloadUrl || el.imageUrlInput.value.trim()) : '';
     const imageFileSnapshot = hasSingleImageSlot ? (state.sourceImage?.file || null) : null;
@@ -2287,7 +2318,7 @@
     const lastImageFileSnapshot = state.lastImage?.file || null;
     const lastImageObjSnapshot = state.lastImage;
     if (hasImageInput) {
-      const needsImg = reqList.includes('image') || reqList.includes('images') || reqList.includes('reference_images');
+      const needsImg = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images');
       if (!imageUrlSnapshot && !imageFileSnapshot && extraImagesSnapshot.length === 0 && needsImg) {
         alert('Please provide at least one image input for this model.');
         return;
@@ -2562,11 +2593,12 @@
           }
         }
         const allImageUrls = [finalImageUrl, ...uploadedExtras].filter(Boolean);
-        if (allImageUrls.length === 0 && (reqList.includes('image') || reqList.includes('images') || reqList.includes('reference_images'))) {
+        if (allImageUrls.length === 0 && (reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images'))) {
           throw new Error('Please provide a source image for this model.');
         }
         if (allImageUrls.length > 0) {
           if ('image' in props) payload.image = allImageUrls[0];
+          if ('face_image' in props) payload.face_image = allImageUrls[0];
           if ('images' in props) payload.images = allImageUrls;
           if ('reference_images' in props) payload.reference_images = allImageUrls;
           if (ctx.refVidKey === 'reference_files') resolvedReferenceFileUrls.push(...allImageUrls);

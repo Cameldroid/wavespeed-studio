@@ -13,6 +13,7 @@ Note Modified Date:
   - "2026-11-14T15:59:27-03:00"
   - "2026-11-16T00:57:34-03:00"
   - "2026-11-16T01:45:03-03:00"
+  - "2026-11-16T01:59:25-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -148,3 +149,15 @@ Note Modified Date:
   - `package.json`: Bumped version to `1.0.4`.
 - **Verification:** Playwright DOM/geometry/console/timeline inspection passed (`0` console errors/warnings, `topbarOverflow: false`, 8/8 filmstrip thumbnails, extracted frame -> `Image 1`); re-running `npm test`, `--smoke-test`, and secret scan before pushing `main` + `v1.0.4`.
 - **Next Action:** Commit, push `main` + tag `v1.0.4` for GitHub Release CI, and confirm user's preference on keeping vs retiring `D:\Cocoding\Aimagen Nsfw`.
+
+
+# 2026-11-16T01:59:25-03:00 — Video-Edit + Reference Images Support, Accurate Source-Clip Pricing & `face_image` Schema Support (`v1.0.5`)
+
+- **Summary:** Improved Video-Edit (`alibaba/wan-3.0/video-edit`, `bytedance/seedance-2.5/video-edit`, `kwaivgi/kling-v4.0/video-edit`, `wavespeed-ai/openjutsu/character-swap`) visibility, pricing accuracy when schemas omit `duration`, and `face_image` upload slot mapping (`v1.0.5`).
+- **Changes Applied:**
+  - `server.js`: Added readable titles and `PINNED_ORDER` placement in `🎬 Video & Edit` for `alibaba/wan-3.0/video-edit`, `bytedance/seedance-2.5/video-edit`, `kwaivgi/kling-v4.0/video-edit`, and `wavespeed-ai/openjutsu/character-swap`.
+  - `public/app.js`: Fixed `duration` fallback (`0` instead of `5` when `duration` is absent from schema) so Wan 3.0 Video-Edit evaluates source-clip duration accurately (`5s @ 480p = $0.50`, `15s @ 480p = $1.50`); added `getSingleImageSchemaKey()` (`image` | `face_image`); enabled `+ Image 1` reference chips & prompt guidance when Video-Edit schemas expose `reference_images`/`images`.
+  - `scripts/verify_studio_isolated.js`: Added isolated pricing and simulated DOM tests for `alibaba/wan-3.0/video-edit` (`480p` default + ref images/audios + 5s/15s pricing) and `wavespeed-ai/video-face-swap` (`face_image` slot).
+  - `package.json`: Bumped version to `1.0.5`.
+- **Verification (Zero Live API Spend):** Re-ran `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Electron `--smoke-test` (`SMOKE=0`), and secret scan (`ZERO_LIVE_SECRET_HITS`).
+- **Next Action:** Push `main` + tag `v1.0.5`; user runs `Launch Desktop.cmd` directly from `D:\Cocoding\wavespeed-studio` or downloads `v1.0.5` from GitHub Releases when sharing with testers.

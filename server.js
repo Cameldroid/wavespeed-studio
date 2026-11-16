@@ -494,6 +494,11 @@ function getCleanModelTitle(modelId) {
     // Text to Video & Video Edit
     'wavespeed-ai/minimax-h3/text-to-video': 'MiniMax H3 (WaveSpeed 50% OFF Promo • T2V)',
     'wavespeed-ai/minimax-h3/video-edit': 'MiniMax H3 Video Edit (50% OFF)',
+    'alibaba/wan-3.0/video-edit': 'WAN 3.0 (Video Edit • Up to 15s + Ref Images)',
+    'alibaba/wan-3.0-prime/video-edit': 'WAN 3.0 Prime (Video Edit • Up to 15s)',
+    'bytedance/seedance-2.5/video-edit': 'Seedance 2.5 (Video Edit + Ref Images)',
+    'kwaivgi/kling-v4.0/video-edit': 'Kling 4.0 (Video Edit + Ref Images)',
+    'wavespeed-ai/openjutsu/character-swap': 'OpenJutsu Character Swap (Video + Ref Images)',
     'bytedance/seedance-2.5/text-to-video': 'Seedance 2.5 (Text-to-Video)',
     'bytedance/seedance-2.5-flash/text-to-video': 'Seedance 2.5 Flash (Text-to-Video)',
     'bytedance/seedance-2.0/text-to-video': 'Seedance 2.0 (Text-to-Video)',
@@ -636,8 +641,13 @@ async function getModels(forceRefresh = false) {
     'google/nano-banana-2.1/edit',
     'minimax/h3-image/edit',
     'openai/gpt-image-2.6-flare/edit',
-    // Text-to-Video Top Picks
+    // Text-to-Video & Video Edit Top Picks
     'wavespeed-ai/minimax-h3/text-to-video',
+    'alibaba/wan-3.0/video-edit',
+    'bytedance/seedance-2.5/video-edit',
+    'wavespeed-ai/minimax-h3/video-edit',
+    'kwaivgi/kling-v4.0/video-edit',
+    'wavespeed-ai/openjutsu/character-swap',
     'alibaba/wan-3.0/text-to-video',
     'bytedance/seedance-2.0-mini/text-to-video',
     'bytedance/seedance-2.5/text-to-video',

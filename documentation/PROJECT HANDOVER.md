@@ -5,6 +5,7 @@ Note Modified Date:
   - "2026-11-14T15:59:27-03:00"
   - "2026-11-16T00:57:34-03:00"
   - "2026-11-16T01:45:03-03:00"
+  - "2026-11-16T01:59:25-03:00"
 ---
 
 # 2026-11-14T15:59:27-03:00 — Project Handover Scaffold: WaveSpeed Studio
@@ -182,3 +183,9 @@ D:\Cocoding\wavespeed-studio\
   - Run `Launch Studio.cmd` (`scripts/launch_studio.ps1`) for localhost browser mode using that exact same external `WAVESPEED_USER_DATA_DIR`.
   - Legacy `D:\Cocoding\Aimagen Nsfw` (`82` runs, `78` outputs) has been non-destructively copied/merged via `scripts/import_legacy_studio.js` into `C:\Users\psyco\AppData\Roaming\wavespeed-studio\database\studio_history.sqlite` (`84` total generations, `80` output rows; pre-merge backup saved at `studio_history.pre-merge.sqlite.bak`). `D:\Cocoding\Aimagen Nsfw` originals remain untouched as a backup.
 - **Exact Next Action:** Use `D:\Cocoding\wavespeed-studio` as the single development & launch workspace (`Launch Desktop.cmd` for instant dev testing without rebuilding `.exe`), keep `D:\Cocoding\Aimagen Nsfw` only as a read-only archive or delete later if satisfied, and tag/release via GitHub Actions when distributing updates.
+
+
+# 2026-11-16T01:59:25-03:00 — v1.0.5 Video-Edit + Reference Images Polish
+
+- **Summary:** `alibaba/wan-3.0/video-edit`, `bytedance/seedance-2.5/video-edit`, `kwaivgi/kling-v4.0/video-edit`, and `wavespeed-ai/openjutsu/character-swap` are now pinned in `🎬 Video & Edit` with accurate source-clip duration pricing (`duration: 0` when omitted from schema -> `$0.50` for 5s / `$1.50` for 15s on Wan 3.0 Video-Edit at `480p`), `+ Image 1` reference chips, and `face_image` single-slot upload support.
+- **Exact Next Action:** Run `Launch Desktop.cmd` directly from `D:\Cocoding\wavespeed-studio` to test against your unified `%AppData%\wavespeed-studio` DB (`84` runs) and `D:\wvst` outputs (`80` files); share `v1.0.5` installer from GitHub Releases with testers once CI finishes.

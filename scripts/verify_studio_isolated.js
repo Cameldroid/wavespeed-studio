@@ -258,6 +258,23 @@ async function runFormulaTests() {
   assert.strictEqual(calculateModelCost(multiFallback, { num_images: 2 }).finalPrice, 0.14);
   assert.strictEqual(calculateModelCost(multiFallback, { num_images: 4 }).finalPrice, 0.28);
 
+  // m) wan-3.0/video-edit (schema omits duration -> duration=0 uses source clip duration up to 15s; 480p = $0.05/s * 2)
+  const wanVidEdit = formulasJson['alibaba/wan-3.0/video-edit'];
+  const wanVidEditModel = {
+    model_id: 'alibaba/wan-3.0/video-edit',
+    base_price: wanVidEdit.base_price_micro / 1e6,
+    base_price_micro: wanVidEdit.base_price_micro,
+    discount_rate: 100,
+    discount_percent: 0,
+    formula: wanVidEdit.formula,
+    has_formula: true,
+    isTextToVideoOrEdit: true,
+    schema: { properties: { prompt: {}, video: {}, reference_images: {}, resolution: { default: '720p', enum: ['480p', '720p', '1080p'] } } }
+  };
+  assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '480p', duration: 0, video_duration: 5 }).finalPrice, 0.5);
+  assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '480p', duration: 0, video_duration: 15 }).finalPrice, 1.5);
+  assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '720p', duration: 0, video_duration: 5 }).finalPrice, 1);
+
   console.log('[PASS] Edge-case formula & pricing logic assertions passed');
 }
 
@@ -656,6 +673,25 @@ async function runMockDomAppTests() {
       formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
       category: 'utility', isUtility: true, isPinned: true, pinnedRank: 12,
       schema: { required: ['video'], properties: { video: {}, target_resolution: { default: '1080p', enum: ['720p', '1080p', '2k', '4k'] } } }
+    },
+    {
+      model_id: 'alibaba/wan-3.0/video-edit',
+      name: 'WAN 3.0 (Video Edit • Up to 15s + Ref Images)',
+      base_price: 0.1, base_price_micro: 100000, effective_price: 0.1,
+      discount_rate: 100, discount_percent: 0,
+      formula: formulasJson['alibaba/wan-3.0/video-edit'].formula,
+      has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'video-gen', isTextToVideoOrEdit: true, isPinned: true, pinnedRank: 13,
+      schema: { required: ['prompt', 'video'], properties: { prompt: {}, video: {}, reference_images: { maxItems: 10 }, reference_audios: { maxItems: 5 }, resolution: { default: '720p', enum: ['480p', '720p', '1080p'] }, generate_audio: { default: true } } }
+    },
+    {
+      model_id: 'wavespeed-ai/video-face-swap',
+      name: 'wavespeed-ai/video-face-swap',
+      base_price: 0.01, base_price_micro: 10000, effective_price: 0.01,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: false, fetched_at: 0, isSpicy: false,
+      category: 'video-gen', isTextToVideoOrEdit: true, isPinned: false, pinnedRank: 9999,
+      schema: { required: ['face_image', 'video'], properties: { face_image: {}, video: {} } }
     }
   ];
 
@@ -802,7 +838,24 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('resolutionCol').style.display, 'block');
   assert.strictEqual(elementsById.get('resolutionSelect').value, '1080p');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Video Upscaler target_resolution, bounded onerror fallback)');
+  // 8. Switch to Video & Edit tab -> verify wan-3.0/video-edit defaults to 480p and exposes Video + Ref Images + Ref Audios + ref chips
+  const videoGenTab = modeBtns.find(b => b.dataset.category === 'video-gen');
+  videoGenTab.click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'alibaba/wan-3.0/video-edit');
+  assert.strictEqual(elementsById.get('resolutionSelect').value, '480p');
+  assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('multiImageGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'none');
+  assert.strictEqual(elementsById.get('r2vRefChips').style.display, 'contents');
+
+  // Also check face_image single-slot support on wavespeed-ai/video-face-swap
+  elementsById.get('comboboxList').children[1].click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/video-face-swap');
+  assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Wan 3.0 Video-Edit + Ref Images, face_image swap slot, Video Upscaler target_resolution, bounded onerror fallback)');
 }
 
 async function runHistoryDatabaseTests() {
