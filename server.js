@@ -340,6 +340,30 @@ function parseJsonBody(req) {
   });
 }
 
+function parseRawBody(req, maxBytes = 200 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    let aborted = false;
+    req.on('data', chunk => {
+      if (aborted) return;
+      total += chunk.length;
+      if (total > maxBytes) {
+        aborted = true;
+        reject(new Error(`Upload exceeds ${(maxBytes / (1024 * 1024)).toFixed(0)} MB limit`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (!aborted) resolve(Buffer.concat(chunks));
+    });
+    req.on('error', err => {
+      if (!aborted) reject(err);
+    });
+  });
+}
+
 function requireApiKey() {
   if (!API_KEY || !API_KEY.trim()) {
     const err = new Error('WaveSpeed API key is not configured. Click 🔑 Key in the topbar or set WAVESPEED_API_KEY in .env.');
@@ -392,6 +416,19 @@ function getCleanModelTitle(modelId) {
     'wavespeed-ai/minimax-h3/image-to-video': 'MiniMax H3 (WaveSpeed 50% OFF Promo • I2V)',
     'wavespeed-ai/minimax-h3/image-to-video-spicy': 'MiniMax H3 Spicy 🌶️ (50% OFF Promo • I2V)',
     'wavespeed-ai/minimax-h3/reference-to-video': 'MiniMax H3 Reference-to-Video (50% OFF)',
+    'alibaba/wan-3.0/reference-to-video': 'WAN 3.0 (Reference-to-Video)',
+    'alibaba/wan-3.0-prime/reference-to-video': 'WAN 3.0 Prime (Reference-to-Video)',
+    'bytedance/seedance-2.5/reference-to-video': 'Seedance 2.5 (Reference-to-Video)',
+    'bytedance/seedance-2.5-flash/reference-to-video': 'Seedance 2.5 Flash (Reference-to-Video)',
+    'kwaivgi/kling-v4.0/reference-to-video': 'Kling 4.0 (Reference-to-Video)',
+    'kwaivgi/kling-v4.0-flash/reference-to-video': 'Kling 4.0 Flash (Reference-to-Video)',
+    'minimax/h3-lite/reference-to-video': 'MiniMax H3 Lite (Reference-to-Video)',
+    'wavespeed-ai/video-upscaler': 'WaveSpeed Video Upscaler (720p–4K)',
+    'wavespeed-ai/video-upscaler-pro': 'WaveSpeed Video Upscaler Pro (720p–4K)',
+    'wavespeed-ai/flashvsr': 'FlashVSR Video Upscaler (720p–4K)',
+    'bytedance/video-upscaler': 'ByteDance Video Upscaler (1080p–4K)',
+    'wavespeed-ai/real-esrgan': 'Real-ESRGAN Image Upscaler',
+    'wavespeed-ai/image-upscaler': 'WaveSpeed Image Upscaler (2K–8K)',
     'bytedance/seedance-2.5/image-to-video': 'Seedance 2.5 (Image-to-Video)',
     'bytedance/seedance-2.5/image-to-video-spicy': 'Seedance 2.5 Spicy 🌶️ (Image-to-Video)',
     'bytedance/seedance-2.5/image-to-video-turbo': 'Seedance 2.5 Turbo (Image-to-Video)',
@@ -600,8 +637,20 @@ async function getModels(forceRefresh = false) {
     'bytedance/seedance-2.0-mini/text-to-video',
     'bytedance/seedance-2.5/text-to-video',
     'kwaivgi/kling-v4.0/text-to-video',
-    // Quick Tools Top Picks
-    'wavespeed-ai/feynobg'
+    // Reference-to-Video Top Picks
+    'wavespeed-ai/minimax-h3/reference-to-video',
+    'alibaba/wan-3.0/reference-to-video',
+    'bytedance/seedance-2.5/reference-to-video',
+    'kwaivgi/kling-v4.0/reference-to-video',
+    'bytedance/seedance-2.5-flash/reference-to-video',
+    'minimax/h3-lite/reference-to-video',
+    // Quick Tools & Upscalers Top Picks
+    'wavespeed-ai/feynobg',
+    'wavespeed-ai/real-esrgan',
+    'wavespeed-ai/image-upscaler',
+    'wavespeed-ai/video-upscaler',
+    'bytedance/video-upscaler',
+    'wavespeed-ai/flashvsr'
   ];
 
   const processed = filteredClutter.map(m => {
@@ -614,38 +663,44 @@ async function getModels(forceRefresh = false) {
       type === 'image-to-3d' || type === 'content-moderation' || type === 'image-to-text' ||
       type === 'video-to-text' || type === 'video-to-audio';
 
-    const isImageToVideo = !isNonVisual && (
-      type === 'image-to-video' || type === 'reference-to-video' ||
-      mid.includes('image-to-video') || mid.includes('reference-to-video') ||
+    const isReferenceToVideo = !isNonVisual && (
+      type === 'reference-to-video' || mid.includes('reference-to-video')
+    );
+
+    const isImageToVideo = !isNonVisual && !isReferenceToVideo && (
+      type === 'image-to-video' || mid.includes('image-to-video') ||
       (mid.includes('i2v') && !mid.includes('lora')) ||
       (type.includes('video') && desc.includes('from reference image'))
     );
 
-    const isTextToVideoOrEdit = !isNonVisual && !isImageToVideo && (
-      type === 'text-to-video' || type === 'video-to-video' || mid.includes('video-edit') ||
-      mid.includes('t2v') || mid.includes('text-to-video') || type.includes('video')
-    );
-
-    const isUtility = !isNonVisual && !isImageToVideo && !isTextToVideoOrEdit && (
+    const isUtility = !isNonVisual && !isReferenceToVideo && !isImageToVideo && (
       type.includes('background') || type.includes('image-effects') || type.includes('image-tools') ||
-      type === 'upscale-image' || type === 'image-object-removal' || type === 'image-face-swap' ||
+      type === 'upscale-image' || type === 'upscale-video' || type === 'video-tools' ||
+      type === 'image-object-removal' || type === 'image-face-swap' ||
       mid.includes('remove-bg') || mid.includes('feynobg') || mid.includes('upscale') ||
       mid.includes('face-blur') || mid.includes('watermark-remover') || mid.includes('image-eraser') ||
       mid.includes('text-remover') || mid.includes('converter')
     );
 
-    const isImageEdit = !isNonVisual && !isImageToVideo && !isTextToVideoOrEdit && !isUtility && (
+    const isTextToVideoOrEdit = !isNonVisual && !isReferenceToVideo && !isImageToVideo && !isUtility && (
+      type === 'text-to-video' || type === 'video-to-video' || type === 'video-extend' ||
+      mid.includes('video-edit') || mid.includes('video-extend') ||
+      mid.includes('t2v') || mid.includes('text-to-video') || type.includes('video')
+    );
+
+    const isImageEdit = !isNonVisual && !isReferenceToVideo && !isImageToVideo && !isTextToVideoOrEdit && !isUtility && (
       type.includes('image-to-image') || mid.includes('/edit') || mid.includes('image-edit') || mid.includes('inpaint') ||
       desc.includes('edit and composes images') || desc.includes('image-to-image')
     );
 
-    const isImageGen = !isNonVisual && !isImageToVideo && !isTextToVideoOrEdit && !isUtility && !isImageEdit && (
+    const isImageGen = !isNonVisual && !isReferenceToVideo && !isImageToVideo && !isTextToVideoOrEdit && !isUtility && !isImageEdit && (
       type === 'text-to-image' || mid.includes('text-to-image') || mid.includes('flux') || mid.includes('recraft') ||
       mid.includes('sdxl') || mid.includes('z-image/turbo') || mid.includes('nano-banana') || mid.includes('seedream')
     );
 
     let category = 'other';
-    if (isImageToVideo) category = 'image-to-video';
+    if (isReferenceToVideo) category = 'ref-to-video';
+    else if (isImageToVideo) category = 'image-to-video';
     else if (isTextToVideoOrEdit) category = 'video-gen';
     else if (isImageEdit) category = 'image-edit';
     else if (isImageGen) category = 'image-gen';
@@ -701,6 +756,7 @@ async function getModels(forceRefresh = false) {
       fetched_at: formInfo?.fetched_at || 0,
       type: m.type,
       category,
+      isReferenceToVideo,
       isImageToVideo,
       isTextToVideoOrEdit,
       isImageEdit,
@@ -939,7 +995,7 @@ async function resolvePayloadMedia(payload) {
       payload[k] = await resolveLocalMediaUrl(payload[k]);
     }
   }
-  const arrayKeys = ['images', 'reference_images', 'videos', 'reference_videos', 'reference_audios', 'reference_files'];
+  const arrayKeys = ['images', 'reference_images', 'videos', 'reference_videos', 'ref_videos', 'audios', 'reference_audios', 'reference_files'];
   for (const k of arrayKeys) {
     if (Array.isArray(payload[k])) {
       payload[k] = await Promise.all(payload[k].map(v => resolveLocalMediaUrl(v)));
@@ -1293,6 +1349,24 @@ const server = http.createServer(async (req, res) => {
       const buffer = Buffer.from(base64Data.replace(/^data:[^;]+;base64,/, ''), 'base64');
       const uploadResult = await uploadToWavespeed(filename, mimeType, buffer);
       logServerEvent('INFO', `Uploaded media to WaveSpeed storage: ${filename || 'upload.png'}`, { size: buffer.length });
+      return sendJson(res, 200, { code: 200, data: uploadResult });
+    }
+
+    if (pathname === '/api/upload-raw' && req.method === 'POST') {
+      const buffer = await parseRawBody(req);
+      if (!buffer || buffer.length === 0) {
+        return sendJson(res, 400, { error: 'Empty upload body' });
+      }
+      const rawNameHeader = req.headers['x-file-name'] || 'upload.bin';
+      let filename = 'upload.bin';
+      try {
+        filename = decodeURIComponent(String(rawNameHeader));
+      } catch (e) {
+        filename = String(rawNameHeader);
+      }
+      const mimeType = String(req.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
+      const uploadResult = await uploadToWavespeed(filename, mimeType, buffer);
+      logServerEvent('INFO', `Stream-uploaded raw media to WaveSpeed storage: ${filename}`, { size: buffer.length, mimeType });
       return sendJson(res, 200, { code: 200, data: uploadResult });
     }
 

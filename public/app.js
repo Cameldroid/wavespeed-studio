@@ -25,10 +25,16 @@
     jobCounter: 0,
     activeJobsTickTimer: null,
     sourceImage: null, // { file, base64, url, downloadUrl }
+    sourceImageDimensions: null, // { width, height }
     lastImage: null, // { file, url, downloadUrl }
     extraImages: [], // [{ id, file, previewUrl, downloadUrl }]
+    refVideos: [], // [{ id, file, url, previewUrl, downloadUrl, name, width, height, duration }]
+    refAudios: [], // [{ id, file, url, downloadUrl, name, duration }]
     sourceVideo: null, // { file, url, downloadUrl }
+    sourceVideoDimensions: null, // { width, height }
     sourceVideoDuration: null,
+    timelineVideo: null, // { src, objectUrl, name, width, height, duration }
+    timelineIsObjectUrl: false,
     maskDataUrl: null,
     isDrawing: false,
     hasDrawnMask: false,
@@ -211,6 +217,8 @@
     lastImageUrlInput: document.getElementById('lastImageUrlInput'),
     loadLastUrlBtn: document.getElementById('loadLastUrlBtn'),
     multiImgGrid: document.getElementById('multiImgGrid'),
+    multiImageUrlInput: document.getElementById('multiImageUrlInput'),
+    addMultiImageUrlBtn: document.getElementById('addMultiImageUrlBtn'),
     addMoreImagesBtn: document.getElementById('addMoreImagesBtn'),
     multiFileInput: document.getElementById('multiFileInput'),
     extendVideoBtn: document.getElementById('extendVideoBtn'),
@@ -225,8 +233,54 @@
     compareGrid: document.getElementById('compareGrid'),
     negativePromptGroup: document.getElementById('negativePromptGroup'),
     negativePromptInput: document.getElementById('negativePromptInput'),
+    r2vRefChips: document.getElementById('r2vRefChips'),
     refVideosGroup: document.getElementById('refVideosGroup'),
+    refVideosLabel: document.getElementById('refVideosLabel'),
+    refVideoDropzone: document.getElementById('refVideoDropzone'),
+    refVideoFileInput: document.getElementById('refVideoFileInput'),
+    refVideoUrlInput: document.getElementById('refVideoUrlInput'),
+    addRefVideoUrlBtn: document.getElementById('addRefVideoUrlBtn'),
+    useActiveRefVideoBtn: document.getElementById('useActiveRefVideoBtn'),
+    refVideosList: document.getElementById('refVideosList'),
     refVideosInput: document.getElementById('refVideosInput'),
+    refAudiosGroup: document.getElementById('refAudiosGroup'),
+    refAudiosLabel: document.getElementById('refAudiosLabel'),
+    refAudioFileInput: document.getElementById('refAudioFileInput'),
+    refAudioUrlInput: document.getElementById('refAudioUrlInput'),
+    addRefAudioUrlBtn: document.getElementById('addRefAudioUrlBtn'),
+    uploadRefAudioBtn: document.getElementById('uploadRefAudioBtn'),
+    refAudiosList: document.getElementById('refAudiosList'),
+    openSourceVideoTimelineBtn: document.getElementById('openSourceVideoTimelineBtn'),
+    videoTimelineGroup: document.getElementById('videoTimelineGroup'),
+    toggleTimelineExtractorBtn: document.getElementById('toggleTimelineExtractorBtn'),
+    timelineExtractorBody: document.getElementById('timelineExtractorBody'),
+    timelineChevron: document.getElementById('timelineChevron'),
+    timelineVideoFileInput: document.getElementById('timelineVideoFileInput'),
+    browseTimelineVideoBtn: document.getElementById('browseTimelineVideoBtn'),
+    loadActiveToTimelineBtn: document.getElementById('loadActiveToTimelineBtn'),
+    timelineMetaReadout: document.getElementById('timelineMetaReadout'),
+    timelineStage: document.getElementById('timelineStage'),
+    timelineVideoPlayer: document.getElementById('timelineVideoPlayer'),
+    timelineFilmstrip: document.getElementById('timelineFilmstrip'),
+    timelineScrubber: document.getElementById('timelineScrubber'),
+    timelineTimecode: document.getElementById('timelineTimecode'),
+    tlStepStartBtn: document.getElementById('tlStepStartBtn'),
+    tlStepBack1sBtn: document.getElementById('tlStepBack1sBtn'),
+    tlStepBack1fBtn: document.getElementById('tlStepBack1fBtn'),
+    tlStepFwd1fBtn: document.getElementById('tlStepFwd1fBtn'),
+    tlStepFwd1sBtn: document.getElementById('tlStepFwd1sBtn'),
+    tlStepEndBtn: document.getElementById('tlStepEndBtn'),
+    extractFrameSourceBtn: document.getElementById('extractFrameSourceBtn'),
+    extractFrameLastBtn: document.getElementById('extractFrameLastBtn'),
+    extractFrameRefBtn: document.getElementById('extractFrameRefBtn'),
+    inputQualityAdvisory: document.getElementById('inputQualityAdvisory'),
+    inputQualityAdvisoryText: document.getElementById('inputQualityAdvisoryText'),
+    preUpscaleLabel: document.getElementById('preUpscaleLabel'),
+    preUpscaleCheckbox: document.getElementById('preUpscaleCheckbox'),
+    preUpscaleLabelText: document.getElementById('preUpscaleLabelText'),
+    routeToVideoUpscalerBtn: document.getElementById('routeToVideoUpscalerBtn'),
+    openViewerTimelineBtn: document.getElementById('openViewerTimelineBtn'),
+    useOutputAsR2vBtn: document.getElementById('useOutputAsR2vBtn'),
     advancedMotionGroup: document.getElementById('advancedMotionGroup'),
     movementAmpCol: document.getElementById('movementAmpCol'),
     movementAmpSelect: document.getElementById('movementAmpSelect'),
@@ -487,22 +541,61 @@
 
   // Model Category Classifier Helper
   function isModelInCategory(m, category) {
+    if (category === 'ref-to-video') {
+      return Boolean(m.isReferenceToVideo || m.category === 'ref-to-video');
+    }
     if (category === 'image-to-video') {
-      return m.isImageToVideo;
+      return Boolean(m.isImageToVideo);
     }
     if (category === 'video-gen') {
-      return m.isTextToVideoOrEdit;
+      return Boolean(m.isTextToVideoOrEdit);
     }
     if (category === 'image-edit') {
-      return m.isImageEdit;
+      return Boolean(m.isImageEdit);
     }
     if (category === 'image-gen') {
-      return m.isImageGen;
+      return Boolean(m.isImageGen);
     }
     if (category === 'utility') {
-      return m.isUtility;
+      return Boolean(m.isUtility);
     }
     return true;
+  }
+
+  function isR2VModel(model) {
+    if (!model) return false;
+    return Boolean(
+      model.isReferenceToVideo ||
+      model.category === 'ref-to-video' ||
+      String(model.type || '').toLowerCase() === 'reference-to-video' ||
+      String(model.model_id || '').toLowerCase().includes('reference-to-video')
+    );
+  }
+
+  function getRefVideosSchemaKey(props, model) {
+    if (!props || typeof props !== 'object') return null;
+    for (const k of ['reference_videos', 'videos', 'ref_videos']) {
+      if (k in props && !props[k]?.['x-hidden']) return k;
+    }
+    if (isR2VModel(model) && 'reference_files' in props && !props.reference_files?.['x-hidden']) {
+      return 'reference_files';
+    }
+    return null;
+  }
+
+  function getRefAudiosSchemaKey(props) {
+    if (!props || typeof props !== 'object') return null;
+    for (const k of ['reference_audios', 'audios', 'audio']) {
+      if (k in props && !props[k]?.['x-hidden']) return k;
+    }
+    return null;
+  }
+
+  function getResolutionSchemaKey(props) {
+    if (!props || typeof props !== 'object') return null;
+    if ('resolution' in props && !props.resolution?.['x-hidden']) return 'resolution';
+    if ('target_resolution' in props && !props.target_resolution?.['x-hidden']) return 'target_resolution';
+    return null;
   }
 
   // Fetch Models
@@ -533,16 +626,18 @@
 
   function updatePlaceholderForCategory() {
     const cat = state.currentCategory;
-    if (cat === 'image-to-video') {
+    if (cat === 'ref-to-video') {
+      el.modelAutocompleteInput.placeholder = 'Search Ref → Video (Wan 3.0, Seedance 2.5, Kling 4.0, MiniMax H3)...';
+    } else if (cat === 'image-to-video') {
       el.modelAutocompleteInput.placeholder = 'Search Image-to-Video models (Seedance 2.5, H3, Kling, WAN)...';
     } else if (cat === 'image-gen') {
       el.modelAutocompleteInput.placeholder = 'Search Text-to-Image models (flux, recraft, nano-banana)...';
     } else if (cat === 'image-edit') {
       el.modelAutocompleteInput.placeholder = 'Search Image Edit models (H3 edit, z-image, inpaint)...';
     } else if (cat === 'video-gen') {
-      el.modelAutocompleteInput.placeholder = 'Search Text-to-Video models (seedance flash, wan t2v)...';
+      el.modelAutocompleteInput.placeholder = 'Search Video & Edit models (T2V, Video Edit, Video Extend)...';
     } else if (cat === 'utility') {
-      el.modelAutocompleteInput.placeholder = 'Search Quick Tools (background removal, upscale, blur)...';
+      el.modelAutocompleteInput.placeholder = 'Search Tools (Video/Image Upscalers, background removal, blur)...';
     }
   }
 
@@ -579,7 +674,7 @@
 
   function isVideoTabModel(model) {
     if (!model) return false;
-    return Boolean(model.isImageToVideo || model.isTextToVideoOrEdit);
+    return Boolean(model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit || model.category === 'ref-to-video');
   }
 
   function updateAudioControlHint(model, audioKey, props) {
@@ -649,13 +744,23 @@
         markup_image: params.markup_image ?? '',
         video: params.video ?? '',
         videos: Array.isArray(params.videos) ? params.videos : [],
+        ref_videos: Array.isArray(params.ref_videos) ? params.ref_videos : [],
         reference_videos: Array.isArray(params.reference_videos) ? params.reference_videos : [],
         reference_images: Array.isArray(params.reference_images) ? params.reference_images : [],
+        reference_files: Array.isArray(params.reference_files) ? params.reference_files : [],
         reference_audios: Array.isArray(params.reference_audios) ? params.reference_audios : [],
+        audios: Array.isArray(params.audios) ? params.audios : [],
+        target_resolution: String(params.target_resolution ?? params.resolution ?? '1080p'),
         max_images: params.max_images !== undefined ? Number(params.max_images) : undefined,
         audio: params.audio ?? '',
         __get_duration: (media) => {
-          if (Array.isArray(media)) return media.length > 0 ? (Number(params.video_duration ?? params.duration ?? 5) * media.length) : 0;
+          if (Array.isArray(media)) {
+            if (media.length === 0) return 0;
+            if (Array.isArray(params.reference_video_durations) && params.reference_video_durations.length === media.length) {
+              return params.reference_video_durations.reduce((acc, sec) => acc + (Number(sec) || Number(params.duration ?? 5)), 0);
+            }
+            return Number(params.video_duration ?? params.duration ?? 5) * media.length;
+          }
           return Number(params.video_duration ?? params.duration ?? 5);
         },
         __count: (arr) => Array.isArray(arr) ? arr.length : (arr ? 1 : 0),
@@ -715,7 +820,8 @@
   function isModelPerSecond(model) {
     if (!model) return false;
     const props = model.schema?.properties || {};
-    const isVideoModality = model.isImageToVideo || model.isTextToVideoOrEdit || model.category === 'video-gen';
+    const isVideoModality = model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit ||
+      model.category === 'ref-to-video' || model.category === 'video-gen';
     if (!isVideoModality || !('duration' in props)) return false;
     // Explicit empty formula in WaveSpeed RSC means flat base_price per generation
     if (model.has_formula && (!model.formula || !model.formula.trim())) return false;
@@ -859,21 +965,48 @@
   }
 
   function getPlannedInputImageCount() {
-    return Math.max(1, 1 + (Array.isArray(state.extraImages) ? state.extraImages.length : 0));
+    const props = state.selectedModel?.schema?.properties || {};
+    const hasSingleSlot = Boolean(
+      state.selectedModel &&
+      ('image' in props || state.selectedModel.isImageToVideo || (!('images' in props) && !('reference_images' in props)))
+    );
+    const extraCount = Array.isArray(state.extraImages) ? state.extraImages.length : 0;
+    return hasSingleSlot ? Math.max(1, 1 + extraCount) : Math.max(0, extraCount);
   }
 
   function buildDummyImageArray(count) {
-    return Array.from({ length: Math.max(1, count) }, (_, i) => `img${i + 1}`);
+    if (count <= 0) return [];
+    return Array.from({ length: count }, (_, i) => `img${i + 1}`);
+  }
+
+  function getPreUpscaleUnitCost() {
+    const esr = state.models.find(m => m.model_id === 'wavespeed-ai/real-esrgan');
+    return esr ? Number(esr.effective_price ?? esr.base_price ?? 0.0024) : 0.0024;
+  }
+
+  function getPlannedRefVideoMeta() {
+    const activeVids = Array.isArray(state.refVideos) ? state.refVideos : [];
+    const manualLines = (el.refVideosInput && el.refVideosInput.style.display !== 'none')
+      ? el.refVideosInput.value.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean)
+      : [];
+    const total = activeVids.length > 0 ? activeVids.length : manualLines.length;
+    const dummyVids = Array.from({ length: total }, (_, i) => `vid${i + 1}`);
+    const durations = activeVids.length > 0
+      ? activeVids.map(v => Math.max(1, Math.ceil(Number(v.duration) || Number(el.durationSelect?.value) || 5)))
+      : dummyVids.map(() => Number(el.durationSelect?.value) || 5);
+    return { dummyVids, durations };
   }
 
   // Price and Discount Calculation Helper for current active form state
   function getModelPricing(model) {
     if (!model) return { basePrice: 0, finalPrice: 0, hasDiscount: false, percentOff: 0, breakdownText: '' };
     const props = model.schema?.properties || {};
+    const resKey = getResolutionSchemaKey(props) || 'resolution';
+    const resProp = props[resKey];
 
-    const resVal = ('resolution' in props && !props.resolution['x-hidden'] && el.resolutionSelect?.value)
+    const resVal = (resProp && el.resolutionSelect?.value)
       ? el.resolutionSelect.value
-      : (props.resolution?.default || '720p');
+      : (resProp?.default || '720p');
     const hiddenDurDefault = (props.duration?.['x-hidden'] && props.duration?.default === undefined) ? 0 : (props.duration?.default ?? 5);
     const durVal = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
       ? Number(el.durationSelect.value)
@@ -902,9 +1035,14 @@
     const dummyImgs = buildDummyImageArray(imgCount);
     const refImgs = ('reference_images' in props) ? dummyImgs : [];
     const maskVal = ('mask_image' in props && (state.hasDrawnMask || model.schema?.required?.includes('mask_image'))) ? 'mask.png' : '';
+    const refVidMeta = getPlannedRefVideoMeta();
+    const refVidKey = getRefVideosSchemaKey(props, model);
+    const refAudCount = Array.isArray(state.refAudios) ? state.refAudios.length : 0;
+    const dummyAuds = Array.from({ length: refAudCount }, (_, i) => `aud${i + 1}`);
 
     const params = {
       resolution: resVal,
+      target_resolution: resVal,
       duration: durVal,
       video_duration: state.sourceVideoDuration ?? (durVal || 5),
       size: sizeVal,
@@ -919,39 +1057,55 @@
       save_audio: saveAudioVal,
       keep_audio: keepAudioVal,
       keep_original_sound: keepOrigSoundVal,
-      images: dummyImgs,
+      images: dummyImgs.length > 0 ? dummyImgs : ['img1'],
       reference_images: refImgs,
+      videos: refVidKey === 'videos' ? refVidMeta.dummyVids : [],
+      ref_videos: refVidKey === 'ref_videos' ? refVidMeta.dummyVids : [],
+      reference_videos: (!refVidKey || refVidKey === 'reference_videos') ? refVidMeta.dummyVids : [],
+      reference_files: refVidKey === 'reference_files' ? [...dummyImgs, ...refVidMeta.dummyVids] : [],
+      reference_video_durations: refVidMeta.durations,
+      reference_audios: dummyAuds,
+      audios: dummyAuds,
       mask_image: maskVal
     };
 
     const calc = calculateModelCost(model, params);
+    const preUpscaleExtra = (el.preUpscaleCheckbox?.checked && el.preUpscaleLabel?.style.display !== 'none')
+      ? getPreUpscaleUnitCost()
+      : 0;
+    const totalBasePrice = parseFloat((calc.basePrice + preUpscaleExtra).toFixed(4));
+    const totalFinalPrice = parseFloat((calc.finalPrice + preUpscaleExtra).toFixed(4));
 
     // Build transparent formula breakdown text
     let breakdownText = '';
     const imgCountNote = numImagesVal > 1 ? ` × ${numImagesVal} images` : '';
+    const preUpNote = preUpscaleExtra > 0 ? ` + Pre-Upscale ($${preUpscaleExtra.toFixed(4)})` : '';
     if (calc.isPerSecond && durVal > 0) {
       const perSecBase = parseFloat((calc.basePrice / durVal).toFixed(4));
       const perSecFinal = parseFloat((calc.finalPrice / durVal).toFixed(4));
-      const resLabel = ('resolution' in props) ? ` @ ${resVal}` : '';
+      const resLabel = resProp ? ` @ ${resVal}` : '';
       if (calc.hasDiscount) {
-        breakdownText = `Formula: $${perSecBase}/s${resLabel} × ${durVal}s = $${calc.basePrice} → $${calc.finalPrice} (${calc.percentOff}% OFF • $${perSecFinal}/s)`;
+        breakdownText = `Formula: $${perSecBase}/s${resLabel} × ${durVal}s = $${calc.basePrice} → $${calc.finalPrice} (${calc.percentOff}% OFF • $${perSecFinal}/s)${preUpNote}`;
       } else {
-        breakdownText = `Formula: $${perSecFinal}/s${resLabel} × ${durVal}s = $${calc.finalPrice} total`;
+        breakdownText = `Formula: $${perSecFinal}/s${resLabel} × ${durVal}s = $${calc.finalPrice} total${preUpNote}`;
       }
-    } else if ('duration' in props && (model.isImageToVideo || model.isTextToVideoOrEdit)) {
-      breakdownText = `Clip tier (${durVal}s): $${calc.finalPrice} total${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}`;
+    } else if ('duration' in props && (model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit)) {
+      breakdownText = `Clip tier (${durVal}s): $${calc.finalPrice} total${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
     } else if ((model.price_inputs || []).includes('images') || (model.price_inputs || []).includes('reference_images')) {
-      const resLabel = ('resolution' in props) ? ` (${resVal})` : '';
+      const resLabel = resProp ? ` (${resVal})` : '';
       const maskNote = params.mask_image ? ' + mask' : '';
-      breakdownText = `Formula: Output${resLabel} + ${imgCount} input image${imgCount > 1 ? 's' : ''}${maskNote}${imgCountNote} = $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}`;
-    } else if ('resolution' in props) {
-      breakdownText = `Selected tier: ${resVal}${imgCountNote} → $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}`;
+      breakdownText = `Formula: Output${resLabel} + ${Math.max(1, imgCount)} input image${imgCount > 1 ? 's' : ''}${maskNote}${imgCountNote} = $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+    } else if (resProp) {
+      breakdownText = `Selected tier: ${resVal}${imgCountNote} → $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
     } else {
-      breakdownText = `Flat rate${imgCountNote}: $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF)` : ''}`;
+      breakdownText = `Flat rate${imgCountNote}: $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF)` : ''}${preUpNote}`;
     }
 
     return {
       ...calc,
+      basePrice: totalBasePrice,
+      finalPrice: totalFinalPrice,
+      preUpscaleExtra,
       resVal,
       durVal,
       numImagesVal,
@@ -965,7 +1119,9 @@
   function refreshParameterOptionPrices(model) {
     if (!model) return;
     const props = model.schema?.properties || {};
-    const curRes = ('resolution' in props && !props.resolution['x-hidden'] && el.resolutionSelect?.value) ? el.resolutionSelect.value : (props.resolution?.default || '720p');
+    const resKey = getResolutionSchemaKey(props) || 'resolution';
+    const resProp = props[resKey];
+    const curRes = (resProp && el.resolutionSelect?.value) ? el.resolutionSelect.value : (resProp?.default || '720p');
     const hiddenDurDef = (props.duration?.['x-hidden'] && props.duration?.default === undefined) ? 0 : (props.duration?.default ?? 5);
     const curDur = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
       ? Number(el.durationSelect.value)
@@ -985,9 +1141,13 @@
     const curDummyImgs = buildDummyImageArray(getPlannedInputImageCount());
     const curRefImgs = ('reference_images' in props) ? curDummyImgs : [];
     const curMask = ('mask_image' in props && (state.hasDrawnMask || model.schema?.required?.includes('mask_image'))) ? 'mask.png' : '';
+    const refVidMeta = getPlannedRefVideoMeta();
+    const refVidKey = getRefVideosSchemaKey(props, model);
+    const dummyAuds = Array.from({ length: (state.refAudios || []).length }, (_, i) => `aud${i + 1}`);
 
     const baseParams = {
       resolution: curRes,
+      target_resolution: curRes,
       duration: curDur,
       video_duration: state.sourceVideoDuration ?? (curDur || 5),
       size: curSize,
@@ -1002,12 +1162,19 @@
       save_audio: curSaveAudio,
       keep_audio: curKeepAudio,
       keep_original_sound: curKeepOrigSound,
-      images: curDummyImgs,
+      images: curDummyImgs.length > 0 ? curDummyImgs : ['img1'],
       reference_images: curRefImgs,
+      videos: refVidKey === 'videos' ? refVidMeta.dummyVids : [],
+      ref_videos: refVidKey === 'ref_videos' ? refVidMeta.dummyVids : [],
+      reference_videos: (!refVidKey || refVidKey === 'reference_videos') ? refVidMeta.dummyVids : [],
+      reference_files: refVidKey === 'reference_files' ? [...curDummyImgs, ...refVidMeta.dummyVids] : [],
+      reference_video_durations: refVidMeta.durations,
+      reference_audios: dummyAuds,
+      audios: dummyAuds,
       mask_image: curMask
     };
 
-    if ('resolution' in props && !props.resolution['x-hidden'] && el.resolutionSelect) {
+    if (resProp && el.resolutionSelect) {
       Array.from(el.resolutionSelect.options).forEach(opt => {
         const v = opt.value;
         const vLower = v.toLowerCase();
@@ -1021,8 +1188,9 @@
         else if (vLower === '2k') tierDesc = 'High-Res';
         else if (vLower === '3k') tierDesc = 'Ultra 3K';
         else if (vLower === '4k') tierDesc = 'Extreme 4K';
+        else if (vLower === '8k') tierDesc = 'Master 8K';
 
-        const c = calculateModelCost(model, { ...baseParams, resolution: v });
+        const c = calculateModelCost(model, { ...baseParams, resolution: v, target_resolution: v });
         const warn = (state.balance > 0 && c.finalPrice > state.balance) ? ' ⚠️ > Balance' : '';
         opt.textContent = `${v} (${tierDesc}) — $${c.finalPrice}${warn}`;
       });
@@ -1173,8 +1341,9 @@
       const cleanTitle = m.name || m.model_id;
       const highlightedTitle = highlightMatches(cleanTitle, query);
       const highlightedId = highlightMatches(m.model_id, query);
-      const categoryLabel = m.isImageToVideo ? 'Image to Video' :
-                            m.isTextToVideoOrEdit ? 'Text to Video' :
+      const categoryLabel = m.isReferenceToVideo ? 'Ref to Video' :
+                            m.isImageToVideo ? 'Image to Video' :
+                            m.isTextToVideoOrEdit ? 'Video & Edit' :
                             m.isImageEdit ? 'Image Edit' :
                             m.isImageGen ? 'Text to Image' : 'Utility';
 
@@ -1235,7 +1404,8 @@
     // Auto-sync category tab if needed
     if (autoSyncTab && model.category && model.category !== state.currentCategory) {
       let targetCat = model.category;
-      if (model.isImageToVideo) targetCat = 'image-to-video';
+      if (model.isReferenceToVideo) targetCat = 'ref-to-video';
+      else if (model.isImageToVideo) targetCat = 'image-to-video';
       else if (model.isTextToVideoOrEdit) targetCat = 'video-gen';
       else if (model.isImageEdit) targetCat = 'image-edit';
       else if (model.isImageGen) targetCat = 'image-gen';
@@ -1365,8 +1535,9 @@
 
     // Tags
     el.infoModelTags.innerHTML = '';
-    const catLabel = model.isImageToVideo ? 'Image to Video' :
-                     model.isTextToVideoOrEdit ? 'Text to Video' :
+    const catLabel = model.isReferenceToVideo ? 'Reference to Video' :
+                     model.isImageToVideo ? 'Image to Video' :
+                     model.isTextToVideoOrEdit ? 'Video & Edit' :
                      model.isImageEdit ? 'Image Edit' :
                      model.isImageGen ? 'Text to Image' : 'Utility';
     const tags = [catLabel, model.type, model.model_id].filter(Boolean);
@@ -1383,7 +1554,7 @@
     return Boolean(
       state.economyDefaultsEnabled &&
       model &&
-      (model.isImageToVideo || model.isImageEdit || model.isTextToVideoOrEdit)
+      (model.isReferenceToVideo || model.isImageToVideo || model.isImageEdit || model.isTextToVideoOrEdit)
     );
   }
 
@@ -1439,6 +1610,9 @@
     // 1. Prompt & Negative Prompt
     if ('prompt' in props && !props.prompt['x-hidden']) {
       el.promptGroup.style.display = 'flex';
+      el.promptInput.placeholder = isR2VModel(model)
+        ? 'Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1...'
+        : 'Enter detailed prompt...';
     } else {
       el.promptGroup.style.display = 'none';
     }
@@ -1446,14 +1620,22 @@
       el.negativePromptGroup.style.display = ('negative_prompt' in props && !props.negative_prompt['x-hidden']) ? 'flex' : 'none';
     }
     if (el.videoMotionChips) {
-      const isVidMode = Boolean(model.isImageToVideo || model.isTextToVideoOrEdit || model.isVideoGen || model.isVideoEdit);
+      const isVidMode = Boolean(model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit || model.isVideoGen || model.isVideoEdit);
       el.videoMotionChips.style.display = isVidMode ? 'contents' : 'none';
     }
+    if (el.r2vRefChips) {
+      el.r2vRefChips.style.display = isR2VModel(model) ? 'contents' : 'none';
+    }
 
-    // 2. Image Inputs (customized label for Image-to-Video & Reference-to-Video)
-    const hasImage = 'image' in props || 'images' in props || 'reference_images' in props || model.isImageToVideo;
-    el.imageInputGroup.style.display = hasImage ? 'flex' : 'none';
-    if (hasImage) {
+    // 2. Image Inputs (single Source Image when schema takes `image` or is I2V; pure multi-image arrays use #multiImageGroup directly)
+    const multiProp = ('images' in props && !props.images['x-hidden'])
+      ? props.images
+      : (('reference_images' in props && !props.reference_images['x-hidden'])
+        ? props.reference_images
+        : ((isR2VModel(model) && 'reference_files' in props && !props.reference_files['x-hidden']) ? props.reference_files : null));
+    const hasSingleImage = 'image' in props || model.isImageToVideo;
+    el.imageInputGroup.style.display = hasSingleImage ? 'flex' : 'none';
+    if (hasSingleImage) {
       const lbl = el.imageInputGroup.querySelector('.input-header label');
       const sub = el.imageInputGroup.querySelector('.input-header .subtext');
       const reqList = model.schema?.required || [];
@@ -1461,7 +1643,7 @@
       const reqStar = isReq ? ' <span class="required">*</span>' : '';
       if (model.isImageToVideo) {
         if (lbl) lbl.innerHTML = `Image to Animate${reqStar}`;
-        if (sub) sub.textContent = 'Upload or paste the still image to animate into video';
+        if (sub) sub.textContent = 'Upload still image, paste URL, or extract a frame from the Timeline below';
       } else {
         if (lbl) lbl.innerHTML = `Source Image${reqStar}`;
         if (sub) sub.textContent = 'Upload, drag & drop, or paste image URL';
@@ -1479,21 +1661,69 @@
       }
     }
 
-    // 2c. Multi-Image Reference Slots (for Models like MiniMax H3 / Seedream / Reference-to-Video)
-    const multiProp = ('images' in props && !props.images['x-hidden'])
-      ? props.images
-      : (('reference_images' in props && !props.reference_images['x-hidden']) ? props.reference_images : null);
+    // 2c. Multi-Image Reference Slots (Wan 3.0 R2V, Seedance 2.5, Kling 4.0, MiniMax H3)
     if (el.multiImageGroup) {
       el.multiImageGroup.style.display = multiProp ? 'flex' : 'none';
       if (multiProp) {
-        const maxRefs = Math.min(16, Math.max(2, Number(multiProp.maxItems || props.max_images?.maximum || 16)));
+        const maxRefs = Math.min(30, Math.max(2, Number(multiProp.maxItems || props.max_images?.maximum || 10)));
         const mLbl = el.multiImageGroup.querySelector('.input-header label');
-        if (mLbl) mLbl.textContent = `Additional Reference Images (Up to ${maxRefs - 1} extra)`;
+        if (mLbl) {
+          mLbl.textContent = hasSingleImage
+            ? `Additional Reference Images (Up to ${maxRefs - 1} extra)`
+            : `Reference Images (Up to ${maxRefs})`;
+        }
         renderExtraImagesGrid();
       }
     }
+
+    // 2d. Reference Videos (R2V: reference_videos / videos / ref_videos / reference_files)
+    const refVidKey = getRefVideosSchemaKey(props, model);
     if (el.refVideosGroup) {
-      el.refVideosGroup.style.display = ('reference_videos' in props && !props.reference_videos['x-hidden']) ? 'flex' : 'none';
+      el.refVideosGroup.style.display = refVidKey ? 'flex' : 'none';
+      if (refVidKey) {
+        const vidProp = props[refVidKey] || {};
+        const maxVids = Math.min(10, Math.max(1, Number(vidProp.maxItems || 5)));
+        if (el.refVideosLabel) {
+          el.refVideosLabel.textContent = `Reference Videos (Up to ${maxVids})`;
+        }
+        if (el.useActiveRefVideoBtn) {
+          const hasActiveVid = Boolean(state.activeOutputItem?.isVideo || state.activeOutputItem?.is_video);
+          el.useActiveRefVideoBtn.style.display = hasActiveVid ? 'inline-flex' : 'none';
+        }
+        renderRefVideosList();
+      }
+    }
+
+    // 2e. Reference Audios (R2V / Video Edit: reference_audios / audios / audio)
+    const refAudKey = getRefAudiosSchemaKey(props);
+    if (el.refAudiosGroup) {
+      el.refAudiosGroup.style.display = refAudKey ? 'flex' : 'none';
+      if (refAudKey) {
+        const audProp = props[refAudKey] || {};
+        const isSingleAud = audProp.type === 'string';
+        const maxAuds = isSingleAud ? 1 : Math.min(10, Math.max(1, Number(audProp.maxItems || 5)));
+        if (el.refAudiosLabel) {
+          el.refAudiosLabel.textContent = `Reference Audio${isSingleAud ? '' : `s (Up to ${maxAuds})`}`;
+        }
+        renderRefAudiosList();
+      }
+    }
+
+    // 2f. Video Timeline & Frame Extractor + Quality Match Advisory
+    if (el.videoTimelineGroup) {
+      const showTimeline = Boolean(
+        hasSingleImage || multiProp || refVidKey || 'video' in props ||
+        model.isImageToVideo || model.isReferenceToVideo || model.isImageEdit || model.isTextToVideoOrEdit
+      );
+      el.videoTimelineGroup.style.display = showTimeline ? 'block' : 'none';
+      if (showTimeline) {
+        if (el.extractFrameLastBtn) el.extractFrameLastBtn.style.display = hasLastImage ? 'inline-flex' : 'none';
+        if (el.extractFrameRefBtn) el.extractFrameRefBtn.style.display = multiProp ? 'inline-flex' : 'none';
+        if (el.loadActiveToTimelineBtn) {
+          const hasActiveVid = Boolean(state.activeOutputItem?.isVideo || state.activeOutputItem?.is_video);
+          el.loadActiveToTimelineBtn.style.display = hasActiveVid ? 'inline-flex' : 'none';
+        }
+      }
     }
 
     // 3. Mask Canvas for Inpainting
@@ -1566,21 +1796,27 @@
       el.aspectRatioRow.style.display = 'none';
     }
 
-    // 7. Dynamic Output Resolution (Strictly based on model schema; cheapest first in Economy mode)
-    if ('resolution' in props && !props.resolution['x-hidden'] && el.resolutionSelect) {
+    // 7. Dynamic Output Resolution / Target Resolution (Strictly based on model schema; cheapest first in Economy mode)
+    const resKey = getResolutionSchemaKey(props);
+    if (resKey && el.resolutionSelect) {
+      const resProp = props[resKey];
       el.resolutionCol.style.display = 'block';
-      el.resolutionSelect.innerHTML = '';
-      const enums = (Array.isArray(props.resolution.enum) && props.resolution.enum.length > 0)
-        ? [...props.resolution.enum]
-        : (model.isImageToVideo || model.isTextToVideoOrEdit ? ['480p', '720p', '1080p'] : ['1k', '2k']);
-      if (props.resolution.default !== undefined && !enums.includes(props.resolution.default)) {
-        enums.unshift(props.resolution.default);
+      const resLabelEl = el.resolutionCol.querySelector('label[for="resolutionSelect"]');
+      if (resLabelEl) {
+        resLabelEl.textContent = resKey === 'target_resolution' ? 'Target Resolution' : 'Output Resolution';
       }
-      const schemaResDef = (props.resolution.default !== undefined && enums.includes(props.resolution.default))
-        ? props.resolution.default
+      el.resolutionSelect.innerHTML = '';
+      const enums = (Array.isArray(resProp.enum) && resProp.enum.length > 0)
+        ? [...resProp.enum]
+        : (isVideoTabModel(model) ? ['480p', '720p', '1080p'] : ['1k', '2k']);
+      if (resProp.default !== undefined && !enums.includes(resProp.default)) {
+        enums.unshift(resProp.default);
+      }
+      const schemaResDef = (resProp.default !== undefined && enums.includes(resProp.default))
+        ? resProp.default
         : (enums.includes('480p') ? '480p' : (enums.includes('720p') ? '720p' : (enums.includes('1k') ? '1k' : enums[0])));
       const defaultVal = useEconomyDefaults
-        ? pickCheapestEnumOption(model, 'resolution', enums, getResolutionRank, { duration: 5, images: ['img1'] })
+        ? pickCheapestEnumOption(model, resKey, enums, getResolutionRank, { duration: 5, images: ['img1'] })
         : schemaResDef;
 
       enums.forEach(v => {
@@ -1824,10 +2060,28 @@
 
     // Update Action Button Text
     el.btnLabel.textContent = `Run ${model.model_id.split('/').pop()}`;
+    updateInputQualityAdvisory();
   }
 
-  // Upload Local File to Wavespeed Storage
+  // Upload Local File to Wavespeed Storage (uses raw binary stream endpoint for large videos/audio, falls back to base64 JSON in mocks)
   async function uploadFileDirect(file) {
+    if (file && typeof file.arrayBuffer === 'function') {
+      const buf = await file.arrayBuffer();
+      const res = await fetch('/api/upload-raw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name || 'upload.bin')
+        },
+        body: buf
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || 'Upload failed');
+      }
+      return json.data.download_url;
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async () => {
@@ -2022,10 +2276,11 @@
       if (promptVal) payload.prompt = promptVal;
     }
 
-    const hasImageInput = 'image' in props || 'images' in props || 'reference_images' in props;
-    const imageUrlSnapshot = state.sourceImage?.downloadUrl || el.imageUrlInput.value.trim();
-    const imageFileSnapshot = state.sourceImage?.file || null;
-    const sourceImageObjSnapshot = state.sourceImage;
+    const hasSingleImageSlot = 'image' in props || model.isImageToVideo;
+    const hasImageInput = hasSingleImageSlot || 'images' in props || 'reference_images' in props || (isR2VModel(model) && 'reference_files' in props);
+    const imageUrlSnapshot = hasSingleImageSlot ? (state.sourceImage?.downloadUrl || el.imageUrlInput.value.trim()) : '';
+    const imageFileSnapshot = hasSingleImageSlot ? (state.sourceImage?.file || null) : null;
+    const sourceImageObjSnapshot = hasSingleImageSlot ? state.sourceImage : null;
     const extraImagesSnapshot = Array.isArray(state.extraImages) ? state.extraImages.map(x => ({ ...x })) : [];
     const hasLastImageInput = 'last_image' in props && !props.last_image['x-hidden'];
     const lastImageUrlSnapshot = state.lastImage?.downloadUrl || (el.lastImageUrlInput ? el.lastImageUrlInput.value.trim() : '');
@@ -2034,7 +2289,7 @@
     if (hasImageInput) {
       const needsImg = reqList.includes('image') || reqList.includes('images') || reqList.includes('reference_images');
       if (!imageUrlSnapshot && !imageFileSnapshot && extraImagesSnapshot.length === 0 && needsImg) {
-        alert('Please provide a source image for this model.');
+        alert('Please provide at least one image input for this model.');
         return;
       }
     }
@@ -2054,14 +2309,30 @@
       }
     }
 
+    const refVidKey = getRefVideosSchemaKey(props, model);
+    const refVideosSnapshot = refVidKey ? (Array.isArray(state.refVideos) ? state.refVideos.map(x => ({ ...x })) : []) : [];
+    const manualRefVids = (refVidKey && el.refVideosInput && el.refVideosInput.style.display !== 'none')
+      ? el.refVideosInput.value.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean)
+      : [];
+    const refAudKey = getRefAudiosSchemaKey(props);
+    const refAudiosSnapshot = refAudKey ? (Array.isArray(state.refAudios) ? state.refAudios.map(x => ({ ...x })) : []) : [];
+
+    if (refVidKey && reqList.includes(refVidKey) && refVideosSnapshot.length === 0 && manualRefVids.length === 0) {
+      if (!(refVidKey === 'reference_files' && (extraImagesSnapshot.length > 0 || imageUrlSnapshot || imageFileSnapshot))) {
+        alert('Please upload or paste at least one reference video (or reference file) for this model.');
+        return;
+      }
+    }
+
     const needsMaskUpload = ('mask_image' in props && (state.hasDrawnMask || reqList.includes('mask_image')));
     const activeRatio = ('aspect_ratio' in props && !props.aspect_ratio['x-hidden'])
       ? (document.querySelector('.ratio-pill.active')?.dataset.ratio || props.aspect_ratio.default || '1:1')
       : null;
 
     if (activeRatio) payload.aspect_ratio = activeRatio;
-    if ('resolution' in props && !props.resolution['x-hidden'] && el.resolutionSelect && el.resolutionSelect.value) {
-      payload.resolution = el.resolutionSelect.value;
+    const activeResKey = getResolutionSchemaKey(props);
+    if (activeResKey && el.resolutionSelect && el.resolutionSelect.value) {
+      payload[activeResKey] = el.resolutionSelect.value;
     }
     if ('duration' in props && !props.duration['x-hidden'] && el.durationSelect && el.durationSelect.value !== '') {
       payload.duration = Number(el.durationSelect.value);
@@ -2091,10 +2362,6 @@
       const negVal = el.negativePromptInput.value.trim();
       if (negVal) payload.negative_prompt = negVal;
     }
-    if ('reference_videos' in props && !props.reference_videos['x-hidden'] && el.refVideosInput) {
-      const refVids = el.refVideosInput.value.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
-      if (refVids.length > 0) payload.reference_videos = refVids;
-    }
     if ('movement_amplitude' in props && !props.movement_amplitude['x-hidden'] && el.movementAmpSelect?.value) {
       payload.movement_amplitude = el.movementAmpSelect.value;
     }
@@ -2111,6 +2378,13 @@
     if ('seed' in props && !isNaN(seed) && seed !== -1) {
       payload.seed = seed;
     }
+
+    const preUpscaleEnabled = Boolean(
+      el.preUpscaleCheckbox?.checked &&
+      el.preUpscaleLabel?.style.display !== 'none' &&
+      hasSingleImageSlot &&
+      (imageUrlSnapshot || imageFileSnapshot)
+    );
 
     // 2. Accidental Spend Guard check
     const pricing = getModelPricing(model);
@@ -2157,6 +2431,7 @@
       props,
       reqList,
       payload,
+      hasSingleImageSlot,
       hasImageInput,
       imageUrlSnapshot,
       imageFileSnapshot,
@@ -2170,8 +2445,55 @@
       videoUrlSnapshot,
       videoFileSnapshot,
       sourceVideoObjSnapshot,
-      needsMaskUpload
+      refVidKey,
+      refVideosSnapshot,
+      manualRefVids,
+      refAudKey,
+      refAudiosSnapshot,
+      needsMaskUpload,
+      preUpscaleEnabled
     });
+  }
+
+  async function runPreUpscaleOnImage(imageUrl, job) {
+    const unitCost = getPreUpscaleUnitCost();
+    job.stageText = `Pre-upscaling low-res frame via Real-ESRGAN ($${unitCost.toFixed(4)})...`;
+    renderActiveJobs();
+    const submitRes = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model_id: 'wavespeed-ai/real-esrgan',
+        model_name: 'Real-ESRGAN Pre-Upscale',
+        category: 'utility',
+        payload: { image: imageUrl },
+        estimated_price: unitCost
+      })
+    });
+    const submitData = await submitRes.json();
+    if (!submitRes.ok || submitData.error) {
+      throw new Error(submitData.error || submitData.message || 'Pre-upscale failed to start');
+    }
+    const taskId = submitData.data?.id || submitData.id;
+    if (!taskId) throw new Error('Pre-upscale returned no task ID');
+
+    while (!job.cancelled) {
+      await new Promise(r => setTimeout(r, 1200));
+      const res = await fetch(`/api/task/${taskId}`);
+      const json = await res.json();
+      const d = json.data || json;
+      if (d.status === 'completed') {
+        const outs = Array.isArray(d.outputs) ? d.outputs : [];
+        const upscaledUrl = outs[0] || d.local_outputs?.[0]?.remote_url || d.local_outputs?.[0]?.local_url;
+        if (!upscaledUrl) throw new Error('Pre-upscale completed without output URL');
+        fetchBalance();
+        return upscaledUrl;
+      }
+      if (d.status === 'failed') {
+        throw new Error(d.error || 'Pre-upscale task failed');
+      }
+    }
+    throw new Error('Cancelled');
   }
 
   async function resolveMediaAssetUrl(urlSnapshot, fileSnapshot, targetObj, defaultName, defaultMime, job, label) {
@@ -2200,17 +2522,24 @@
   async function executeConcurrentJob(job, ctx) {
     try {
       const { model, props, reqList, payload } = ctx;
+      let resolvedReferenceFileUrls = [];
 
       if (ctx.hasImageInput) {
-        const finalImageUrl = await resolveMediaAssetUrl(
-          ctx.imageUrlSnapshot,
-          ctx.imageFileSnapshot,
-          ctx.sourceImageObjSnapshot,
-          'source.png',
-          'image/png',
-          job,
-          'source image'
-        );
+        let finalImageUrl = ctx.hasSingleImageSlot
+          ? await resolveMediaAssetUrl(
+              ctx.imageUrlSnapshot,
+              ctx.imageFileSnapshot,
+              ctx.sourceImageObjSnapshot,
+              'source.png',
+              'image/png',
+              job,
+              'source image'
+            )
+          : '';
+        if (ctx.preUpscaleEnabled && finalImageUrl) {
+          finalImageUrl = await runPreUpscaleOnImage(finalImageUrl, job);
+          if (job.cancelled) return;
+        }
         const uploadedExtras = [];
         if (Array.isArray(ctx.extraImagesSnapshot) && ctx.extraImagesSnapshot.length > 0) {
           job.stageText = `Uploading ${ctx.extraImagesSnapshot.length} reference image(s)...`;
@@ -2240,6 +2569,7 @@
           if ('image' in props) payload.image = allImageUrls[0];
           if ('images' in props) payload.images = allImageUrls;
           if ('reference_images' in props) payload.reference_images = allImageUrls;
+          if (ctx.refVidKey === 'reference_files') resolvedReferenceFileUrls.push(...allImageUrls);
         }
       }
 
@@ -2281,6 +2611,50 @@
           throw new Error('Please select or provide a video for this model.');
         }
         if (videoUrl) payload.video = videoUrl;
+      }
+
+      if (ctx.refVidKey) {
+        const uploadedRefVids = [];
+        for (const rv of (ctx.refVideosSnapshot || [])) {
+          const rUrl = await resolveMediaAssetUrl(
+            rv.downloadUrl || rv.url || '',
+            rv.file || null,
+            rv,
+            rv.name || 'ref-video.mp4',
+            rv.file?.type || 'video/mp4',
+            job,
+            'reference video'
+          );
+          if (rUrl) uploadedRefVids.push(rUrl);
+        }
+        for (const mUrl of (ctx.manualRefVids || [])) {
+          if (!uploadedRefVids.includes(mUrl)) uploadedRefVids.push(mUrl);
+        }
+        if (ctx.refVidKey === 'reference_files') {
+          const combined = [...resolvedReferenceFileUrls, ...uploadedRefVids].filter(Boolean);
+          if (combined.length > 0) payload.reference_files = combined;
+        } else if (uploadedRefVids.length > 0) {
+          payload[ctx.refVidKey] = uploadedRefVids;
+        }
+      }
+
+      if (ctx.refAudKey && Array.isArray(ctx.refAudiosSnapshot) && ctx.refAudiosSnapshot.length > 0) {
+        const uploadedAuds = [];
+        for (const ra of ctx.refAudiosSnapshot) {
+          const aUrl = await resolveMediaAssetUrl(
+            ra.downloadUrl || ra.url || '',
+            ra.file || null,
+            ra,
+            ra.name || 'ref-audio.mp3',
+            ra.file?.type || 'audio/mpeg',
+            job,
+            'reference audio'
+          );
+          if (aUrl) uploadedAuds.push(aUrl);
+        }
+        if (uploadedAuds.length > 0) {
+          payload[ctx.refAudKey] = (props[ctx.refAudKey]?.type === 'string') ? uploadedAuds[0] : uploadedAuds;
+        }
       }
 
       if (job.cancelled) return;
@@ -2956,8 +3330,9 @@
       if (params.negative_prompt !== undefined && el.negativePromptInput) {
         el.negativePromptInput.value = params.negative_prompt || '';
       }
-      if (params.resolution && el.resolutionSelect && Array.from(el.resolutionSelect.options).some(o => o.value === params.resolution)) {
-        el.resolutionSelect.value = params.resolution;
+      const resVal = params.resolution || params.target_resolution;
+      if (resVal && el.resolutionSelect && Array.from(el.resolutionSelect.options).some(o => o.value === resVal)) {
+        el.resolutionSelect.value = resVal;
       }
       if (params.duration !== undefined && el.durationSelect && Array.from(el.durationSelect.options).some(o => Number(o.value) === Number(params.duration))) {
         el.durationSelect.value = String(params.duration);
@@ -3012,6 +3387,34 @@
     if (vidInputUrl && el.videoUrlInput) {
       state.sourceVideo = { url: vidInputUrl, downloadUrl: vidInputUrl };
       el.videoUrlInput.value = vidInputUrl;
+      if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+    }
+
+    const restoredRefVids = params.reference_videos || params.videos || params.ref_videos;
+    if (Array.isArray(restoredRefVids) && restoredRefVids.length > 0) {
+      state.refVideos = restoredRefVids.map((u, idx) => ({
+        id: `rv-reuse-${Date.now()}-${idx}`,
+        url: u,
+        downloadUrl: u,
+        previewUrl: u,
+        name: u.split('/').pop() || `reference-video-${idx + 1}`,
+        width: null,
+        height: null,
+        duration: null
+      }));
+      renderRefVideosList();
+    }
+
+    const restoredAuds = params.reference_audios || params.audios || (params.audio ? [params.audio] : []);
+    if (Array.isArray(restoredAuds) && restoredAuds.length > 0) {
+      state.refAudios = restoredAuds.map((u, idx) => ({
+        id: `ra-reuse-${Date.now()}-${idx}`,
+        url: u,
+        downloadUrl: u,
+        name: u.split('/').pop() || `reference-audio-${idx + 1}`,
+        duration: null
+      }));
+      renderRefAudiosList();
     }
 
     if (el.historyDbModal) el.historyDbModal.style.display = 'none';
@@ -3754,12 +4157,17 @@
   function renderExtraImagesGrid() {
     if (!el.multiImgGrid) return;
     el.multiImgGrid.innerHTML = '';
-    state.extraImages.forEach((entry) => {
+    const hasSingleBefore = Boolean(el.imageInputGroup && el.imageInputGroup.style.display !== 'none');
+    state.extraImages.forEach((entry, idx) => {
       const box = document.createElement('div');
       box.className = 'multi-img-thumb';
       const img = document.createElement('img');
       img.src = entry.previewUrl || entry.downloadUrl || '';
-      img.alt = 'Extra reference image';
+      img.alt = 'Reference image';
+
+      const slotBadge = document.createElement('span');
+      slotBadge.className = 'multi-img-badge';
+      slotBadge.textContent = `Image ${hasSingleBefore ? idx + 2 : idx + 1}`;
 
       const rm = document.createElement('button');
       rm.type = 'button';
@@ -3773,6 +4181,7 @@
       });
 
       box.appendChild(img);
+      box.appendChild(slotBadge);
       box.appendChild(rm);
       el.multiImgGrid.appendChild(box);
     });
@@ -3780,7 +4189,7 @@
 
   function addExtraImageFiles(fileList) {
     if (!fileList || fileList.length === 0) return;
-    const files = Array.from(fileList).slice(0, Math.max(0, 15 - state.extraImages.length));
+    const files = Array.from(fileList).slice(0, Math.max(0, 30 - state.extraImages.length));
     files.forEach((file) => {
       const id = `ref-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const entry = { id, file, previewUrl: '', downloadUrl: null };
@@ -3792,6 +4201,15 @@
       };
       reader.readAsDataURL(file);
     });
+    renderExtraImagesGrid();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+  }
+
+  function addExtraImageUrl(url) {
+    const clean = String(url || '').trim();
+    if (!clean) return;
+    const id = `ref-url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    state.extraImages.push({ id, file: null, previewUrl: clean, downloadUrl: clean });
     renderExtraImagesGrid();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
@@ -3977,6 +4395,10 @@
       }
       if (el.grabFrameEditBtn) el.grabFrameEditBtn.style.display = 'flex';
       if (el.grabLastFrameI2VBtn) el.grabLastFrameI2VBtn.style.display = 'flex';
+      if (el.openViewerTimelineBtn) el.openViewerTimelineBtn.style.display = 'flex';
+      if (el.useOutputAsR2vBtn) el.useOutputAsR2vBtn.style.display = 'flex';
+      if (el.useActiveRefVideoBtn) el.useActiveRefVideoBtn.style.display = 'inline-flex';
+      if (el.loadActiveToTimelineBtn) el.loadActiveToTimelineBtn.style.display = 'inline-flex';
       if (el.beforeAfterToggleBtn) el.beforeAfterToggleBtn.style.display = 'none';
       if (el.extendVideoBtn) el.extendVideoBtn.style.display = 'flex';
       if (el.sendToVideoBtn) el.sendToVideoBtn.style.display = 'none';
@@ -3996,6 +4418,10 @@
       el.outputImageViewer.src = preferredUrl;
       if (el.grabFrameEditBtn) el.grabFrameEditBtn.style.display = 'none';
       if (el.grabLastFrameI2VBtn) el.grabLastFrameI2VBtn.style.display = 'none';
+      if (el.openViewerTimelineBtn) el.openViewerTimelineBtn.style.display = 'none';
+      if (el.useOutputAsR2vBtn) el.useOutputAsR2vBtn.style.display = 'none';
+      if (el.useActiveRefVideoBtn) el.useActiveRefVideoBtn.style.display = 'none';
+      if (el.loadActiveToTimelineBtn) el.loadActiveToTimelineBtn.style.display = 'none';
       if (el.beforeAfterToggleBtn) {
         const beforeUrl = getBeforeImageForItem(item);
         el.beforeAfterToggleBtn.style.display = beforeUrl ? 'flex' : 'none';
@@ -4201,6 +4627,7 @@
     // Dynamic price recalculation on parameter adjustment
     if (el.resolutionSelect) {
       el.resolutionSelect.addEventListener('change', () => {
+        updateInputQualityAdvisory();
         if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
     }
@@ -4327,9 +4754,12 @@
     el.removeImageBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       state.sourceImage = null;
+      state.sourceImageDimensions = null;
       el.imagePreview.src = '';
       el.imagePreviewContainer.style.display = 'none';
       document.getElementById('dropzonePrompt').style.display = 'block';
+      updateInputQualityAdvisory();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
     });
 
     // Load Image via URL
@@ -4337,6 +4767,16 @@
       const url = el.imageUrlInput.value.trim();
       if (url) {
         state.sourceImage = { url, downloadUrl: url };
+        state.sourceImageDimensions = null;
+        el.imagePreview.onload = () => {
+          if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
+            state.sourceImageDimensions = {
+              width: el.imagePreview.naturalWidth,
+              height: el.imagePreview.naturalHeight
+            };
+            updateInputQualityAdvisory();
+          }
+        };
         el.imagePreview.src = url;
         el.imagePreviewContainer.style.display = 'flex';
         document.getElementById('dropzonePrompt').style.display = 'none';
@@ -4384,7 +4824,7 @@
       });
     }
 
-    // Multi-Reference Additional Images
+    // Multi-Reference Additional Images (Files + URL)
     if (el.addMoreImagesBtn && el.multiFileInput) {
       el.addMoreImagesBtn.addEventListener('click', () => el.multiFileInput.click());
       el.multiFileInput.addEventListener('change', (e) => {
@@ -4394,47 +4834,216 @@
         }
       });
     }
+    if (el.addMultiImageUrlBtn && el.multiImageUrlInput) {
+      el.addMultiImageUrlBtn.addEventListener('click', () => {
+        const u = el.multiImageUrlInput.value.trim();
+        if (u) {
+          addExtraImageUrl(u);
+          el.multiImageUrlInput.value = '';
+        }
+      });
+    }
 
-    // Video Upload & Duration Probing (for Video Edit models)
+    // Source Video Upload & Duration/Resolution Probing (for Video Edit / Extend / Upscalers)
+    const handleSourceVideoFile = (file) => {
+      if (!file) return;
+      state.sourceVideo = { file };
+      state.sourceVideoDimensions = null;
+      el.videoDropzone.querySelector('p').textContent = `Loaded: ${file.name}`;
+      if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+      probeVideoFileMeta(file, (meta) => {
+        if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
+        if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
+        updateInputQualityAdvisory();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+    };
     el.videoDropzone.addEventListener('click', () => el.videoFileInput.click());
+    el.videoDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      el.videoDropzone.classList.add('dragover');
+    });
+    el.videoDropzone.addEventListener('dragleave', () => {
+      el.videoDropzone.classList.remove('dragover');
+    });
+    el.videoDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.videoDropzone.classList.remove('dragover');
+      if (e.dataTransfer?.files?.length > 0) {
+        handleSourceVideoFile(e.dataTransfer.files[0]);
+      }
+    });
     el.videoFileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
-        const file = e.target.files[0];
-        state.sourceVideo = { file };
-        el.videoDropzone.querySelector('p').textContent = `Loaded: ${file.name}`;
-        try {
-          const probe = document.createElement('video');
-          probe.preload = 'metadata';
-          probe.onloadedmetadata = () => {
-            URL.revokeObjectURL(probe.src);
-            if (probe.duration && isFinite(probe.duration)) {
-              state.sourceVideoDuration = Math.ceil(probe.duration);
-              if (state.selectedModel) updateModelInfo(state.selectedModel);
-            }
-          };
-          probe.src = URL.createObjectURL(file);
-        } catch (err) {}
+        handleSourceVideoFile(e.target.files[0]);
       }
     });
     if (el.videoUrlInput) {
       el.videoUrlInput.addEventListener('change', () => {
         const vUrl = el.videoUrlInput.value.trim();
         if (vUrl) {
-          try {
-            const probe = document.createElement('video');
-            probe.preload = 'metadata';
-            probe.onloadedmetadata = () => {
-              if (probe.duration && isFinite(probe.duration)) {
-                state.sourceVideoDuration = Math.ceil(probe.duration);
-                if (state.selectedModel) updateModelInfo(state.selectedModel);
-              }
-            };
-            probe.src = vUrl;
-          } catch (err) {}
+          if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+          probeVideoUrlMeta(vUrl, (meta) => {
+            if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
+            if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
+            updateInputQualityAdvisory();
+            if (state.selectedModel) updateModelInfo(state.selectedModel);
+          });
         } else {
           state.sourceVideoDuration = null;
+          state.sourceVideoDimensions = null;
+          if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'none';
+          updateInputQualityAdvisory();
           if (state.selectedModel) updateModelInfo(state.selectedModel);
         }
+      });
+    }
+    if (el.openSourceVideoTimelineBtn) {
+      el.openSourceVideoTimelineBtn.addEventListener('click', () => {
+        const src = state.sourceVideo?.file || state.sourceVideo?.downloadUrl || state.sourceVideo?.url || el.videoUrlInput?.value.trim();
+        if (src) openVideoInTimeline(src, state.sourceVideo?.file?.name || 'Source Video');
+      });
+    }
+
+    // Reference Videos Self-Upload, Drag-Drop & URL List (R2V)
+    if (el.refVideoDropzone && el.refVideoFileInput) {
+      el.refVideoDropzone.addEventListener('click', () => el.refVideoFileInput.click());
+      el.refVideoDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.refVideoDropzone.classList.add('dragover');
+      });
+      el.refVideoDropzone.addEventListener('dragleave', () => {
+        el.refVideoDropzone.classList.remove('dragover');
+      });
+      el.refVideoDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.refVideoDropzone.classList.remove('dragover');
+        if (e.dataTransfer?.files?.length > 0) addRefVideoFiles(e.dataTransfer.files);
+      });
+      el.refVideoFileInput.addEventListener('change', (e) => {
+        if (e.target.files?.length > 0) {
+          addRefVideoFiles(e.target.files);
+          e.target.value = '';
+        }
+      });
+    }
+    if (el.addRefVideoUrlBtn && el.refVideoUrlInput) {
+      el.addRefVideoUrlBtn.addEventListener('click', () => {
+        const u = el.refVideoUrlInput.value.trim();
+        if (u) {
+          addRefVideoUrl(u);
+          el.refVideoUrlInput.value = '';
+        }
+      });
+    }
+    if (el.useActiveRefVideoBtn) {
+      el.useActiveRefVideoBtn.addEventListener('click', () => {
+        const activeVid = state.activeOutputItem?.isVideo ? (state.activeOutputItem.local_url || state.activeOutputItem.remote_url || state.activeOutputItem.url) : '';
+        if (activeVid) addRefVideoUrl(activeVid, 'Active Output Clip');
+      });
+    }
+
+    // Reference Audios Self-Upload & URL List (R2V / Video Edit)
+    if (el.uploadRefAudioBtn && el.refAudioFileInput) {
+      el.uploadRefAudioBtn.addEventListener('click', () => el.refAudioFileInput.click());
+      el.refAudioFileInput.addEventListener('change', (e) => {
+        if (e.target.files?.length > 0) {
+          addRefAudioFiles(e.target.files);
+          e.target.value = '';
+        }
+      });
+    }
+    if (el.addRefAudioUrlBtn && el.refAudioUrlInput) {
+      el.addRefAudioUrlBtn.addEventListener('click', () => {
+        const u = el.refAudioUrlInput.value.trim();
+        if (u) {
+          addRefAudioUrl(u);
+          el.refAudioUrlInput.value = '';
+        }
+      });
+    }
+
+    // Interactive Video Timeline & Frame Extractor
+    if (el.toggleTimelineExtractorBtn && el.timelineExtractorBody) {
+      el.toggleTimelineExtractorBtn.addEventListener('click', () => {
+        const isOpen = el.timelineExtractorBody.style.display !== 'none';
+        el.timelineExtractorBody.style.display = isOpen ? 'none' : 'flex';
+        el.toggleTimelineExtractorBtn.setAttribute('aria-expanded', String(!isOpen));
+        if (el.timelineChevron) el.timelineChevron.textContent = isOpen ? '▼' : '▲';
+      });
+    }
+    if (el.browseTimelineVideoBtn && el.timelineVideoFileInput) {
+      el.browseTimelineVideoBtn.addEventListener('click', () => el.timelineVideoFileInput.click());
+      el.timelineVideoFileInput.addEventListener('change', (e) => {
+        if (e.target.files?.length > 0) {
+          openVideoInTimeline(e.target.files[0], e.target.files[0].name);
+          e.target.value = '';
+        }
+      });
+    }
+    if (el.loadActiveToTimelineBtn) {
+      el.loadActiveToTimelineBtn.addEventListener('click', () => {
+        const activeVid = state.activeOutputItem?.isVideo
+          ? (state.activeOutputItem.local_url || state.activeOutputItem.remote_url || state.activeOutputItem.url)
+          : '';
+        if (activeVid) openVideoInTimeline(activeVid, 'Active Output Video');
+      });
+    }
+    if (el.timelineVideoPlayer && el.timelineScrubber) {
+      el.timelineScrubber.addEventListener('input', () => {
+        const dur = el.timelineVideoPlayer.duration;
+        if (Number.isFinite(dur) && dur > 0) {
+          el.timelineVideoPlayer.pause();
+          el.timelineVideoPlayer.currentTime = (Number(el.timelineScrubber.value) / 1000) * dur;
+        }
+      });
+      el.timelineVideoPlayer.addEventListener('timeupdate', syncTimelineTimecodeUI);
+      el.timelineVideoPlayer.addEventListener('seeked', syncTimelineTimecodeUI);
+    }
+    const stepTimeline = (deltaSec, absPos = null) => {
+      const v = el.timelineVideoPlayer;
+      if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return;
+      v.pause();
+      if (absPos === 'start') v.currentTime = 0;
+      else if (absPos === 'end') v.currentTime = Math.max(0, v.duration - 0.04);
+      else v.currentTime = Math.max(0, Math.min(v.duration, (v.currentTime || 0) + deltaSec));
+    };
+    if (el.tlStepStartBtn) el.tlStepStartBtn.addEventListener('click', () => stepTimeline(0, 'start'));
+    if (el.tlStepBack1sBtn) el.tlStepBack1sBtn.addEventListener('click', () => stepTimeline(-1));
+    if (el.tlStepBack1fBtn) el.tlStepBack1fBtn.addEventListener('click', () => stepTimeline(-1 / 24));
+    if (el.tlStepFwd1fBtn) el.tlStepFwd1fBtn.addEventListener('click', () => stepTimeline(1 / 24));
+    if (el.tlStepFwd1sBtn) el.tlStepFwd1sBtn.addEventListener('click', () => stepTimeline(1));
+    if (el.tlStepEndBtn) el.tlStepEndBtn.addEventListener('click', () => stepTimeline(0, 'end'));
+    if (el.extractFrameSourceBtn) el.extractFrameSourceBtn.addEventListener('click', () => extractTimelineFrame('source'));
+    if (el.extractFrameLastBtn) el.extractFrameLastBtn.addEventListener('click', () => extractTimelineFrame('last'));
+    if (el.extractFrameRefBtn) el.extractFrameRefBtn.addEventListener('click', () => extractTimelineFrame('ref'));
+
+    if (el.preUpscaleCheckbox) {
+      el.preUpscaleCheckbox.addEventListener('change', () => {
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+    }
+    if (el.routeToVideoUpscalerBtn) {
+      el.routeToVideoUpscalerBtn.addEventListener('click', routeVideoToUpscaler);
+    }
+    if (el.openViewerTimelineBtn) {
+      el.openViewerTimelineBtn.addEventListener('click', () => {
+        const activeVid = state.activeOutputItem?.isVideo
+          ? (state.activeOutputItem.local_url || state.activeOutputItem.remote_url || state.activeOutputItem.url)
+          : '';
+        if (activeVid) openVideoInTimeline(activeVid, 'Active Output Video');
+      });
+    }
+    if (el.useOutputAsR2vBtn) {
+      el.useOutputAsR2vBtn.addEventListener('click', async () => {
+        const activeVid = state.activeOutputItem?.isVideo
+          ? (state.activeOutputItem.local_url || state.activeOutputItem.remote_url || state.activeOutputItem.url)
+          : '';
+        if (!activeVid) return;
+        const r2vTab = document.querySelector('.mode-btn[data-category="ref-to-video"]');
+        if (r2vTab) r2vTab.click();
+        addRefVideoUrl(activeVid, 'Active Output Clip');
+        showToast('Attached active output as Video 1 in Ref → Video', 'good');
       });
     }
 
@@ -5062,11 +5671,14 @@
       if (tabBtn) tabBtn.click();
 
       state.sourceImage = { file, url: dataUrl, downloadUrl: null };
+      state.sourceImageDimensions = { width: w, height: h };
       if (el.imagePreview) el.imagePreview.src = dataUrl;
       if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
       const dp = document.getElementById('dropzonePrompt');
       if (dp) dp.style.display = 'none';
       if (el.imageUrlInput) el.imageUrlInput.value = '';
+      updateInputQualityAdvisory();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
 
       showToast(
         seekToEnd
@@ -5195,10 +5807,483 @@
     loadOutputIntoViewer(items[idx]);
   }
 
+  function probeVideoFileMeta(file, cb) {
+    try {
+      const probe = document.createElement('video');
+      probe.preload = 'metadata';
+      const objUrl = URL.createObjectURL(file);
+      probe.onloadedmetadata = () => {
+        URL.revokeObjectURL(objUrl);
+        cb({
+          width: probe.videoWidth || 0,
+          height: probe.videoHeight || 0,
+          duration: (probe.duration && isFinite(probe.duration)) ? probe.duration : 0
+        });
+      };
+      probe.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        cb({ width: 0, height: 0, duration: 0 });
+      };
+      probe.src = objUrl;
+    } catch (e) {
+      cb({ width: 0, height: 0, duration: 0 });
+    }
+  }
+
+  function probeVideoUrlMeta(url, cb) {
+    try {
+      const probe = document.createElement('video');
+      probe.preload = 'metadata';
+      probe.onloadedmetadata = () => {
+        cb({
+          width: probe.videoWidth || 0,
+          height: probe.videoHeight || 0,
+          duration: (probe.duration && isFinite(probe.duration)) ? probe.duration : 0
+        });
+      };
+      probe.onerror = () => cb({ width: 0, height: 0, duration: 0 });
+      probe.src = url;
+    } catch (e) {
+      cb({ width: 0, height: 0, duration: 0 });
+    }
+  }
+
+  function formatTimecode(sec) {
+    const s = Math.max(0, Number(sec) || 0);
+    const mins = Math.floor(s / 60);
+    const rem = (s % 60).toFixed(2).padStart(5, '0');
+    return `${String(mins).padStart(2, '0')}:${rem}`;
+  }
+
+  function syncRefVideosTextarea() {
+    if (!el.refVideosInput) return;
+    el.refVideosInput.value = state.refVideos.map(rv => rv.downloadUrl || rv.url || '').filter(Boolean).join('\n');
+  }
+
+  function renderRefVideosList() {
+    if (!el.refVideosList) return;
+    el.refVideosList.innerHTML = '';
+    state.refVideos.forEach((rv, idx) => {
+      const card = document.createElement('div');
+      card.className = 'ref-media-card';
+
+      const info = document.createElement('div');
+      info.className = 'ref-media-info';
+      const statusTxt = rv.downloadUrl ? 'URL ready' : (rv.file ? 'Local file (uploads on Run)' : 'Pending');
+      const dimTxt = (rv.width && rv.height) ? `${rv.width}×${rv.height}` : '';
+      const durTxt = rv.duration ? `${Math.round(rv.duration * 10) / 10}s` : '';
+      const metaParts = [dimTxt, durTxt, statusTxt].filter(Boolean).join(' • ');
+
+      info.innerHTML = `
+        <div class="ref-media-title">
+          <span class="ref-slot-tag">Video ${idx + 1}</span>
+          <span>${escapeHtml(rv.name || `Clip ${idx + 1}`)}</span>
+        </div>
+        <div class="ref-media-meta">${escapeHtml(metaParts)}</div>
+      `;
+
+      const actions = document.createElement('div');
+      actions.className = 'ref-media-actions';
+
+      const tlBtn = document.createElement('button');
+      tlBtn.type = 'button';
+      tlBtn.className = 'btn-tiny';
+      tlBtn.title = 'Open clip in Video Timeline & Frame Picker';
+      tlBtn.textContent = '🎞️ Timeline';
+      tlBtn.addEventListener('click', () => {
+        openVideoInTimeline(rv.file || rv.downloadUrl || rv.url, rv.name || `Video ${idx + 1}`);
+      });
+
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.className = 'btn-tiny';
+      upBtn.title = 'Send clip to Tools → Video Upscaler';
+      upBtn.textContent = '⬆️ Upscale';
+      upBtn.addEventListener('click', () => routeVideoToUpscaler(rv));
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn-tiny';
+      rmBtn.title = 'Remove reference video';
+      rmBtn.textContent = '✕';
+      rmBtn.addEventListener('click', () => {
+        state.refVideos = state.refVideos.filter(x => x.id !== rv.id);
+        renderRefVideosList();
+        syncRefVideosTextarea();
+        updateInputQualityAdvisory();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+
+      actions.appendChild(tlBtn);
+      actions.appendChild(upBtn);
+      actions.appendChild(rmBtn);
+      card.appendChild(info);
+      card.appendChild(actions);
+      el.refVideosList.appendChild(card);
+    });
+  }
+
+  function addRefVideoFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const props = state.selectedModel?.schema?.properties || {};
+    const refVidKey = getRefVideosSchemaKey(props, state.selectedModel) || 'reference_videos';
+    const maxVids = Math.min(10, Math.max(1, Number(props[refVidKey]?.maxItems || 5)));
+    const remaining = Math.max(0, maxVids - state.refVideos.length);
+    const files = Array.from(fileList).slice(0, remaining || maxVids);
+    if (files.length === 0) {
+      showToast(`Maximum ${maxVids} reference video(s) allowed by selected model`, 'warn');
+      return;
+    }
+    files.forEach((file) => {
+      const id = `rv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const entry = { id, file, url: '', downloadUrl: '', name: file.name, width: 0, height: 0, duration: 0 };
+      state.refVideos.push(entry);
+      probeVideoFileMeta(file, (meta) => {
+        entry.width = meta.width;
+        entry.height = meta.height;
+        entry.duration = meta.duration;
+        renderRefVideosList();
+        updateInputQualityAdvisory();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+    });
+    renderRefVideosList();
+    syncRefVideosTextarea();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+  }
+
+  function addRefVideoUrl(url, customName = null) {
+    const clean = String(url || '').trim();
+    if (!clean) return;
+    const id = `rv-url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const name = customName || clean.split('/').pop()?.split('?')[0] || 'Reference Video URL';
+    const entry = { id, file: null, url: clean, downloadUrl: clean, name, width: 0, height: 0, duration: 0 };
+    state.refVideos.push(entry);
+    renderRefVideosList();
+    syncRefVideosTextarea();
+    probeVideoUrlMeta(clean, (meta) => {
+      entry.width = meta.width;
+      entry.height = meta.height;
+      entry.duration = meta.duration;
+      renderRefVideosList();
+      updateInputQualityAdvisory();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+    });
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+  }
+
+  function renderRefAudiosList() {
+    if (!el.refAudiosList) return;
+    el.refAudiosList.innerHTML = '';
+    state.refAudios.forEach((ra, idx) => {
+      const card = document.createElement('div');
+      card.className = 'ref-media-card';
+      const statusTxt = ra.downloadUrl ? 'URL ready' : (ra.file ? 'Local file (uploads on Run)' : 'Pending');
+      const info = document.createElement('div');
+      info.className = 'ref-media-info';
+      info.innerHTML = `
+        <div class="ref-media-title">
+          <span class="ref-slot-tag">Audio ${idx + 1}</span>
+          <span>${escapeHtml(ra.name || `Audio ${idx + 1}`)}</span>
+        </div>
+        <div class="ref-media-meta">${escapeHtml(statusTxt)}</div>
+      `;
+      const actions = document.createElement('div');
+      actions.className = 'ref-media-actions';
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn-tiny';
+      rmBtn.textContent = '✕';
+      rmBtn.addEventListener('click', () => {
+        state.refAudios = state.refAudios.filter(x => x.id !== ra.id);
+        renderRefAudiosList();
+      });
+      actions.appendChild(rmBtn);
+      card.appendChild(info);
+      card.appendChild(actions);
+      el.refAudiosList.appendChild(card);
+    });
+  }
+
+  function addRefAudioFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    Array.from(fileList).slice(0, 5).forEach((file) => {
+      state.refAudios.push({
+        id: `ra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        file,
+        url: '',
+        downloadUrl: '',
+        name: file.name
+      });
+    });
+    renderRefAudiosList();
+  }
+
+  function addRefAudioUrl(url) {
+    const clean = String(url || '').trim();
+    if (!clean) return;
+    const name = clean.split('/').pop()?.split('?')[0] || 'Audio URL';
+    state.refAudios.push({
+      id: `ra-url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      file: null,
+      url: clean,
+      downloadUrl: clean,
+      name
+    });
+    renderRefAudiosList();
+  }
+
+  function syncTimelineTimecodeUI() {
+    const v = el.timelineVideoPlayer;
+    if (!v || !el.timelineTimecode) return;
+    const dur = Number.isFinite(v.duration) ? v.duration : 0;
+    const cur = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+    el.timelineTimecode.textContent = `${formatTimecode(cur)} / ${formatTimecode(dur)}`;
+    if (el.timelineScrubber && dur > 0) {
+      el.timelineScrubber.value = String(Math.round((cur / dur) * 1000));
+    }
+  }
+
+  async function generateTimelineFilmstrip(videoSrc, duration, width, height) {
+    if (!el.timelineFilmstrip || !Number.isFinite(duration) || duration <= 0) return;
+    el.timelineFilmstrip.innerHTML = '';
+    const count = 8;
+    const probe = document.createElement('video');
+    probe.muted = true;
+    probe.playsInline = true;
+    probe.preload = 'auto';
+    if (!videoSrc.startsWith('blob:') && !videoSrc.startsWith('/outputs/')) {
+      probe.crossOrigin = 'anonymous';
+    }
+    const canvas = document.createElement('canvas');
+    const aspect = (width && height) ? (width / height) : (16 / 9);
+    canvas.width = 96;
+    canvas.height = Math.max(40, Math.round(96 / aspect));
+    const ctx = canvas.getContext('2d');
+
+    try {
+      await new Promise((resolve, reject) => {
+        probe.onloadeddata = resolve;
+        probe.onerror = reject;
+        probe.src = videoSrc;
+      });
+      for (let i = 0; i < count; i++) {
+        const targetSec = Math.min(Math.max(0, duration - 0.04), (duration * (i + 0.5)) / count);
+        await new Promise((resolve) => {
+          const onS = () => { probe.removeEventListener('seeked', onS); resolve(); };
+          probe.addEventListener('seeked', onS);
+          probe.currentTime = targetSec;
+        });
+        ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
+        const img = document.createElement('img');
+        img.className = 'timeline-filmstrip-thumb';
+        img.src = canvas.toDataURL('image/jpeg', 0.65);
+        img.title = `Jump to ${formatTimecode(targetSec)}`;
+        img.addEventListener('click', () => {
+          if (el.timelineVideoPlayer) {
+            el.timelineVideoPlayer.pause();
+            el.timelineVideoPlayer.currentTime = targetSec;
+          }
+        });
+        el.timelineFilmstrip.appendChild(img);
+      }
+    } catch (e) {
+      el.timelineFilmstrip.innerHTML = '<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 0.7rem; padding: 6px; text-align: center;">Timeline filmstrip unavailable for CORS video (scrubber &amp; frame capture still work)</div>';
+    }
+  }
+
+  function openVideoInTimeline(source, label = 'Loaded Clip') {
+    if (!source || !el.videoTimelineGroup || !el.timelineVideoPlayer) return;
+    el.videoTimelineGroup.style.display = 'block';
+    if (el.timelineExtractorBody) {
+      el.timelineExtractorBody.style.display = 'flex';
+      if (el.toggleTimelineExtractorBtn) el.toggleTimelineExtractorBtn.setAttribute('aria-expanded', 'true');
+      if (el.timelineChevron) el.timelineChevron.textContent = '▲';
+    }
+    if (state.timelineIsObjectUrl && state.timelineVideo?.src) {
+      try { URL.revokeObjectURL(state.timelineVideo.src); } catch (e) {}
+    }
+
+    const isFile = (typeof File !== 'undefined' && source instanceof File) || (typeof Blob !== 'undefined' && source instanceof Blob);
+    const srcUrl = isFile ? URL.createObjectURL(source) : String(source);
+    state.timelineIsObjectUrl = isFile;
+
+    el.timelineVideoPlayer.onloadedmetadata = () => {
+      const w = el.timelineVideoPlayer.videoWidth || 0;
+      const h = el.timelineVideoPlayer.videoHeight || 0;
+      const dur = Number.isFinite(el.timelineVideoPlayer.duration) ? el.timelineVideoPlayer.duration : 0;
+      state.timelineVideo = { src: srcUrl, name: label, width: w, height: h, duration: dur };
+      if (el.timelineMetaReadout) {
+        el.timelineMetaReadout.textContent = `${w && h ? `${w}×${h} • ` : ''}${dur ? `${dur.toFixed(1)}s` : ''}`;
+      }
+      if (el.timelineStage) el.timelineStage.style.display = 'flex';
+      syncTimelineTimecodeUI();
+      generateTimelineFilmstrip(srcUrl, dur, w, h);
+    };
+    el.timelineVideoPlayer.src = srcUrl;
+    el.timelineVideoPlayer.load();
+    el.videoTimelineGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function extractTimelineFrame(targetSlot = 'source') {
+    const v = el.timelineVideoPlayer;
+    if (!v || !v.src || v.readyState < 2) {
+      showToast('Load a video and wait for a frame before extracting', 'warn');
+      return;
+    }
+    const w = v.videoWidth || 720;
+    const h = v.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(v, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/png');
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const tLabel = String((v.currentTime || 0).toFixed(2)).replace('.', 's');
+    const file = new File([blob], `timeline-${tLabel}.png`, { type: 'image/png' });
+
+    if (targetSlot === 'last') {
+      state.lastImage = { file, url: dataUrl, downloadUrl: null };
+      if (el.lastImagePreview) el.lastImagePreview.src = dataUrl;
+      if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
+      if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
+      if (el.lastImageUrlInput) el.lastImageUrlInput.value = '';
+      showToast(`Loaded frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) as End Frame`, 'good');
+      return;
+    }
+    if (targetSlot === 'ref') {
+      const id = `ref-tl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      state.extraImages.push({ id, file, previewUrl: dataUrl, downloadUrl: null });
+      renderExtraImagesGrid();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+      showToast(`Added frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) to Reference Images`, 'good');
+      return;
+    }
+
+    // Default: Source Image (switch to I2V only if current model has no image input at all)
+    const curProps = state.selectedModel?.schema?.properties || {};
+    const curAcceptsSingleImg = Boolean('image' in curProps || state.selectedModel?.isImageToVideo);
+    if (!curAcceptsSingleImg) {
+      const i2vBtn = document.querySelector('.mode-btn[data-category="image-to-video"]');
+      if (i2vBtn) i2vBtn.click();
+    }
+    state.sourceImage = { file, url: dataUrl, downloadUrl: null };
+    state.sourceImageDimensions = { width: w, height: h };
+    if (el.imagePreview) el.imagePreview.src = dataUrl;
+    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+    const dp = document.getElementById('dropzonePrompt');
+    if (dp) dp.style.display = 'none';
+    if (el.imageUrlInput) el.imageUrlInput.value = '';
+    updateInputQualityAdvisory();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+    showToast(`Extracted frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) into Source Image ($0.00)`, 'good');
+  }
+
+  function parseTargetShortEdge(resStr) {
+    const r = String(resStr || '').toLowerCase();
+    if (r === '360p') return 360;
+    if (r === '480p') return 480;
+    if (r === '540p') return 540;
+    if (r === '720p') return 720;
+    if (r === '768p') return 768;
+    if (r === '1080p') return 1080;
+    if (r === '2k' || r === '1440p') return 1440;
+    if (r === '4k' || r === '2160p') return 2160;
+    return 0;
+  }
+
+  function updateInputQualityAdvisory() {
+    if (!el.inputQualityAdvisory || !el.inputQualityAdvisoryText) return;
+    const model = state.selectedModel;
+    if (!model) {
+      el.inputQualityAdvisory.style.display = 'none';
+      return;
+    }
+    const props = model.schema?.properties || {};
+    const resKey = getResolutionSchemaKey(props);
+    const targetRes = (resKey && el.resolutionSelect?.value) ? el.resolutionSelect.value : (props[resKey]?.default || '');
+    const targetEdge = parseTargetShortEdge(targetRes);
+
+    const hasSingleImageSlot = ('image' in props || model.isImageToVideo) && !String(model.model_id || '').includes('upscal');
+    const imgDims = state.sourceImageDimensions;
+    const vidDims = state.sourceVideoDimensions || state.refVideos.find(rv => rv.width && rv.height) || null;
+
+    if (hasSingleImageSlot && imgDims && targetEdge > 0) {
+      const srcEdge = Math.min(imgDims.width, imgDims.height);
+      if (srcEdge > 0 && srcEdge < Math.round(targetEdge * 0.85)) {
+        const upCost = getPreUpscaleUnitCost();
+        el.inputQualityAdvisory.style.display = 'flex';
+        el.inputQualityAdvisoryText.innerHTML =
+          `⚠️ <strong>Resolution Mismatch:</strong> Source frame is <code>${imgDims.width}×${imgDims.height}</code> (~${srcEdge}p) while target output is <code>${escapeHtml(targetRes)}</code>. Running directly is free ($0 extra) and works, or enable pre-upscale below for sharper early frames.`;
+        if (el.preUpscaleLabel && el.preUpscaleLabelText) {
+          el.preUpscaleLabel.style.display = 'inline-flex';
+          el.preUpscaleLabelText.textContent = `✨ Pre-upscale low-res frame via Real-ESRGAN (+$${upCost.toFixed(4)}) before running`;
+        }
+        if (el.routeToVideoUpscalerBtn) el.routeToVideoUpscalerBtn.style.display = 'none';
+        return;
+      }
+    }
+
+    if (('video' in props || getRefVideosSchemaKey(props, model)) && vidDims && targetEdge > 0 && !String(model.model_id || '').includes('upscal')) {
+      const srcVidEdge = Math.min(vidDims.width, vidDims.height);
+      if (srcVidEdge > 0 && srcVidEdge < Math.round(targetEdge * 0.85)) {
+        el.inputQualityAdvisory.style.display = 'flex';
+        el.inputQualityAdvisoryText.innerHTML =
+          `⚠️ <strong>Low-Res Reference Clip:</strong> Clip is <code>${vidDims.width}×${vidDims.height}</code> (~${srcVidEdge}p) vs target <code>${escapeHtml(targetRes)}</code>. R2V mainly copies motion cleanly, whereas V2V/Video Edit closely follows source quality.`;
+        if (el.preUpscaleLabel) el.preUpscaleLabel.style.display = 'none';
+        if (el.preUpscaleCheckbox) el.preUpscaleCheckbox.checked = false;
+        if (el.routeToVideoUpscalerBtn) el.routeToVideoUpscalerBtn.style.display = 'inline-flex';
+        return;
+      }
+    }
+
+    el.inputQualityAdvisory.style.display = 'none';
+    if (el.preUpscaleLabel) el.preUpscaleLabel.style.display = 'none';
+    if (el.preUpscaleCheckbox) el.preUpscaleCheckbox.checked = false;
+    if (el.routeToVideoUpscalerBtn) el.routeToVideoUpscalerBtn.style.display = 'none';
+  }
+
+  function routeVideoToUpscaler(clipEntry = null) {
+    const toolsTab = document.querySelector('.mode-btn[data-category="utility"]');
+    if (toolsTab) toolsTab.click();
+    const preferredUpscalers = [
+      'wavespeed-ai/video-upscaler',
+      'bytedance/video-upscaler',
+      'wavespeed-ai/flashvsr',
+      'wavespeed-ai/video-upscaler-pro'
+    ];
+    const targetModelId = preferredUpscalers.find(id => state.models.some(m => m.model_id === id))
+      || state.models.find(m => m.type === 'upscale-video')?.model_id;
+    if (targetModelId) selectModel(targetModelId, true);
+
+    const chosen = clipEntry || (state.sourceVideo ? state.sourceVideo : state.refVideos[0]);
+    if (chosen) {
+      state.sourceVideo = chosen.file
+        ? { file: chosen.file }
+        : { url: chosen.downloadUrl || chosen.url, downloadUrl: chosen.downloadUrl || chosen.url };
+      if (el.videoUrlInput) el.videoUrlInput.value = chosen.file ? '' : (chosen.downloadUrl || chosen.url || '');
+      if (el.videoDropzone) {
+        const p = el.videoDropzone.querySelector('p');
+        if (p) p.textContent = `Loaded: ${chosen.name || chosen.file?.name || 'Reference Video'}`;
+      }
+    }
+    showToast('Loaded clip into Tools → Video Upscaler (choose target resolution & Run)', 'good');
+  }
+
   function handleImageFile(file) {
     state.sourceImage = { file };
+    state.sourceImageDimensions = null;
     const reader = new FileReader();
     reader.onload = (e) => {
+      el.imagePreview.onload = () => {
+        if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
+          state.sourceImageDimensions = {
+            width: el.imagePreview.naturalWidth,
+            height: el.imagePreview.naturalHeight
+          };
+          updateInputQualityAdvisory();
+        }
+      };
       el.imagePreview.src = e.target.result;
       el.imagePreviewContainer.style.display = 'flex';
       document.getElementById('dropzonePrompt').style.display = 'none';

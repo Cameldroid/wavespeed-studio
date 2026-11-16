@@ -10,6 +10,8 @@ Note Modified Date:
   - "2026-11-14T13:49:12-03:00"
   - "2026-11-14T15:21:45-03:00"
   - "2026-11-14T15:36:03-03:00"
+  - "2026-11-14T15:59:27-03:00"
+  - "2026-11-16T00:57:34-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -111,3 +113,25 @@ Note Modified Date:
 - **Verification (Zero Live API Spend):**
   - `node --check electron/main.js`, `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Electron `--smoke-test` (`SMOKE=0 DB_OK=True`), and secret scan (`ZERO_SECRET_HITS`) passed.
 - **Next Action:** Push `main` and tag `v1.0.2` to publish updated Windows installers on GitHub Releases.
+
+
+# 2026-11-14T15:59:27-03:00 — Initial Handover Scaffold Created
+
+- **Summary:** Created initial scaffold `documentation/PROJECT HANDOVER.md` mapping exact local roots (`D:\Cocoding\wavespeed-studio`, `D:\Cocoding\Aimagen Nsfw`, `D:\wvst\WaveSpeed Studio`, `D:\wvst`, `C:\Users\psyco\AppData\Roaming\wavespeed-studio`), architecture blocks, release state (`v1.0.2` published on GitHub), and verification boundaries.
+- **Documentation Changed:**
+  - Created [PROJECT HANDOVER.md](file:///D:/Cocoding/wavespeed-studio/documentation/PROJECT%20HANDOVER.md) (scaffold awaiting user confirmation on depth/expansion before finalizing and committing).
+  - Updated [PROJECT LOG.md](file:///D:/Cocoding/wavespeed-studio/documentation/PROJECT%20LOG.md).
+- **Verification:** No application source modified; directory tree and authoritative files inspected directly prior to scaffolding.
+- **Next Action:** Review handover scaffold scope with user, expand requested "How It Works" sections if needed, and prepare the fresh chat continuation prompt with `D:\Cocoding\wavespeed-studio` as active workspace.
+
+
+# 2026-11-16T00:57:34-03:00 — R2V Multimodal Self-Upload, Timeline Frame Picker, Quality Advisory & Pre-Upscale (`v1.0.3`)
+
+- **Summary:** Added dedicated `🧬 Ref → Video` tab, full self-upload/drag-drop + raw binary streaming for R2V reference videos & audios across all WaveSpeed schemas (`reference_videos`, `videos`, `ref_videos`, `reference_files`, `reference_audios`, `audios`), interactive `$0.00` Video Timeline & Frame Picker with 8-frame filmstrip thumbnails, resolution mismatch advisory with optional `wavespeed-ai/real-esrgan` pre-upscale toggle, `target_resolution` support, and moved video upscalers into `✂️ Tools` (`v1.0.3`).
+- **Changes Applied:**
+  - `server.js`: Added `parseRawBody()` + `POST /api/upload-raw` (up to 200 MB streaming binary uploads), `isReferenceToVideo` -> `ref-to-video` category, routed `upscale-video` / `video-tools` to `utility` (`Tools`), and extended `resolvePayloadMedia` with `ref_videos` & `audios`.
+  - `public/index.html`, `public/style.css`, `public/app.js`: Added `🧬 Ref → Video` mode tab, `Image 1`/`Video 1`/`Audio 1` quick chips & slot badges, R2V video/audio upload dropzones + card lists, interactive `#videoTimelineGroup` scrubber + filmstrip + frame extraction buttons, `#inputQualityAdvisory` + optional Real-ESRGAN pre-upscale toggle integrated with pricing/Spend Guard, and `target_resolution` parameter support.
+  - `scripts/verify_studio_isolated.js`: Added `POST /api/upload-raw`, `ref_videos`/`audios`, `ref-to-video` (`wan-3.0` + `kling-v4.0`), and `video-upscaler` (`target_resolution`) automated isolated assertions.
+  - `package.json`: Bumped version to `1.0.3`.
+- **Verification (Zero Live API Spend):** `node --check` passed on `server.js`, `public/app.js`, and `electron/main.js`; `npm test` (`ALL_ISOLATED_TESTS_PASSED`).
+- **Next Action:** Run Electron `--smoke-test` + secret scan, commit & push `main` + tag `v1.0.3` for GitHub Actions release, build Windows installer, and update `D:\wvst\WaveSpeed Studio`.

@@ -29,13 +29,16 @@
         <button class="mode-btn" data-category="image-edit" title="Image Edit & Inpainting models">
           <span class="icon">🖌️</span> <span class="mode-label">Image Edit</span>
         </button>
-        <button class="mode-btn" data-category="image-to-video" title="Animate image to video">
+        <button class="mode-btn" data-category="image-to-video" title="Animate still image to video (Start/End frame I2V)">
           <span class="icon">🎞️</span> <span class="mode-label">Image → Video</span>
         </button>
-        <button class="mode-btn" data-category="video-gen" title="Text to Video, Video Edit & Extend">
-          <span class="icon">🎬</span> <span class="mode-label">Video &amp; Extend</span>
+        <button class="mode-btn" data-category="ref-to-video" title="Reference-to-Video (R2V): upload reference images, videos & audio clips">
+          <span class="icon">🧬</span> <span class="mode-label">Ref → Video</span>
         </button>
-        <button class="mode-btn" data-category="utility" title="Upscale, Background Removal & Tools">
+        <button class="mode-btn" data-category="video-gen" title="Text to Video, Video Edit (V2V) & Video Extend">
+          <span class="icon">🎬</span> <span class="mode-label">Video &amp; Edit</span>
+        </button>
+        <button class="mode-btn" data-category="utility" title="Image/Video Upscalers, Background Removal & Tools">
           <span class="icon">✂️</span> <span class="mode-label">Tools</span>
         </button>
       </nav>
@@ -200,6 +203,11 @@
                 <button type="button" class="chip-btn chip-motion" data-add="slow push-in camera, steady tripod">📷 Slow Push-In</button>
                 <button type="button" class="chip-btn chip-motion" data-add="slow motion, smooth fabric movement">🐢 Slow-Mo</button>
               </span>
+              <span id="r2vRefChips" class="video-motion-chips" style="display: none;">
+                <button type="button" class="chip-btn chip-ref" data-add="Image 1">+ Image 1</button>
+                <button type="button" class="chip-btn chip-ref" data-add="Video 1">+ Video 1</button>
+                <button type="button" class="chip-btn chip-ref" data-add="Audio 1">+ Audio 1</button>
+              </span>
               <div id="customPromptChips" class="custom-prompt-chips"></div>
               <button type="button" class="chip-btn chip-save-preset" id="savePresetChipBtn" title="Save current prompt as a reusable chip">+ Save Preset</button>
             </div>
@@ -287,38 +295,125 @@
             </div>
           </div>
 
-          <!-- Video Upload / Target (for Video Edit models) -->
+          <!-- Video Upload / Target (for Video Edit / Extend / Video Upscaler models) -->
           <div class="input-group" id="videoInputGroup" style="display: none;">
             <div class="input-header">
               <label>Source Video <span class="required">*</span></label>
-              <span class="subtext">Upload or link video for editing</span>
+              <span class="subtext">Upload MP4/WEBM/MOV or paste video URL</span>
             </div>
-            <input type="file" id="videoFileInput" accept="video/mp4,video/webm" class="file-hidden">
+            <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="file-hidden">
             <div class="upload-dropzone" id="videoDropzone">
               <span class="drop-icon">🎥</span>
               <p>Click or drag video file here</p>
+              <small>Supports MP4, WEBM, MOV</small>
             </div>
-            <input type="text" id="videoUrlInput" class="mt-2" placeholder="Or paste video URL...">
+            <div class="url-input-row">
+              <input type="text" id="videoUrlInput" placeholder="Or paste video URL...">
+              <button type="button" class="btn-secondary-sm" id="openSourceVideoTimelineBtn" title="Open loaded Source Video in the Frame Timeline Picker" style="display: none;">🎞️ Timeline</button>
+            </div>
           </div>
 
-          <!-- Multi-Image List (for Models like MiniMax H3 / Reference-to-Video) -->
+          <!-- Multi-Image List (for Models like MiniMax H3 / Wan 3.0 / Kling / Seedance R2V) -->
           <div class="input-group" id="multiImageGroup" style="display: none;">
             <div class="input-header">
-              <label>Reference Images (Up to 16)</label>
-              <span class="subtext">Add additional reference images</span>
+              <label>Reference Images (Up to 10)</label>
+              <span class="subtext">Upload or paste images — referenced as Image 1, Image 2...</span>
             </div>
             <div class="multi-img-grid" id="multiImgGrid"></div>
-            <button type="button" class="btn-secondary-sm" id="addMoreImagesBtn">+ Add Image</button>
+            <div class="url-input-row">
+              <input type="text" id="multiImageUrlInput" placeholder="Paste reference image URL...">
+              <button type="button" class="btn-secondary-sm" id="addMultiImageUrlBtn">Add URL</button>
+              <button type="button" class="btn-secondary-sm" id="addMoreImagesBtn">+ Upload Image(s)</button>
+            </div>
             <input type="file" id="multiFileInput" accept="image/*" multiple class="file-hidden">
           </div>
 
-          <!-- Reference Videos (for reference-to-video models like MiniMax H3 / Seedance / Wan 3.0) -->
+          <!-- Reference Videos (Self-upload + URLs for R2V models: Wan 3.0, Seedance 2.5, Kling 4.0, MiniMax H3) -->
           <div class="input-group" id="refVideosGroup" style="display: none;">
             <div class="input-header">
-              <label>Reference Video URL(s)</label>
-              <span class="subtext">Motion or subject reference clip (one URL per line or upload)</span>
+              <label id="refVideosLabel">Reference Videos (Up to 5)</label>
+              <span class="subtext">Upload MP4/WEBM/MOV clips or paste URLs — refer to them as Video 1, Video 2...</span>
             </div>
-            <textarea id="refVideosInput" rows="2" placeholder="Paste reference video URL(s), or use active output video..."></textarea>
+            <input type="file" id="refVideoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple class="file-hidden">
+            <div class="upload-dropzone upload-dropzone-compact" id="refVideoDropzone">
+              <span class="drop-icon">🎞️</span>
+              <p>Drag &amp; drop reference video clip(s), or <span class="browse-link">browse from PC</span></p>
+              <small>Supports MP4, WEBM, MOV — auto-uploads on Run</small>
+            </div>
+            <div class="url-input-row">
+              <input type="text" id="refVideoUrlInput" placeholder="Or paste reference video URL...">
+              <button type="button" class="btn-sm" id="addRefVideoUrlBtn">Add</button>
+              <button type="button" class="btn-secondary-sm" id="useActiveRefVideoBtn" title="Attach currently playing output video as a Reference Video" style="display: none;">🎬 Use Active Output</button>
+            </div>
+            <div class="ref-media-list" id="refVideosList"></div>
+            <textarea id="refVideosInput" rows="2" style="display: none;" placeholder="Paste reference video URL(s), one per line..."></textarea>
+          </div>
+
+          <!-- Reference Audios (for R2V / Video Edit models with reference_audios / audios) -->
+          <div class="input-group" id="refAudiosGroup" style="display: none;">
+            <div class="input-header">
+              <label id="refAudiosLabel">Reference Audio(s)</label>
+              <span class="subtext">Optional voice, music, or SFX reference (Audio 1, Audio 2...)</span>
+            </div>
+            <input type="file" id="refAudioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple class="file-hidden">
+            <div class="url-input-row">
+              <input type="text" id="refAudioUrlInput" placeholder="Paste audio URL or click Upload Audio...">
+              <button type="button" class="btn-sm" id="addRefAudioUrlBtn">Add</button>
+              <button type="button" class="btn-secondary-sm" id="uploadRefAudioBtn">🎵 Upload Audio</button>
+            </div>
+            <div class="ref-media-list" id="refAudiosList"></div>
+          </div>
+
+          <!-- Local Video Timeline & Frame Extractor ($0.00 local canvas capture) -->
+          <div class="timeline-extractor-card" id="videoTimelineGroup" style="display: none;">
+            <div class="timeline-extractor-header">
+              <button type="button" class="timeline-collapse-btn" id="toggleTimelineExtractorBtn" aria-expanded="false">
+                <span>🎞️ Video Timeline &amp; Frame Picker <small class="timeline-free-pill">$0.00 Local</small></span>
+                <span id="timelineChevron">▼</span>
+              </button>
+            </div>
+            <div class="timeline-extractor-body" id="timelineExtractorBody" style="display: none;">
+              <p class="timeline-helper-text">Upload any local clip or load the active video, scrub frame-by-frame on the timeline, and send an exact frame into Image → Video, End Frame, or Ref Images.</p>
+              <input type="file" id="timelineVideoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="file-hidden">
+              <div class="timeline-source-bar">
+                <button type="button" class="btn-secondary-sm" id="browseTimelineVideoBtn">📁 Upload Video for Timeline</button>
+                <button type="button" class="btn-secondary-sm" id="loadActiveToTimelineBtn" style="display: none;">🎬 Load Active Output Video</button>
+                <span class="timeline-meta-badge" id="timelineMetaReadout">No video loaded</span>
+              </div>
+              <div class="timeline-stage" id="timelineStage" style="display: none;">
+                <video id="timelineVideoPlayer" muted playsinline preload="metadata"></video>
+                <div class="timeline-filmstrip" id="timelineFilmstrip" title="Click any frame thumbnail to jump to that timestamp"></div>
+                <div class="timeline-scrubber-row">
+                  <input type="range" id="timelineScrubber" min="0" max="1000" value="0" step="1">
+                  <span class="timeline-timecode" id="timelineTimecode">00:00.00 / 00:00.00</span>
+                </div>
+                <div class="timeline-step-row">
+                  <button type="button" class="btn-tiny" id="tlStepStartBtn" title="Jump to first frame">⏮ Start</button>
+                  <button type="button" class="btn-tiny" id="tlStepBack1sBtn" title="Step backward 1 second">◀ -1s</button>
+                  <button type="button" class="btn-tiny" id="tlStepBack1fBtn" title="Step backward 1 frame">◀ -1f</button>
+                  <button type="button" class="btn-tiny" id="tlStepFwd1fBtn" title="Step forward 1 frame">+1f ▶</button>
+                  <button type="button" class="btn-tiny" id="tlStepFwd1sBtn" title="Step forward 1 second">+1s ▶</button>
+                  <button type="button" class="btn-tiny" id="tlStepEndBtn" title="Jump to last frame">⏭ End</button>
+                </div>
+                <div class="timeline-extract-actions">
+                  <button type="button" class="btn-sm" id="extractFrameSourceBtn">📸 Use Frame → Source Image</button>
+                  <button type="button" class="btn-secondary-sm" id="extractFrameLastBtn" style="display: none;">🏁 Use as End Frame</button>
+                  <button type="button" class="btn-secondary-sm" id="extractFrameRefBtn" style="display: none;">🖼️ Add to Ref Images</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resolution & Quality Match Advisory + Optional Pre-Upscale Toggle -->
+          <div class="quality-advisory-box" id="inputQualityAdvisory" style="display: none;">
+            <div class="quality-advisory-text" id="inputQualityAdvisoryText"></div>
+            <div class="quality-advisory-actions">
+              <label class="pre-upscale-toggle" id="preUpscaleLabel" style="display: none;">
+                <input type="checkbox" id="preUpscaleCheckbox">
+                <span id="preUpscaleLabelText">✨ Pre-upscale low-res frame to match output before running (+$0.0024 Real-ESRGAN)</span>
+              </label>
+              <button type="button" class="btn-secondary-sm" id="routeToVideoUpscalerBtn" style="display: none;">⬆️ Upscale Video Clip First (Tools)</button>
+            </div>
           </div>
         </section>
 
@@ -515,6 +610,12 @@
               </button>
               <button type="button" class="btn-action-tool" id="grabLastFrameI2VBtn" title="Extract crisp last frame ($0.00) and load into Image-to-Video to continue cleanly" style="display: none;">
                 ⏭️ Last → I2V
+              </button>
+              <button type="button" class="btn-action-tool" id="openViewerTimelineBtn" title="Open this video in the Timeline &amp; Frame Picker ($0.00)" style="display: none;">
+                🎞️ Pick Frame
+              </button>
+              <button type="button" class="btn-action-tool" id="useOutputAsR2vBtn" title="Switch to Ref → Video and attach this clip as a Reference Video" style="display: none;">
+                🧬 Use as R2V Ref
               </button>
               <button type="button" class="btn-action-tool" id="extendVideoBtn" title="Continue/extend this clip in Video Gen / Edit" style="display: none;">
                 ⏩ Extend Video

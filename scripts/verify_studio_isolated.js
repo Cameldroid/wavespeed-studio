@@ -402,12 +402,29 @@ async function runMockOutputAndServerTests() {
     const payload = {
       image: `http://localhost:3000${savedImg[0].local_url}`,
       reference_images: [savedImg[0].local_url, 'https://example.com/already-remote.png'],
+      ref_videos: [savedVid[0].local_url],
+      audios: ['https://example.com/ref-audio.mp3'],
       prompt: 'test'
     };
     await srvMod.resolvePayloadMedia(payload);
     assert.strictEqual(payload.image, `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
     assert.strictEqual(payload.reference_images[0], `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
     assert.strictEqual(payload.reference_images[1], 'https://example.com/already-remote.png');
+    assert.strictEqual(payload.ref_videos[0], `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
+
+    // 4b. Test raw binary streaming POST /api/upload-raw (used for video/audio uploads)
+    const rawUploadResp = await realFetch(`http://127.0.0.1:${appPort}/api/upload-raw`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'video/mp4',
+        'X-File-Name': encodeURIComponent('ref-clip test.mp4')
+      },
+      body: tinyMp4
+    });
+    assert.strictEqual(rawUploadResp.status, 200);
+    const rawUploadJson = await rawUploadResp.json();
+    assert.strictEqual(rawUploadJson.data.download_url, `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
+    assert(uploadedPayloads[uploadedPayloads.length - 1].equals(tinyMp4), 'upload-raw must preserve exact binary bytes');
 
     // 5. Test POST /api/outputs/delete traversal protection & clean removal
     const badDelResp = await realFetch(`http://127.0.0.1:${appPort}/api/outputs/delete`, {
@@ -558,7 +575,7 @@ async function runMockDomAppTests() {
   elementsById.get('seedInput').value = '-1';
   elementsById.get('strengthSlider').value = '0.70';
 
-  const modeBtns = ['image-gen', 'image-edit', 'image-to-video', 'video-gen', 'utility'].map(cat => {
+  const modeBtns = ['image-gen', 'image-edit', 'image-to-video', 'ref-to-video', 'video-gen', 'utility'].map(cat => {
     const b = makeElement('button');
     b.dataset.category = cat;
     if (cat === 'image-gen') b.classList.add('active');
@@ -610,6 +627,35 @@ async function runMockDomAppTests() {
       has_formula: true, fetched_at: Date.now(), isSpicy: false,
       category: 'image-edit', isImageEdit: true, isPinned: true, pinnedRank: 4,
       schema: { required: ['prompt', 'image'], properties: { prompt: {}, image: {}, size: { default: '1024*1024', enum: ['512*512', '1024*1024', '1536*1536'] }, quality: { default: 'medium', enum: ['low', 'medium', 'high'] }, resolution: { default: '2k', enum: ['1k', '2k', '4k'] }, num_images: { default: 2, enum: [1, 2, 4] } } }
+    },
+    {
+      model_id: 'alibaba/wan-3.0/reference-to-video',
+      name: 'WAN 3.0 (Reference-to-Video)',
+      base_price: 0.3, base_price_micro: 300000, effective_price: 0.3,
+      discount_rate: 100, discount_percent: 0,
+      formula: formulasJson['alibaba/wan-3.0/reference-to-video'].formula,
+      has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'ref-to-video', isReferenceToVideo: true, isPinned: true, pinnedRank: 10,
+      schema: { required: ['prompt'], properties: { prompt: {}, aspect_ratio: { default: '16:9', enum: ['16:9', '9:16', '1:1'] }, duration: { default: 5 }, resolution: { default: '720p', enum: ['480p', '720p', '1080p'] }, reference_images: { maxItems: 10 }, reference_videos: { maxItems: 5 }, reference_audios: { maxItems: 5 } } }
+    },
+    {
+      model_id: 'kwaivgi/kling-v4.0/reference-to-video',
+      name: 'Kling 4.0 (Reference-to-Video)',
+      base_price: 0.157, base_price_micro: 157000, effective_price: 0.157,
+      discount_rate: 100, discount_percent: 0,
+      formula: formulasJson['kwaivgi/kling-v4.0/reference-to-video'].formula,
+      has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'ref-to-video', isReferenceToVideo: true, isPinned: true, pinnedRank: 11,
+      schema: { required: ['prompt'], properties: { prompt: {}, aspect_ratio: { default: 'auto', enum: ['auto', '16:9', '9:16'] }, duration: { default: 5, enum: [3, 5, 10] }, resolution: { default: '720p', enum: ['720p', '1080p'] }, images: { maxItems: 10 }, videos: { maxItems: 5 }, audios: { maxItems: 3 } } }
+    },
+    {
+      model_id: 'wavespeed-ai/video-upscaler',
+      name: 'WaveSpeed Video Upscaler (720p–4K)',
+      base_price: 0.005, base_price_micro: 5000, effective_price: 0.005,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'utility', isUtility: true, isPinned: true, pinnedRank: 12,
+      schema: { required: ['video'], properties: { video: {}, target_resolution: { default: '1080p', enum: ['720p', '1080p', '2k', '4k'] } } }
     }
   ];
 
@@ -731,7 +777,32 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('resolutionSelect').value, '1k');
   assert.strictEqual(String(elementsById.get('numImagesSelect').value), '1');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, bounded onerror fallback)');
+  // 6. Switch back to 'This Tab Only' filter and open Ref -> Video tab -> verify Wan 3.0 & Kling 4.0 expose Ref Video/Audio self-upload containers + R2V ref chips
+  const tabChip = chipFilterBtns.find(b => b.dataset.filter === 'tab');
+  tabChip.click();
+  const r2vTab = modeBtns.find(b => b.dataset.category === 'ref-to-video');
+  r2vTab.click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'alibaba/wan-3.0/reference-to-video');
+  assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'none');
+  assert.strictEqual(elementsById.get('multiImageGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('refVideosGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('r2vRefChips').style.display, 'contents');
+
+  elementsById.get('comboboxList').children[1].click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'kwaivgi/kling-v4.0/reference-to-video');
+  assert.strictEqual(elementsById.get('refVideosGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
+
+  // 7. Switch to Tools tab -> verify video-upscaler routes here and shows target_resolution in resolutionSelect
+  const toolsTab = modeBtns.find(b => b.dataset.category === 'utility');
+  toolsTab.click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/video-upscaler');
+  assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('resolutionCol').style.display, 'block');
+  assert.strictEqual(elementsById.get('resolutionSelect').value, '1080p');
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Video Upscaler target_resolution, bounded onerror fallback)');
 }
 
 async function runHistoryDatabaseTests() {
