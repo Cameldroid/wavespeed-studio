@@ -67,7 +67,19 @@
     designTheme: localStorage.getItem('wavespeed_studio_theme') || 'obsidian-pro',
     designDensity: localStorage.getItem('wavespeed_studio_density') || 'compact',
     viewerStage: localStorage.getItem('wavespeed_viewer_stage') || 'tall',
-    customPromptChips: []
+    customPromptChips: [],
+    pipeline: {
+      runMode: 'checkpoint', // 'checkpoint' | 'auto'
+      expandedStepIndex: 0,
+      activeViewStepIndex: 0,
+      activeRunId: null,
+      isRunning: false,
+      stopRequested: false,
+      pausedAfterStep: null,
+      preset: null, // { name, file, url, downloadUrl, previewUrl, packImages? }
+      steps: [],
+      savedRecipes: []
+    }
   };
 
   // DOM Elements
@@ -361,7 +373,56 @@
     maskCanvasSubtext: document.getElementById('maskCanvasSubtext'),
     viewerCard: document.getElementById('viewerCard'),
     activeOutputInspector: document.getElementById('activeOutputInspector'),
-    toggleExpandGalleryBtn: document.getElementById('toggleExpandGalleryBtn')
+    toggleExpandGalleryBtn: document.getElementById('toggleExpandGalleryBtn'),
+    modelSelectionSection: document.getElementById('modelSelectionSection'),
+    inputsSection: document.getElementById('inputsSection'),
+    settingsSection: document.getElementById('settingsSection'),
+    singleActionFooter: document.getElementById('singleActionFooter'),
+    modelMixingTipWrap: document.getElementById('modelMixingTipWrap'),
+    modelMixingBadgeBtn: document.getElementById('modelMixingBadgeBtn'),
+    modelMixingBadgeText: document.getElementById('modelMixingBadgeText'),
+    modelMixingPopover: document.getElementById('modelMixingPopover'),
+    buildFaceSheetBtn: document.getElementById('buildFaceSheetBtn'),
+    preUploadFacePackBtn: document.getElementById('preUploadFacePackBtn'),
+    sendRefsToPipelineBtn: document.getElementById('sendRefsToPipelineBtn'),
+    angleControlsGroup: document.getElementById('angleControlsGroup'),
+    angleReadoutText: document.getElementById('angleReadoutText'),
+    horizontalAnglePills: document.getElementById('horizontalAnglePills'),
+    horizontalAngleSlider: document.getElementById('horizontalAngleSlider'),
+    horizontalAngleValue: document.getElementById('horizontalAngleValue'),
+    verticalAngleSelect: document.getElementById('verticalAngleSelect'),
+    cameraDistanceSelect: document.getElementById('cameraDistanceSelect'),
+    pipelineBuilderPanel: document.getElementById('pipelineBuilderPanel'),
+    pipelineStageBoard: document.getElementById('pipelineStageBoard'),
+    pipelineStageStrip: document.getElementById('pipelineStageStrip'),
+    pipelineCheckpointBar: document.getElementById('pipelineCheckpointBar'),
+    pipelineStatusText: document.getElementById('pipelineStatusText'),
+    pipelineRerunStepBtn: document.getElementById('pipelineRerunStepBtn'),
+    pipelineApproveNextBtn: document.getElementById('pipelineApproveNextBtn'),
+    pipelineSaveStagePresetBtn: document.getElementById('pipelineSaveStagePresetBtn'),
+    pipelineRecipeSelect: document.getElementById('pipelineRecipeSelect'),
+    pipelineSaveRecipeBtn: document.getElementById('pipelineSaveRecipeBtn'),
+    pipelineExportJsonBtn: document.getElementById('pipelineExportJsonBtn'),
+    pipelineImportJsonBtn: document.getElementById('pipelineImportJsonBtn'),
+    pipelineImportFileInput: document.getElementById('pipelineImportFileInput'),
+    pipelineRunModeSwitch: document.getElementById('pipelineRunModeSwitch'),
+    pipelineFacePresetSelect: document.getElementById('pipelineFacePresetSelect'),
+    pipelinePresetDropzone: document.getElementById('pipelinePresetDropzone'),
+    pipelinePresetFileInput: document.getElementById('pipelinePresetFileInput'),
+    pipelinePresetDropPrompt: document.getElementById('pipelinePresetDropPrompt'),
+    pipelinePresetPreviewWrap: document.getElementById('pipelinePresetPreviewWrap'),
+    pipelinePresetPreviewImg: document.getElementById('pipelinePresetPreviewImg'),
+    pipelinePresetClearBtn: document.getElementById('pipelinePresetClearBtn'),
+    pipelinePresetUrlInput: document.getElementById('pipelinePresetUrlInput'),
+    pipelinePresetLoadUrlBtn: document.getElementById('pipelinePresetLoadUrlBtn'),
+    pipelineStepsList: document.getElementById('pipelineStepsList'),
+    pipelineAddStepBtn: document.getElementById('pipelineAddStepBtn'),
+    pipelineTotalCostBadge: document.getElementById('pipelineTotalCostBadge'),
+    pipelineAffordabilityBanner: document.getElementById('pipelineAffordabilityBanner'),
+    pipelineRunBtn: document.getElementById('pipelineRunBtn'),
+    pipelineRunBtnLabel: document.getElementById('pipelineRunBtnLabel'),
+    pipelineRunBtnPrice: document.getElementById('pipelineRunBtnPrice'),
+    pipelineStopBtn: document.getElementById('pipelineStopBtn')
   };
 
   // Mask Canvas Context
@@ -377,6 +438,7 @@
     renderCustomPromptChips();
     loadFacePacks();
     renderFacePacksSelect();
+    initPipelineBuilder();
     loadLocalHistory();
     setupCanvas();
     setupResizer();
@@ -606,7 +668,32 @@
   }
 
   // Model Category Classifier Helper
+  function isFaceOrSwapModel(m) {
+    if (!m) return false;
+    if (m.isFaceOrSwap) return true;
+    const mid = String(m.model_id || '').toLowerCase();
+    const type = String(m.type || '').toLowerCase();
+    return Boolean(
+      type === 'image-face-swap' || type === 'video-face-swap' ||
+      mid.includes('face-swap') || mid.includes('head-swap') || mid.includes('body-swap') ||
+      mid.includes('face-enhancer') || mid.includes('infinite-you') || mid.includes('pulid') ||
+      mid.includes('multiple-angles') || mid.includes('instant-character') || mid.includes('ideogram-character') ||
+      mid.includes('character-swap') ||
+      mid === 'bytedance/seedream-v5.5/edit' || mid === 'bytedance/seedream-v5.0-flash/edit' ||
+      mid === 'bytedance/seedream-v4.5/edit-sequential' ||
+      mid === 'wavespeed-ai/minimax-h3/image-edit' || mid === 'wavespeed-ai/minimax-h3-image/edit' ||
+      mid === 'minimax/h3-image/edit' || mid === 'wavespeed-ai/qwen-image/edit-plus' ||
+      mid === 'wavespeed-ai/flux-kontext-dev/multi' || mid === 'vidu/reference-to-image-q2'
+    );
+  }
+
   function isModelInCategory(m, category) {
+    if (category === 'faces-swaps') {
+      return isFaceOrSwapModel(m);
+    }
+    if (category === 'pipeline') {
+      return false;
+    }
     if (category === 'ref-to-video') {
       return Boolean(m.isReferenceToVideo || m.category === 'ref-to-video');
     }
@@ -666,6 +753,7 @@
 
   function getSingleImageSchemaKey(props) {
     if (!props || typeof props !== 'object') return null;
+    if ('target_image' in props && !props.target_image?.['x-hidden']) return 'target_image';
     if ('image' in props && !props.image?.['x-hidden']) return 'image';
     if ('face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
     if ('body_image' in props && !props.body_image?.['x-hidden']) return 'body_image';
@@ -675,6 +763,7 @@
   function getSecondaryImageSchemaKey(props) {
     if (!props || typeof props !== 'object') return null;
     if ('last_image' in props && !props.last_image?.['x-hidden']) return 'last_image';
+    if ('target_image' in props && 'source_image' in props && !props.source_image?.['x-hidden']) return 'source_image';
     if ('image' in props && 'face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
     if ('image' in props && 'body_image' in props && !props.body_image?.['x-hidden']) return 'body_image';
     return null;
@@ -700,6 +789,9 @@
       }
 
       filterAndRenderAutocomplete();
+      if (typeof refreshPipelineCatalogOptions === 'function') {
+        refreshPipelineCatalogOptions();
+      }
     } catch (err) {
       console.error('Failed to load models:', err);
       el.modelAutocompleteInput.placeholder = 'Error loading models';
@@ -718,6 +810,8 @@
       el.modelAutocompleteInput.placeholder = 'Search Image Edit models (H3 edit, z-image, inpaint)...';
     } else if (cat === 'video-gen') {
       el.modelAutocompleteInput.placeholder = 'Search Video & Edit models (T2V, Video Edit, Video Extend)...';
+    } else if (cat === 'faces-swaps') {
+      el.modelAutocompleteInput.placeholder = 'Search Face Study, Angles & Swaps (MiniMax H3, Qwen Angles, PuLID, Face Swap)...';
     } else if (cat === 'utility') {
       el.modelAutocompleteInput.placeholder = 'Search Tools (Video/Image Upscalers, background removal, blur)...';
     }
@@ -1550,8 +1644,9 @@
     el.modelAutocompleteInput.value = model.model_id;
     el.comboboxClearBtn.style.display = 'block';
 
-    // Auto-sync category tab if needed
-    if (autoSyncTab && model.category && model.category !== state.currentCategory) {
+    // Auto-sync category tab if needed (preserve Faces & Swaps tab when picking a matching model)
+    const keepInFacesTab = state.currentCategory === 'faces-swaps' && isFaceOrSwapModel(model);
+    if (autoSyncTab && !keepInFacesTab && model.category && model.category !== state.currentCategory) {
       let targetCat = model.category;
       if (model.isReferenceToVideo) targetCat = 'ref-to-video';
       else if (model.isImageToVideo) targetCat = 'image-to-video';
@@ -1565,6 +1660,12 @@
         el.modeBtns.forEach(btn => {
           btn.classList.toggle('active', btn.dataset.category === state.currentCategory);
         });
+        if (el.modelSelectionSection) el.modelSelectionSection.style.display = 'flex';
+        if (el.inputsSection) el.inputsSection.style.display = 'flex';
+        if (el.settingsSection) el.settingsSection.style.display = 'flex';
+        if (el.singleActionFooter) el.singleActionFooter.style.display = 'flex';
+        if (el.pipelineBuilderPanel) el.pipelineBuilderPanel.style.display = 'none';
+        if (el.pipelineStageBoard) el.pipelineStageBoard.style.display = 'none';
         updatePlaceholderForCategory();
       }
     }
@@ -1602,6 +1703,152 @@
       } catch (e) {
         console.warn('Live model pricing fetch skipped:', e);
       }
+    }
+  }
+
+  // Model-Specific Multi-Photo Mixing, Pose, Angle & Swap Workflow Guide
+  function getModelWorkflowMixingGuide(model) {
+    if (!model) return null;
+    const mid = String(model.model_id || '').toLowerCase();
+    const props = model.schema?.properties || {};
+
+    if (mid.includes('qwen-image/edit-multiple-angles') || mid.includes('qwen-image/edit-2509-multiple-angles')) {
+      return {
+        badgeText: '📐 96-Pose 3D Camera Angles • Mixes 1–3 Refs ($0.025)',
+        title: 'Qwen Multiple Angles — 3D Orbit & Pose Shift',
+        syntaxTag: 'Uses 3D Angle Controls + optional prompt',
+        summary: 'Rotates any subject photo around a 96-pose camera grid (azimuth, elevation, zoom) while preserving facial identity & outfit.',
+        bullets: [
+          'Use the <strong>3D Camera Angle</strong> pills below (0° Front, 45° Quarter, 90° Profile, 180° Back).',
+          'Upload 1–3 photos of the person for stronger side/back consistency.',
+          '<strong>Best for Pipeline Step 1:</strong> Create clean new camera angles cheaply ($0.025) before uncensored edits or I2V.'
+        ]
+      };
+    }
+    if (mid.startsWith('wavespeed-ai/minimax-h3/image-edit') || mid.startsWith('wavespeed-ai/minimax-h3-image/edit')) {
+      return {
+        badgeText: '🧩 Multi-Photo Mixer (1–9 Refs) • Syntax: <Picture 1>',
+        title: 'MiniMax H3 Open-Weights — Multi-Photo Face & Outfit Mixer',
+        syntaxTag: 'Prompt Syntax: <Picture 1>, <Picture 2>...',
+        summary: 'Re-renders a subject from 1–9 reference photos into a new pose, outfit, or angle. Open-weights hosted on WaveSpeed.',
+        bullets: [
+          '<strong>Crucial Syntax:</strong> Address photos as <code>&lt;Picture 1&gt;</code>, <code>&lt;Picture 2&gt;</code> (not Image 1).',
+          'Assign each photo a clear job: e.g. <em>"Use face from &lt;Picture 1&gt; and &lt;Picture 2&gt;, outfit/pose from &lt;Picture 3&gt;"</em>.',
+          'Click <strong>🧬 Face Study Prompt</strong> below to auto-insert the exact <code>&lt;Picture N&gt;</code> template.'
+        ]
+      };
+    }
+    if (mid === 'minimax/h3-image/edit') {
+      return {
+        badgeText: '🧩 Multi-Photo Composer (1–16 Refs) • Syntax: image 1',
+        title: 'MiniMax H3 Official — 1–16 Reference Composition',
+        syntaxTag: 'Prompt Syntax: image 1, image 2...',
+        summary: 'Combines up to 16 reference photos with natural-language instructions (+$0.01/extra ref after 1st).',
+        bullets: [
+          'Refer to inputs in order as <code>image 1</code>, <code>image 2</code>, etc.',
+          'Strong for combining face refs + pose/background refs into a single cohesive shot.'
+        ]
+      };
+    }
+    if (mid.includes('seedream-v5.5/edit') || mid.includes('seedream-v5.0-flash/edit') || mid.includes('seedream-v4.5/edit')) {
+      const is55 = mid.includes('seedream-v5.5');
+      return {
+        badgeText: is55 ? '🧬 Multi-Ref Face & Turnaround (1–10 Refs • +$0.0076/ref)' : '🧬 Multi-Ref Face Mixer (Flat $0 Extra Refs)',
+        title: 'ByteDance Seedream — Role-Based Face Study & Turnarounds',
+        syntaxTag: 'Prompt Syntax: Image 1, Image 2...',
+        summary: 'Highest photorealistic facial fidelity when each reference image is assigned a clear role (identity vs. pose/outfit). Strict SFW filter.',
+        bullets: [
+          'Give each slot one job: <em>"Based on Image 1 (face) and Image 2 (3/4 angle), generate..."</em>.',
+          is55
+            ? '<strong>Save 46%:</strong> Click <strong>🧩 $0.00 Face Sheet</strong> to merge 4 photos into 1 sheet ($0.0266 vs $0.0494).'
+            : '<strong>Flat-Rate Advantage:</strong> Extra reference photos cost <strong>$0.00 extra</strong> on this tier.',
+          '<strong>Pipeline Tip:</strong> Use Seedream for SFW pose/face prep in Step 1, then swap/edit uncensored in Step 2.'
+        ]
+      };
+    }
+    if (mid.includes('qwen-image/edit-plus')) {
+      return {
+        badgeText: '🔓 Open-Weights Multi-Image Mixer (1–3 Refs • $0.02 Flat)',
+        title: 'Qwen Image Edit Plus — Uncensored-Friendly Pose & Outfit Edit',
+        syntaxTag: 'Prompt Syntax: Image 1, Image 2 (Flat $0.02)',
+        summary: '20B MMDiT open-weights editor ($0.02 flat regardless of ref count). Great for pose, wardrobe, and uncensored Step 2 edits.',
+        bullets: [
+          'Combine 1–3 images (e.g., Image 1 = base pose, Image 2 = outfit/style) for $0.02 total.',
+          'If heavy body/pose edits drift the face slightly, chain Step 3 to <strong>Image Face Swap Pro ($0.025)</strong>.'
+        ]
+      };
+    }
+    if (mid.includes('flux-pulid')) {
+      return {
+        badgeText: '🧬 1-Photo Face Identity Lock ($0.02)',
+        title: 'FLUX PuLID — Low-Cost Likeness & New Scene Generator',
+        syntaxTag: 'Single Face Photo + Prompt',
+        summary: 'Locks facial structure and likeness from one well-lit reference photo while generating brand-new poses, lighting, and scenes for $0.02.',
+        bullets: [
+          'Works best with one clear front or 3/4 face photo (use <code>guidance_scale</code> ~3.5).',
+          'Ideal cheap <strong>Pipeline Step 1</strong> to create pose/scene presets before Step 2 editing or I2V.'
+        ]
+      };
+    }
+    if (mid.includes('infinite-you')) {
+      return {
+        badgeText: '🎭 ByteDance Zero-Shot Face Swap (source_image → target_image)',
+        title: 'InfiniteYou — High-Fidelity Zero-Shot Identity Transplant',
+        syntaxTag: 'Target Scene + Source Face ($0.05)',
+        summary: 'ByteDance zero-shot identity transplant preserving expression and lighting on the target scene.',
+        bullets: [
+          'Top slot (<code>target_image</code>) = Scene/Body photo to keep.',
+          'Second slot (<code>source_image</code>) = Face photo to transplant in.'
+        ]
+      };
+    }
+    if (mid.includes('face-swap') || mid.includes('head-swap') || mid.includes('body-swap')) {
+      return {
+        badgeText: '🎭 Precision Swap Tool (No Prompt Drift)',
+        title: 'WaveSpeed Dedicated Swap Model',
+        syntaxTag: 'Target Scene + Source Face/Body',
+        summary: 'Replaces face/head/body without altering the target pose, lighting, or uncensored scene composition.',
+        bullets: [
+          'Top slot = Target Scene photo (pose/outfit to keep).',
+          'Second slot = Clean Face/Body photo from your Face Pack.',
+          '<strong>Best as Pipeline Step 2/3:</strong> Re-locks 100% real face identity after any heavy edit.'
+        ]
+      };
+    }
+    if ('images' in props || 'reference_images' in props) {
+      return {
+        badgeText: '🖼️ Multi-Reference Capable Model',
+        title: `${model.name || model.model_id} — Multi-Image Workflow`,
+        syntaxTag: 'Refers to Image 1, Image 2...',
+        summary: 'Supports multiple reference images in one request. Attach Face Pack photos and assign roles in the prompt.',
+        bullets: [
+          'Attach 1–4 clear photos and describe which image supplies the face vs. pose/background.',
+          'Use <strong>🧩 $0.00 Face Sheet</strong> if this model charges per extra reference image.'
+        ]
+      };
+    }
+    return null;
+  }
+
+  function updateModelMixingTip(model) {
+    if (!el.modelMixingTipWrap || !el.modelMixingBadgeBtn || !el.modelMixingBadgeText || !el.modelMixingPopover) return;
+    const guide = getModelWorkflowMixingGuide(model);
+    if (!guide) {
+      el.modelMixingTipWrap.style.display = 'none';
+      el.modelMixingTipWrap.classList.remove('is-open');
+      el.modelMixingPopover.style.display = 'none';
+      return;
+    }
+    el.modelMixingTipWrap.style.display = 'block';
+    el.modelMixingBadgeText.textContent = guide.badgeText;
+    el.modelMixingBadgeBtn.title = `${guide.title} — ${guide.summary} (Click to pin guide)`;
+    el.modelMixingPopover.innerHTML = `
+      <div><strong>${escapeHtml(guide.title)}</strong> <span class="badge-tag" style="margin-left:4px;">${escapeHtml(guide.syntaxTag)}</span></div>
+      <div style="margin-top:4px; color: var(--text-muted);">${escapeHtml(guide.summary)}</div>
+      <ul class="mixing-guide-list">${guide.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    `;
+    if (!el.modelMixingTipWrap.classList.contains('is-open')) {
+      el.modelMixingPopover.style.display = 'none';
     }
   }
 
@@ -1706,6 +1953,7 @@
 
     el.infoModelDesc.textContent = model.description || 'No description provided by model publisher.';
     updateUseCaseAdvice(model);
+    updateModelMixingTip(model);
 
     // Tags
     el.infoModelTags.innerHTML = '';
@@ -1773,6 +2021,19 @@
     }
     if (el.deleteFacePackBtn) {
       el.deleteFacePackBtn.style.display = (el.facePackSelect.value !== '') ? 'inline-flex' : 'none';
+    }
+    if (el.pipelineFacePresetSelect) {
+      const pPrev = el.pipelineFacePresetSelect.value;
+      el.pipelineFacePresetSelect.innerHTML = '<option value="">Load Saved Face Pack...</option>';
+      (state.facePacks || []).forEach((p, idx) => {
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = `👤 ${p.name} (${p.images.length} photos)`;
+        el.pipelineFacePresetSelect.appendChild(opt);
+      });
+      if (pPrev !== '' && Number(pPrev) < (state.facePacks || []).length) {
+        el.pipelineFacePresetSelect.value = pPrev;
+      }
     }
   }
 
@@ -1970,11 +2231,14 @@
       const lbl = el.imageInputGroup.querySelector('.input-header label');
       const sub = el.imageInputGroup.querySelector('.input-header .subtext');
       const reqList = model.schema?.required || [];
-      const isReq = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images');
+      const isReq = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('target_image') || reqList.includes('images') || reqList.includes('reference_images');
       const reqStar = isReq ? ' <span class="required">*</span>' : '';
       if (model.isImageToVideo) {
         if (lbl) lbl.innerHTML = `Image to Animate${reqStar}`;
         if (sub) sub.textContent = 'Upload still image, paste URL, or extract a frame from the Timeline below';
+      } else if (singleImgKey === 'target_image') {
+        if (lbl) lbl.innerHTML = `Target Scene Image (target_image)${reqStar}`;
+        if (sub) sub.textContent = 'Scene/pose photo where the source face will be placed';
       } else if (singleImgKey === 'face_image') {
         if (lbl) lbl.innerHTML = `Reference Face Image${reqStar}`;
         if (sub) sub.textContent = 'Upload, drag & drop, or paste target image URL';
@@ -1984,7 +2248,7 @@
       }
     }
 
-    // 2b. Secondary Single Image Slot (End Frame last_image, OR Face/Body Swap source face_image/body_image)
+    // 2b. Secondary Single Image Slot (End Frame last_image, OR Face/Body Swap source face_image/body_image/source_image)
     const secondaryImgKey = getSecondaryImageSchemaKey(props);
     const hasLastImage = Boolean(secondaryImgKey);
     if (el.lastImageGroup) {
@@ -1993,7 +2257,10 @@
         const lastLbl = el.lastImageGroup.querySelector('.input-header label');
         const lastSub = el.lastImageGroup.querySelector('.input-header .subtext');
         const lastReq = (model.schema?.required || []).includes(secondaryImgKey);
-        if (secondaryImgKey === 'face_image') {
+        if (secondaryImgKey === 'source_image') {
+          if (lastLbl) lastLbl.innerHTML = `Source Face Identity (source_image)${lastReq ? ' <span class="required">*</span>' : ''}`;
+          if (lastSub) lastSub.textContent = 'Face photo to extract identity from (InfiniteYou)';
+        } else if (secondaryImgKey === 'face_image') {
           if (lastLbl) lastLbl.innerHTML = `Source Face to Swap In (face_image)${lastReq ? ' <span class="required">*</span>' : ''}`;
           if (lastSub) lastSub.textContent = 'Face photo to transplant onto the target photo above';
         } else if (secondaryImgKey === 'body_image') {
@@ -2420,6 +2687,31 @@
       el.advancedMotionGroup.style.display = (showMov || showShot || showPreset || showCamFixed) ? 'block' : 'none';
     }
 
+    // 15. 3D Camera Angle Controls (Qwen Multiple Angles: horizontal_angle, vertical_angle, distance)
+    const hasAngleControls = Boolean(
+      ('horizontal_angle' in props && !props.horizontal_angle?.['x-hidden']) ||
+      ('vertical_angle' in props && !props.vertical_angle?.['x-hidden']) ||
+      ('distance' in props && !props.distance?.['x-hidden'])
+    );
+    if (el.angleControlsGroup) {
+      el.angleControlsGroup.style.display = hasAngleControls ? 'block' : 'none';
+      if (hasAngleControls) {
+        const defH = props.horizontal_angle?.default ?? 0;
+        const defV = props.vertical_angle?.default ?? 0;
+        const defD = props.distance?.default ?? 1;
+        if (el.horizontalAngleSlider) el.horizontalAngleSlider.value = String(defH);
+        if (el.horizontalAngleValue) el.horizontalAngleValue.textContent = `${defH}°`;
+        if (el.verticalAngleSelect) el.verticalAngleSelect.value = String(defV);
+        if (el.cameraDistanceSelect) el.cameraDistanceSelect.value = String(defD);
+        if (el.horizontalAnglePills) {
+          el.horizontalAnglePills.querySelectorAll('.ratio-pill').forEach(b => {
+            b.classList.toggle('active', Number(b.dataset.hangle) === Number(defH));
+          });
+        }
+        updateAngleReadout();
+      }
+    }
+
     // Update Action Button Text
     el.btnLabel.textContent = `Run ${model.model_id.split('/').pop()}`;
     updateInputQualityAdvisory();
@@ -2656,16 +2948,18 @@
     const lastImageFileSnapshot = state.lastImage?.file || null;
     const lastImageObjSnapshot = state.lastImage;
     if (hasImageInput) {
-      const needsImg = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('body_image') || reqList.includes('images') || reqList.includes('reference_images');
+      const needsImg = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('target_image') || reqList.includes('body_image') || reqList.includes('images') || reqList.includes('reference_images');
       if (!imageUrlSnapshot && !imageFileSnapshot && extraImagesSnapshot.length === 0 && needsImg) {
         alert('Please provide at least one image input for this model.');
         return;
       }
     }
     if (hasLastImageInput && reqList.includes(secondaryImgKey) && !lastImageUrlSnapshot && !lastImageFileSnapshot) {
-      const slotMsg = secondaryImgKey === 'face_image'
-        ? 'Please provide a Source Face image to swap in.'
-        : (secondaryImgKey === 'body_image' ? 'Please provide a Source Body reference image.' : 'Please provide an end frame (last image) for this model.');
+      const slotMsg = secondaryImgKey === 'source_image'
+        ? 'Please provide a Source Face identity image (source_image).'
+        : (secondaryImgKey === 'face_image'
+          ? 'Please provide a Source Face image to swap in.'
+          : (secondaryImgKey === 'body_image' ? 'Please provide a Source Body reference image.' : 'Please provide an end frame (last image) for this model.'));
       alert(slotMsg);
       return;
     }
@@ -2745,6 +3039,15 @@
     }
     if ('camera_fixed' in props && !props.camera_fixed['x-hidden'] && el.cameraFixedCheckbox) {
       payload.camera_fixed = Boolean(el.cameraFixedCheckbox.checked);
+    }
+    if ('horizontal_angle' in props && !props.horizontal_angle['x-hidden'] && el.horizontalAngleSlider) {
+      payload.horizontal_angle = parseInt(el.horizontalAngleSlider.value, 10) || 0;
+    }
+    if ('vertical_angle' in props && !props.vertical_angle['x-hidden'] && el.verticalAngleSelect) {
+      payload.vertical_angle = parseInt(el.verticalAngleSelect.value, 10) || 0;
+    }
+    if ('distance' in props && !props.distance['x-hidden'] && el.cameraDistanceSelect) {
+      payload.distance = parseInt(el.cameraDistanceSelect.value, 10);
     }
     const seed = parseInt(el.seedInput.value, 10);
     if ('seed' in props && !isNaN(seed) && seed !== -1) {
@@ -3010,12 +3313,13 @@
           }
         }
         const allImageUrls = [finalImageUrl, ...uploadedExtras].filter(Boolean);
-        if (allImageUrls.length === 0 && (reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images'))) {
+        if (allImageUrls.length === 0 && (reqList.includes('image') || reqList.includes('face_image') || reqList.includes('target_image') || reqList.includes('images') || reqList.includes('reference_images'))) {
           throw new Error('Please provide a source image for this model.');
         }
         if (allImageUrls.length > 0) {
+          if ('target_image' in props) payload.target_image = allImageUrls[0];
           if ('image' in props) payload.image = allImageUrls[0];
-          if ('face_image' in props) payload.face_image = allImageUrls[0];
+          if ('face_image' in props && !('image' in props)) payload.face_image = allImageUrls[0];
           if ('images' in props) payload.images = allImageUrls;
           if ('reference_images' in props) payload.reference_images = allImageUrls;
           if (ctx.refVidKey === 'reference_files') resolvedReferenceFileUrls.push(...allImageUrls);
@@ -4705,6 +5009,20 @@
       slotBadge.className = 'multi-img-badge';
       slotBadge.textContent = `Image ${hasSingleBefore ? idx + 2 : idx + 1}`;
 
+      const roleSel = document.createElement('select');
+      roleSel.className = 'multi-img-role-select';
+      roleSel.title = 'Assign role for model-aware Face Study prompt';
+      ['Face ID', '3/4 Angle', 'Side Profile', 'Pose / Outfit', 'Scene / BG'].forEach(r => {
+        const o = document.createElement('option');
+        o.value = r;
+        o.textContent = r;
+        if ((entry.role || 'Face ID') === r) o.selected = true;
+        roleSel.appendChild(o);
+      });
+      roleSel.addEventListener('change', () => {
+        entry.role = roleSel.value;
+      });
+
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'multi-img-remove';
@@ -4720,6 +5038,7 @@
       box.appendChild(img);
       box.appendChild(slotBadge);
       box.appendChild(rm);
+      box.appendChild(roleSel);
       el.multiImgGrid.appendChild(box);
     });
     syncMaskBgPreview();
@@ -4926,6 +5245,7 @@
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorPaintEditBtn">🖌️ Paint-Edit</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorFaceSwapBtn">🎭 Face Swap Onto</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorAddRefBtn">+ Ref Study</button>' : ''}
+          ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorSendPipelineBtn">⛓️ → Pipeline</button>' : ''}
           ${hasComposite ? `<button type="button" class="btn-tiny active" id="inspectorToggleMaskCompositeBtn">${state.activeCompositeShowingMasked ? '🔒 Locked Mask (Click → Raw)' : '👁️ Raw Output (Click → Locked Mask)'}</button>` : ''}
         </div>
       </div>
@@ -4937,6 +5257,7 @@
     const paintBtn = document.getElementById('inspectorPaintEditBtn');
     const swapBtn = document.getElementById('inspectorFaceSwapBtn');
     const addRefBtn = document.getElementById('inspectorAddRefBtn');
+    const sendPipeBtn = document.getElementById('inspectorSendPipelineBtn');
     const maskToggleBtn = document.getElementById('inspectorToggleMaskCompositeBtn');
     const bestImgUrl = item.local_url || item.remote_url || item.url;
 
@@ -4972,6 +5293,18 @@
       addRefBtn.addEventListener('click', () => {
         addExtraImageUrl(bestImgUrl);
         showToast('Added image to multi-photo Reference / Face Study list.', 'good');
+      });
+    }
+    if (sendPipeBtn && bestImgUrl) {
+      sendPipeBtn.addEventListener('click', () => {
+        setPipelinePresetFromAsset({
+          name: item.model_id ? `${item.model_id.split('/').pop()} output` : 'Viewer Output',
+          url: item.remote_url || bestImgUrl,
+          previewUrl: bestImgUrl
+        });
+        const pipeBtn = document.querySelector('.mode-btn[data-category="pipeline"]');
+        if (pipeBtn) pipeBtn.click();
+        showToast('Sent image to Pipeline Subject / Face Preset.', 'good');
       });
     }
     if (maskToggleBtn && el.outputImageViewer) {
@@ -5151,13 +5484,27 @@
 
   // Event Listeners
   function setupEventListeners() {
-    // Mode Switcher Buttons: filter and select top model for tab
+    // Mode Switcher Buttons: filter and select top model for tab (or toggle Pipeline builder)
     el.modeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         el.modeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.currentCategory = btn.dataset.category;
-        
+        const isPipeline = state.currentCategory === 'pipeline';
+
+        if (el.modelSelectionSection) el.modelSelectionSection.style.display = isPipeline ? 'none' : 'flex';
+        if (el.inputsSection) el.inputsSection.style.display = isPipeline ? 'none' : 'flex';
+        if (el.settingsSection) el.settingsSection.style.display = isPipeline ? 'none' : 'flex';
+        if (el.singleActionFooter) el.singleActionFooter.style.display = isPipeline ? 'none' : 'flex';
+        if (el.pipelineBuilderPanel) el.pipelineBuilderPanel.style.display = isPipeline ? 'flex' : 'none';
+        if (el.pipelineStageBoard) el.pipelineStageBoard.style.display = isPipeline ? 'flex' : 'none';
+
+        if (isPipeline) {
+          renderPipelineSteps();
+          renderPipelineStageBoard();
+          return;
+        }
+
         updatePlaceholderForCategory();
 
         // Automatically select the best top-pick model for this tab
@@ -6396,21 +6743,172 @@
       });
     }
 
-    // Face Study Prompt & Saved Face Packs
+    // Face Study Prompt (model-aware: <Picture N> for MiniMax H3, Image N with roles for Seedream/Qwen), $0 Face Sheet & Saved Face Packs
+    if (el.modelMixingBadgeBtn && el.modelMixingTipWrap && el.modelMixingPopover) {
+      el.modelMixingBadgeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nextOpen = !el.modelMixingTipWrap.classList.contains('is-open');
+        el.modelMixingTipWrap.classList.toggle('is-open', nextOpen);
+        el.modelMixingPopover.style.display = nextOpen ? 'block' : 'none';
+      });
+    }
+
     if (el.insertFaceStudyPromptBtn) {
       el.insertFaceStudyPromptBtn.addEventListener('click', () => {
-        const count = Math.max(2, state.extraImages?.length || 0);
-        const refsSpan = Array.from({ length: Math.min(count, 10) }, (_, i) => `Image ${i + 1}`).join(', ');
-        const studyPrefix = `Study all reference images (${refsSpan}) to lock exact facial identity (bone structure, eye shape, nose bridge, lips, skin tone, and proportions). Generate a brand new photo of this exact same person with maximum facial fidelity:`;
+        const mid = String(state.selectedModel?.model_id || '').toLowerCase();
+        const isMinimaxBracket = mid.startsWith('wavespeed-ai/minimax-h3/image-edit') || mid.startsWith('wavespeed-ai/minimax-h3-image/edit');
+        const hasSingleBefore = Boolean(el.imageInputGroup && el.imageInputGroup.style.display !== 'none');
+        const totalRefs = Math.max(2, (hasSingleBefore ? 1 : 0) + (state.extraImages?.length || 0));
+        const tagPrefix = isMinimaxBracket ? 'Picture' : 'Image';
+        const makeTag = (n) => (isMinimaxBracket ? `<Picture ${n}>` : `${tagPrefix} ${n}`);
+
+        const roleNotes = [];
+        if (hasSingleBefore && (state.sourceImage || el.imageUrlInput?.value?.trim())) {
+          roleNotes.push(`${makeTag(1)} (Primary Face ID)`);
+        }
+        (state.extraImages || []).forEach((ex, i) => {
+          const slotNum = hasSingleBefore ? i + 2 : i + 1;
+          roleNotes.push(`${makeTag(slotNum)} (${ex.role || 'Face ID'})`);
+        });
+        const refsDesc = roleNotes.length > 0
+          ? roleNotes.join(', ')
+          : Array.from({ length: Math.min(totalRefs, 10) }, (_, i) => makeTag(i + 1)).join(', ');
+
+        let studyPrefix = '';
+        if (mid.includes('multiple-angles')) {
+          const hAng = el.horizontalAngleSlider?.value || '0';
+          const vAng = el.verticalAngleSelect?.value || '0';
+          studyPrefix = `Preserve exact facial identity, hair, and outfit from ${refsDesc}. Render clean new viewpoint at ${hAng}° horizontal / ${vAng}° elevation:`;
+        } else if (isMinimaxBracket) {
+          studyPrefix = `Study the person across ${refsDesc} to lock exact facial identity, bone structure, eyes, nose, lips, and skin tone. Re-render this exact same person in a new pose/scene:`;
+        } else {
+          studyPrefix = `Based on ${refsDesc}, keep exact facial identity (bone structure, eye shape, nose bridge, lips, skin tone, and proportions) unchanged while generating a new photo of this same person:`;
+        }
+
         if (el.promptInput) {
           const cur = el.promptInput.value.trim();
-          el.promptInput.value = cur ? `${studyPrefix} ${cur}` : `${studyPrefix} closeup portrait in realistic natural lighting`;
+          el.promptInput.value = cur ? `${studyPrefix} ${cur}` : `${studyPrefix} 3/4 view realistic portrait in natural studio light`;
           el.promptInput.dispatchEvent(new Event('input'));
           el.promptInput.focus();
         }
-        showToast('Inserted multi-photo Face Study identity template', 'good');
+        showToast(`Inserted ${isMinimaxBracket ? '<Picture N>' : 'Image N'} role-aware Face Study prompt`, 'good');
       });
     }
+
+    if (el.buildFaceSheetBtn) {
+      el.buildFaceSheetBtn.addEventListener('click', async () => {
+        try {
+          const sheetResult = await buildLocalFaceSheetFromRefs();
+          if (!sheetResult) {
+            showToast('Attach 2+ photos first to build a $0.00 Reference Sheet.', 'warn');
+            return;
+          }
+          state.extraImages = [{
+            id: `sheet-${Date.now()}`,
+            file: sheetResult.file,
+            previewUrl: sheetResult.dataUrl,
+            downloadUrl: null,
+            role: 'Face ID'
+          }];
+          renderExtraImagesGrid();
+          if (state.selectedModel) updateModelInfo(state.selectedModel);
+          showToast(`Built $0.00 Face Sheet (${sheetResult.count} photos → 1 reference image, saves per-ref fees!)`, 'good', 4000);
+        } catch (err) {
+          showToast(`Could not build Face Sheet: ${err.message}`, 'error');
+        }
+      });
+    }
+
+    if (el.preUploadFacePackBtn) {
+      el.preUploadFacePackBtn.addEventListener('click', async () => {
+        const pending = [];
+        if (state.sourceImage?.file && !state.sourceImage.downloadUrl) {
+          pending.push({ obj: state.sourceImage, file: state.sourceImage.file, label: 'Primary' });
+        }
+        (state.extraImages || []).forEach((ex, i) => {
+          if (ex.file && !ex.downloadUrl) {
+            pending.push({ obj: ex, file: ex.file, label: `Ref ${i + 1}` });
+          }
+        });
+        if (pending.length === 0) {
+          showToast('All attached photos already have cached CDN URLs ($0). Ready to Save Face Pack!', 'info');
+          return;
+        }
+        el.preUploadFacePackBtn.disabled = true;
+        el.preUploadFacePackBtn.textContent = `☁️ Uploading 0/${pending.length}...`;
+        let okCount = 0;
+        try {
+          for (let i = 0; i < pending.length; i++) {
+            el.preUploadFacePackBtn.textContent = `☁️ Uploading ${i + 1}/${pending.length}...`;
+            const cdnUrl = await uploadFileDirect(pending[i].file);
+            if (cdnUrl) {
+              pending[i].obj.downloadUrl = cdnUrl;
+              okCount++;
+            }
+          }
+          renderExtraImagesGrid();
+          showToast(`Cached ${okCount} photo URL(s) on CDN ($0 generation cost) — now click Save Face Pack!`, 'good', 3800);
+        } catch (err) {
+          showToast(`Pre-upload failed: ${err.message}`, 'error');
+        } finally {
+          el.preUploadFacePackBtn.disabled = false;
+          el.preUploadFacePackBtn.textContent = '☁️ Cache URLs ($0)';
+        }
+      });
+    }
+
+    if (el.sendRefsToPipelineBtn) {
+      el.sendRefsToPipelineBtn.addEventListener('click', () => {
+        const firstUrl = state.sourceImage?.downloadUrl || state.sourceImage?.url ||
+          state.extraImages?.[0]?.downloadUrl || state.extraImages?.[0]?.previewUrl || '';
+        const extraUrls = (state.extraImages || []).map(ex => ({
+          name: ex.file?.name || ex.role || 'Ref',
+          url: ex.downloadUrl || ex.previewUrl || '',
+          file: ex.file || null
+        })).filter(x => x.url);
+        if (!firstUrl && extraUrls.length === 0) {
+          showToast('Attach at least 1 reference photo first.', 'warn');
+          return;
+        }
+        setPipelinePresetFromAsset({
+          name: state.sourceImage?.file?.name || extraUrls[0]?.name || 'Face Ref',
+          url: firstUrl || extraUrls[0].url,
+          previewUrl: firstUrl || extraUrls[0].url,
+          file: state.sourceImage?.file || extraUrls[0]?.file || null,
+          packImages: extraUrls
+        });
+        const pipeBtn = document.querySelector('.mode-btn[data-category="pipeline"]');
+        if (pipeBtn) pipeBtn.click();
+        showToast('Sent Face / Reference set to Pipeline tab.', 'good');
+      });
+    }
+
+    // 3D Camera Angle Controls Listeners
+    if (el.horizontalAnglePills) {
+      el.horizontalAnglePills.addEventListener('click', (e) => {
+        const btn = e.target.closest('.ratio-pill');
+        if (!btn) return;
+        const val = btn.dataset.hangle || '0';
+        if (el.horizontalAngleSlider) el.horizontalAngleSlider.value = val;
+        if (el.horizontalAngleValue) el.horizontalAngleValue.textContent = `${val}°`;
+        el.horizontalAnglePills.querySelectorAll('.ratio-pill').forEach(b => b.classList.toggle('active', b === btn));
+        updateAngleReadout();
+      });
+    }
+    if (el.horizontalAngleSlider) {
+      el.horizontalAngleSlider.addEventListener('input', () => {
+        const val = el.horizontalAngleSlider.value;
+        if (el.horizontalAngleValue) el.horizontalAngleValue.textContent = `${val}°`;
+        if (el.horizontalAnglePills) {
+          el.horizontalAnglePills.querySelectorAll('.ratio-pill').forEach(b => {
+            b.classList.toggle('active', Number(b.dataset.hangle) === Number(val));
+          });
+        }
+        updateAngleReadout();
+      });
+    }
+    if (el.verticalAngleSelect) el.verticalAngleSelect.addEventListener('change', updateAngleReadout);
+    if (el.cameraDistanceSelect) el.cameraDistanceSelect.addEventListener('change', updateAngleReadout);
     if (el.saveFacePackBtn) {
       el.saveFacePackBtn.addEventListener('click', () => {
         const collected = [];
@@ -7530,6 +8028,1372 @@
       syncMaskBgPreview();
     };
     reader.readAsDataURL(file);
+  }
+
+  function updateAngleReadout() {
+    if (!el.angleReadoutText) return;
+    const h = Number(el.horizontalAngleSlider?.value || 0);
+    const v = Number(el.verticalAngleSelect?.value || 0);
+    const d = Number(el.cameraDistanceSelect?.value || 1);
+    const hMap = { 0: 'Front', 45: '3/4 R', 90: 'Right', 135: 'Back R', 180: 'Back', 225: 'Back L', 270: 'Left', 315: '3/4 L' };
+    const vMap = { '-30': 'Low', 0: 'Eye', 30: 'Elevated', 60: 'Top' };
+    const dMap = { 0: 'Close-up', 1: 'Medium', 2: 'Wide' };
+    el.angleReadoutText.textContent = `${h}° ${hMap[h] || 'Custom'} • ${vMap[String(v)] || `${v}°`} • ${dMap[d] || 'Med'}`;
+  }
+
+  async function buildLocalFaceSheetFromRefs() {
+    const sources = [];
+    if (state.sourceImage) {
+      const s = state.sourceImage.downloadUrl || state.sourceImage.url || el.imagePreview?.src || '';
+      if (s) sources.push({ src: s, label: 'Ref 1' });
+    }
+    (state.extraImages || []).forEach((ex, i) => {
+      const s = ex.previewUrl || ex.downloadUrl || '';
+      if (s) sources.push({ src: s, label: ex.role || `Ref ${sources.length + 1}` });
+    });
+    if (sources.length < 2) return null;
+    const capped = sources.slice(0, 6);
+    const loadImg = (src) => new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('Could not decode reference image for sheet'));
+      im.src = src;
+    });
+    const imgs = await Promise.all(capped.map(item => loadImg(item.src)));
+    const cols = capped.length <= 4 ? 2 : 3;
+    const rows = Math.ceil(capped.length / cols);
+    const cell = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * cell;
+    canvas.height = rows * cell;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    imgs.forEach((im, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      const x = c * cell;
+      const y = r * cell;
+      const iw = im.naturalWidth || cell;
+      const ih = im.naturalHeight || cell;
+      const scale = Math.min(cell / iw, cell / ih);
+      const dw = Math.round(iw * scale);
+      const dh = Math.round(ih * scale);
+      const dx = x + Math.round((cell - dw) / 2);
+      const dy = y + Math.round((cell - dh) / 2);
+      ctx.drawImage(im, dx, dy, dw, dh);
+      ctx.fillStyle = 'rgba(0,0,0,0.58)';
+      ctx.fillRect(x + 8, y + 8, 128, 24);
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(capped[idx].label.slice(0, 16), x + 14, y + 24);
+    });
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], `face-sheet-${Date.now()}.png`, { type: 'image/png' });
+    return { dataUrl, file, count: capped.length };
+  }
+
+  // =========================================================================
+  // Multi-Stage Pipeline Engine (2+ Collapsible Steps, Checkpoints & Auto-Run)
+  // =========================================================================
+  const BUILTIN_PIPELINE_RECIPES = {
+    'pose-uncensored-2step': {
+      name: '⛓️ 2-Step: SFW Pose/Angle Prep → Uncensored Edit',
+      steps: [
+        {
+          label: 'SFW Pose / Angle Prep',
+          modelId: 'wavespeed-ai/qwen-image/edit-multiple-angles',
+          prompt: '',
+          sourceMode: 'preset',
+          secondaryMode: 'none',
+          enabled: true,
+          horizontal_angle: 45,
+          vertical_angle: 0,
+          distance: 1
+        },
+        {
+          label: 'Uncensored Scene / Outfit Edit',
+          modelId: 'wavespeed-ai/qwen-image/edit-plus',
+          prompt: 'Keep the exact pose and framing from Image 1. Change outfit and scene:',
+          sourceMode: 'prev',
+          secondaryMode: 'none',
+          enabled: true
+        }
+      ]
+    },
+    'pose-uncensored-facelock': {
+      name: '🎭 3-Step: SFW Pose/Angle → Uncensored Edit → Face Lock',
+      steps: [
+        {
+          label: 'SFW Pose / Angle Prep',
+          modelId: 'wavespeed-ai/qwen-image/edit-multiple-angles',
+          prompt: '',
+          sourceMode: 'preset',
+          secondaryMode: 'none',
+          enabled: true,
+          horizontal_angle: 45,
+          vertical_angle: 0,
+          distance: 1
+        },
+        {
+          label: 'Uncensored Scene / Outfit Edit',
+          modelId: 'wavespeed-ai/qwen-image/edit-plus',
+          prompt: 'Keep the exact pose and framing from Image 1. Change outfit and scene:',
+          sourceMode: 'prev',
+          secondaryMode: 'none',
+          enabled: true
+        },
+        {
+          label: 'Face Identity Re-Lock',
+          modelId: 'wavespeed-ai/image-face-swap-pro',
+          prompt: '',
+          sourceMode: 'prev',
+          secondaryMode: 'preset',
+          enabled: true
+        }
+      ]
+    },
+    'face-study-spicy-i2v': {
+      name: '🧬 Face Prep / Pose → Spicy I2V',
+      steps: [
+        {
+          label: 'Face / Pose Anchor Still',
+          modelId: 'wavespeed-ai/minimax-h3/image-edit',
+          prompt: 'Using <Picture 1> for facial identity, generate a clean full-frame still in natural lighting:',
+          sourceMode: 'preset',
+          secondaryMode: 'none',
+          enabled: true
+        },
+        {
+          label: 'Spicy Image-to-Video',
+          modelId: 'wavespeed-ai/wan-2.2-spicy/image-to-video',
+          prompt: 'Smooth natural motion, subtle breathing and camera movement, realistic lighting',
+          sourceMode: 'prev',
+          secondaryMode: 'none',
+          enabled: true
+        }
+      ]
+    },
+    'uncensored-edit-faceswap': {
+      name: '🔓 Uncensored Scene Edit → Face Swap Lock',
+      steps: [
+        {
+          label: 'Uncensored Edit',
+          modelId: 'wavespeed-ai/qwen-image/edit-plus',
+          prompt: 'Edit pose/outfit cleanly while preserving lighting and composition:',
+          sourceMode: 'preset',
+          secondaryMode: 'none',
+          enabled: true
+        },
+        {
+          label: 'Face Swap Re-Lock',
+          modelId: 'wavespeed-ai/image-face-swap-pro',
+          prompt: '',
+          sourceMode: 'prev',
+          secondaryMode: 'preset',
+          enabled: true
+        }
+      ]
+    }
+  };
+
+  function makePipelineStepObj(overrides = {}) {
+    return {
+      id: `pstep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label: overrides.label || 'Pipeline Step',
+      enabled: overrides.enabled !== false,
+      modelId: overrides.modelId || 'wavespeed-ai/qwen-image/edit-plus',
+      prompt: overrides.prompt || '',
+      sourceMode: overrides.sourceMode || 'prev', // 'preset' | 'prev' | 'step1' | 'custom' | 'none'
+      secondaryMode: overrides.secondaryMode || 'none', // 'preset' | 'prev' | 'custom' | 'none'
+      customSource: overrides.customSource || null, // { url, previewUrl, file, name }
+      extraRefs: Array.isArray(overrides.extraRefs) ? overrides.extraRefs.map(x => ({ ...x })) : [],
+      resolution: overrides.resolution || '',
+      size: overrides.size || '',
+      duration: overrides.duration || '',
+      aspect_ratio: overrides.aspect_ratio || '',
+      horizontal_angle: overrides.horizontal_angle ?? 0,
+      vertical_angle: overrides.vertical_angle ?? 0,
+      distance: overrides.distance ?? 1,
+      status: 'idle', // 'idle' | 'running' | 'completed' | 'error'
+      error: '',
+      outputUrl: '',
+      localUrl: '',
+      isVideo: false,
+      lastCost: 0
+    };
+  }
+
+  function resolveAvailablePipelineModelId(preferredId) {
+    if (!Array.isArray(state.models) || state.models.length === 0) return preferredId;
+    if (state.models.some(m => m.model_id === preferredId)) return preferredId;
+    if (preferredId.includes('face-swap')) {
+      return state.models.find(m => m.model_id.includes('face-swap'))?.model_id || state.models[0].model_id;
+    }
+    if (preferredId.includes('spicy') || preferredId.includes('video')) {
+      return state.models.find(m => m.isImageToVideo)?.model_id || state.models[0].model_id;
+    }
+    return state.models.find(m => m.isImageEdit || isFaceOrSwapModel(m))?.model_id || state.models[0].model_id;
+  }
+
+  function loadSavedPipelineRecipes() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('wavespeed_pipeline_recipes') || '[]');
+      state.pipeline.savedRecipes = Array.isArray(parsed) ? parsed.filter(r => r && r.name && Array.isArray(r.steps)) : [];
+    } catch (e) {
+      state.pipeline.savedRecipes = [];
+    }
+  }
+
+  function savePipelineRecipesToStorage() {
+    try {
+      localStorage.setItem('wavespeed_pipeline_recipes', JSON.stringify(state.pipeline.savedRecipes || []));
+    } catch (e) {}
+  }
+
+  function renderPipelineRecipeSelect() {
+    if (!el.pipelineRecipeSelect) return;
+    const prev = el.pipelineRecipeSelect.value;
+    el.pipelineRecipeSelect.innerHTML = '';
+    Object.entries(BUILTIN_PIPELINE_RECIPES).forEach(([key, rec]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = rec.name;
+      el.pipelineRecipeSelect.appendChild(opt);
+    });
+    (state.pipeline.savedRecipes || []).forEach((rec, idx) => {
+      const opt = document.createElement('option');
+      opt.value = `saved:${idx}`;
+      opt.textContent = `⭐ ${rec.name} (${rec.steps.length} steps)`;
+      el.pipelineRecipeSelect.appendChild(opt);
+    });
+    if (prev && Array.from(el.pipelineRecipeSelect.options).some(o => o.value === prev)) {
+      el.pipelineRecipeSelect.value = prev;
+    }
+  }
+
+  function applyPipelineRecipe(recipeKey) {
+    let rec = BUILTIN_PIPELINE_RECIPES[recipeKey];
+    if (!rec && String(recipeKey).startsWith('saved:')) {
+      const idx = parseInt(String(recipeKey).split(':')[1], 10);
+      rec = state.pipeline.savedRecipes?.[idx];
+    }
+    if (!rec || !Array.isArray(rec.steps)) return;
+    state.pipeline.steps = rec.steps.map((s, idx) => makePipelineStepObj({
+      ...s,
+      modelId: resolveAvailablePipelineModelId(s.modelId),
+      sourceMode: s.sourceMode || (idx === 0 ? 'preset' : 'prev')
+    }));
+    state.pipeline.expandedStepIndex = 0;
+    state.pipeline.activeViewStepIndex = 0;
+    state.pipeline.pausedAfterStep = null;
+    applyDefaultsToAllPipelineSteps();
+    renderPipelineSteps();
+    renderPipelineStageBoard();
+  }
+
+  function applyStepEconomyDefaults(step) {
+    const model = state.models.find(m => m.model_id === step.modelId);
+    if (!model) return;
+    const props = model.schema?.properties || {};
+    const resKey = getResolutionSchemaKey(props);
+    if (resKey) {
+      const enums = Array.isArray(props[resKey].enum) && props[resKey].enum.length > 0 ? props[resKey].enum : ['1k', '2k'];
+      if (!step.resolution || !enums.includes(step.resolution)) {
+        step.resolution = state.economyDefaultsEnabled
+          ? (pickCheapestEnumOption(model, resKey, enums, getResolutionRank, { duration: 5, images: ['img1'] }) || enums[0])
+          : (props[resKey].default || enums[0]);
+      }
+    } else {
+      step.resolution = '';
+    }
+    if ('size' in props && !props.size['x-hidden']) {
+      const sEnums = Array.isArray(props.size.enum) && props.size.enum.length > 0
+        ? props.size.enum
+        : ['512*512', '768*768', '1024*1024'];
+      if (!step.size || !sEnums.includes(step.size)) {
+        step.size = state.economyDefaultsEnabled
+          ? (pickCheapestEnumOption(model, 'size', sEnums, getSizePixelCount, { images: ['img1'] }) || sEnums[0])
+          : (props.size.default || sEnums[0]);
+      }
+    } else {
+      step.size = '';
+    }
+    if ('duration' in props && !props.duration['x-hidden']) {
+      const dEnums = Array.isArray(props.duration.enum) && props.duration.enum.length > 0 ? props.duration.enum : [5, 10];
+      if (!step.duration) {
+        step.duration = String(props.duration.default ?? dEnums[0] ?? 5);
+      }
+    } else {
+      step.duration = '';
+    }
+    if ('aspect_ratio' in props && !props.aspect_ratio['x-hidden']) {
+      const aEnums = Array.isArray(props.aspect_ratio.enum) && props.aspect_ratio.enum.length > 0 ? props.aspect_ratio.enum : ['1:1', '3:4', '16:9'];
+      if (!step.aspect_ratio || !aEnums.includes(step.aspect_ratio)) {
+        step.aspect_ratio = props.aspect_ratio.default || aEnums[0];
+      }
+    } else {
+      step.aspect_ratio = '';
+    }
+    // Auto-wire Face Swap models to take secondary face from Preset if unset
+    const secKey = getSecondaryImageSchemaKey(props);
+    if ((secKey === 'face_image' || secKey === 'source_image') && (!step.secondaryMode || step.secondaryMode === 'none')) {
+      step.secondaryMode = 'preset';
+    }
+  }
+
+  function applyDefaultsToAllPipelineSteps() {
+    (state.pipeline.steps || []).forEach(applyStepEconomyDefaults);
+  }
+
+  function refreshPipelineCatalogOptions() {
+    applyDefaultsToAllPipelineSteps();
+    if (state.currentCategory === 'pipeline') {
+      renderPipelineSteps();
+      renderPipelineStageBoard();
+    } else {
+      updatePipelineCostSummary();
+    }
+  }
+
+  function getPipelineModelTag(model) {
+    if (!model) return '';
+    const mid = String(model.model_id || '').toLowerCase();
+    if (model.isSpicy) return '🌶️ Spicy';
+    if (mid.includes('face-swap') || mid.includes('head-swap') || mid.includes('body-swap') || mid.includes('infinite-you')) return '🎭 Swap';
+    if (mid.includes('multiple-angles')) return '📐 3D Angles';
+    if (mid.includes('pulid')) return '🧬 Face Lock';
+    if (mid.includes('qwen-image') || mid.includes('minimax-h3/image') || mid.includes('flux-fill') || mid.includes('wan-2.2/image')) return '🔓 Open';
+    if (mid.includes('seedream') || mid.includes('gpt-image') || mid.includes('nano-banana')) return '🛡️ SFW';
+    if (model.isImageToVideo) return '🎞️ I2V';
+    return model.type || 'Image';
+  }
+
+  function calculatePipelineStepCost(step, stepIndex) {
+    const model = state.models.find(m => m.model_id === step.modelId);
+    if (!model) return 0;
+    const props = model.schema?.properties || {};
+    let refCount = 1;
+    if (step.sourceMode === 'preset' && state.pipeline.preset?.packImages?.length > 1) {
+      refCount = Math.max(1, state.pipeline.preset.packImages.length);
+    }
+    refCount += (step.extraRefs || []).length;
+    const dummyRefs = Array.from({ length: Math.min(10, Math.max(1, refCount)) }, (_, i) => `img${i + 1}`);
+    const params = {
+      resolution: step.resolution || props.resolution?.default || '1k',
+      size: step.size || props.size?.default || '1024*1024',
+      duration: Number(step.duration || props.duration?.default || 5),
+      aspect_ratio: step.aspect_ratio || props.aspect_ratio?.default || '1:1',
+      num_images: 1,
+      images: dummyRefs,
+      reference_images: dummyRefs,
+      generate_audio: false,
+      sound: false
+    };
+    const res = calculateModelCost(model, params);
+    return Number(res?.finalPrice || 0);
+  }
+
+  function updatePipelineCostSummary() {
+    const steps = state.pipeline.steps || [];
+    const enabledSteps = steps.filter(s => s.enabled);
+    const totalCost = enabledSteps.reduce((sum, s, i) => sum + calculatePipelineStepCost(s, i), 0);
+    if (el.pipelineTotalCostBadge) {
+      el.pipelineTotalCostBadge.textContent = `Est: $${totalCost.toFixed(4)} (${enabledSteps.length} steps)`;
+    }
+    const activeIdx = Math.min(Math.max(0, state.pipeline.expandedStepIndex || 0), Math.max(0, steps.length - 1));
+    const activeStep = steps[activeIdx];
+    const activeCost = activeStep ? calculatePipelineStepCost(activeStep, activeIdx) : 0;
+    const isAuto = state.pipeline.runMode === 'auto';
+    if (el.pipelineRunBtnLabel) {
+      if (state.pipeline.isRunning) {
+        el.pipelineRunBtnLabel.textContent = 'Running Pipeline...';
+      } else {
+        el.pipelineRunBtnLabel.textContent = isAuto
+          ? `Run All (${enabledSteps.length} Steps)`
+          : `Run Step ${activeIdx + 1}`;
+      }
+    }
+    if (el.pipelineRunBtnPrice) {
+      el.pipelineRunBtnPrice.textContent = `• $${(isAuto ? totalCost : activeCost).toFixed(4)}`;
+    }
+    if (el.pipelineAffordabilityBanner) {
+      const bal = Number(state.balance) || 0;
+      const targetCost = isAuto ? totalCost : activeCost;
+      if (bal > 0 && targetCost > 0) {
+        el.pipelineAffordabilityBanner.style.display = 'block';
+        if (targetCost > bal) {
+          el.pipelineAffordabilityBanner.className = 'affordability-banner insufficient';
+          el.pipelineAffordabilityBanner.innerHTML = `⚠️ Exceeds balance ($${bal.toFixed(4)}) by <strong>$${(targetCost - bal).toFixed(4)}</strong>`;
+        } else {
+          el.pipelineAffordabilityBanner.className = 'affordability-banner affordable';
+          el.pipelineAffordabilityBanner.innerHTML = `✓ Cost: <strong>-$${targetCost.toFixed(4)}</strong> • Remaining: <strong>$${(bal - targetCost).toFixed(4)}</strong>`;
+        }
+      } else {
+        el.pipelineAffordabilityBanner.style.display = 'none';
+      }
+    }
+  }
+
+  function getPipelineModelOptionsList() {
+    if (!Array.isArray(state.models) || state.models.length === 0) return [];
+    // Prioritize image-edit, faces-swaps, image-to-video, image-gen; keep sorted with pinned first
+    return state.models
+      .filter(m => m.isImageEdit || isFaceOrSwapModel(m) || m.isImageToVideo || m.isImageGen || m.isReferenceToVideo)
+      .slice(0, 180);
+  }
+
+  function setPipelinePresetFromAsset(asset) {
+    if (!asset) {
+      state.pipeline.preset = null;
+      if (el.pipelinePresetPreviewWrap) el.pipelinePresetPreviewWrap.style.display = 'none';
+      if (el.pipelinePresetDropPrompt) el.pipelinePresetDropPrompt.style.display = 'flex';
+      if (el.pipelinePresetUrlInput) el.pipelinePresetUrlInput.value = '';
+    } else {
+      state.pipeline.preset = {
+        name: asset.name || 'Subject Preset',
+        url: asset.url || asset.previewUrl || '',
+        downloadUrl: asset.downloadUrl || (asset.url && !asset.url.startsWith('data:') ? asset.url : ''),
+        previewUrl: asset.previewUrl || asset.url || '',
+        file: asset.file || null,
+        packImages: Array.isArray(asset.packImages) ? asset.packImages : null
+      };
+      if (el.pipelinePresetPreviewImg) el.pipelinePresetPreviewImg.src = state.pipeline.preset.previewUrl;
+      if (el.pipelinePresetPreviewWrap) el.pipelinePresetPreviewWrap.style.display = 'flex';
+      if (el.pipelinePresetDropPrompt) el.pipelinePresetDropPrompt.style.display = 'none';
+      if (el.pipelinePresetUrlInput && state.pipeline.preset.downloadUrl) {
+        el.pipelinePresetUrlInput.value = state.pipeline.preset.downloadUrl;
+      }
+    }
+    updatePipelineCostSummary();
+    renderPipelineStageBoard();
+  }
+
+  function renderPipelineSteps() {
+    if (!el.pipelineStepsList) return;
+    el.pipelineStepsList.innerHTML = '';
+    const catalogOpts = getPipelineModelOptionsList();
+
+    (state.pipeline.steps || []).forEach((step, idx) => {
+      applyStepEconomyDefaults(step);
+      const model = state.models.find(m => m.model_id === step.modelId) || null;
+      const props = model?.schema?.properties || {};
+      const stepCost = calculatePipelineStepCost(step, idx);
+      const isExpanded = state.pipeline.expandedStepIndex === idx;
+      const tag = getPipelineModelTag(model);
+      const modelNameShort = (model?.name || step.modelId || 'Select Model').replace(/\s*\([^)]*\)/g, '');
+      const promptPreview = step.prompt ? ` • "${step.prompt.slice(0, 28)}..."` : '';
+
+      const card = document.createElement('div');
+      card.className = `pipeline-step-card ${isExpanded ? 'is-expanded' : 'is-collapsed'} ${!step.enabled ? 'is-disabled' : ''}`;
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'pipeline-step-header';
+      header.innerHTML = `
+        <div class="pipeline-step-head-left">
+          <span class="pipeline-step-num">STEP ${idx + 1}</span>
+          <span class="pipeline-step-summary">${escapeHtml(modelNameShort)}${escapeHtml(promptPreview)}</span>
+        </div>
+        <div class="pipeline-step-head-right">
+          ${tag ? `<span class="badge-tag">${escapeHtml(tag)}</span>` : ''}
+          <span class="pipeline-step-cost">$${stepCost.toFixed(4)}</span>
+          <span>${isExpanded ? '▴' : '▾'}</span>
+        </div>
+      `;
+      header.addEventListener('click', () => {
+        state.pipeline.expandedStepIndex = isExpanded ? -1 : idx;
+        renderPipelineSteps();
+        updatePipelineCostSummary();
+      });
+      card.appendChild(header);
+
+      // Body
+      const body = document.createElement('div');
+      body.className = 'pipeline-step-body';
+
+      // Enable / Remove controls
+      const topBar = document.createElement('div');
+      topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+      const enableLbl = document.createElement('label');
+      enableLbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:0.72rem;cursor:pointer;';
+      const enableChk = document.createElement('input');
+      enableChk.type = 'checkbox';
+      enableChk.checked = step.enabled;
+      enableChk.disabled = idx === 0;
+      enableChk.addEventListener('change', () => {
+        step.enabled = enableChk.checked;
+        renderPipelineSteps();
+        renderPipelineStageBoard();
+        updatePipelineCostSummary();
+      });
+      enableLbl.appendChild(enableChk);
+      enableLbl.appendChild(document.createTextNode(idx === 0 ? 'Step 1 Active' : 'Enable this step'));
+      topBar.appendChild(enableLbl);
+
+      if (idx >= 2) {
+        const rmBtn = document.createElement('button');
+        rmBtn.type = 'button';
+        rmBtn.className = 'btn-tiny';
+        rmBtn.textContent = '✕ Remove';
+        rmBtn.addEventListener('click', () => {
+          state.pipeline.steps.splice(idx, 1);
+          state.pipeline.expandedStepIndex = Math.max(0, idx - 1);
+          renderPipelineSteps();
+          renderPipelineStageBoard();
+          updatePipelineCostSummary();
+        });
+        topBar.appendChild(rmBtn);
+      }
+      body.appendChild(topBar);
+
+      // Model selector with live $price + capability tag
+      const modelField = document.createElement('div');
+      modelField.className = 'pipeline-step-field';
+      const mLabel = document.createElement('label');
+      mLabel.textContent = 'Model (shows base price & filter/mode tag)';
+      const mRow = document.createElement('div');
+      mRow.className = 'pipeline-step-model-row';
+      const mSel = document.createElement('select');
+      const listWithSelected = catalogOpts.some(m => m.model_id === step.modelId)
+        ? catalogOpts
+        : (model ? [model, ...catalogOpts] : catalogOpts);
+      listWithSelected.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.model_id;
+        const catP = getCatalogItemPricing(m);
+        const unit = catP.isPerSecond ? '/s' : '';
+        opt.textContent = `${m.name || m.model_id} — $${catP.finalBaseRate}${unit} [${getPipelineModelTag(m)}]`;
+        if (m.model_id === step.modelId) opt.selected = true;
+        mSel.appendChild(opt);
+      });
+      mSel.addEventListener('change', () => {
+        step.modelId = mSel.value;
+        step.resolution = '';
+        step.size = '';
+        step.duration = '';
+        step.aspect_ratio = '';
+        applyStepEconomyDefaults(step);
+        renderPipelineSteps();
+        renderPipelineStageBoard();
+        updatePipelineCostSummary();
+      });
+
+      const guideBtn = document.createElement('button');
+      guideBtn.type = 'button';
+      guideBtn.className = 'btn-tiny';
+      guideBtn.textContent = 'ℹ️';
+      const guide = getModelWorkflowMixingGuide(model);
+      guideBtn.title = guide ? `${guide.title}: ${guide.summary}` : 'View model info';
+      guideBtn.addEventListener('click', () => {
+        if (guide) {
+          showToast(`${guide.title} (${guide.syntaxTag}): ${guide.summary}`, 'info', 4800);
+        } else {
+          showToast(model?.description || step.modelId, 'info', 3500);
+        }
+      });
+      mRow.appendChild(mSel);
+      mRow.appendChild(guideBtn);
+      modelField.appendChild(mLabel);
+      modelField.appendChild(mRow);
+      body.appendChild(modelField);
+
+      // Source & Secondary Wiring
+      const wireGrid = document.createElement('div');
+      wireGrid.className = 'pipeline-step-mini-grid';
+
+      const srcField = document.createElement('div');
+      srcField.className = 'pipeline-step-field';
+      const srcLbl = document.createElement('label');
+      srcLbl.textContent = 'Primary Input Source';
+      const srcSel = document.createElement('select');
+      [
+        ...(idx > 0 ? [{ v: 'prev', t: `← Step ${idx} Output` }] : []),
+        ...(idx > 1 ? [{ v: 'step1', t: '← Step 1 Output' }] : []),
+        { v: 'preset', t: '👤 Subject / Face Preset' },
+        { v: 'custom', t: '📎 Custom URL / Upload' },
+        { v: 'none', t: 'None (Text Only)' }
+      ].forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.v;
+        opt.textContent = o.t;
+        if (step.sourceMode === o.v) opt.selected = true;
+        srcSel.appendChild(opt);
+      });
+      srcSel.addEventListener('change', () => {
+        step.sourceMode = srcSel.value;
+        renderPipelineSteps();
+        updatePipelineCostSummary();
+      });
+      srcField.appendChild(srcLbl);
+      srcField.appendChild(srcSel);
+      wireGrid.appendChild(srcField);
+
+      const secKey = getSecondaryImageSchemaKey(props);
+      if (secKey) {
+        const secField = document.createElement('div');
+        secField.className = 'pipeline-step-field';
+        const secLbl = document.createElement('label');
+        secLbl.textContent = (secKey === 'face_image' || secKey === 'source_image')
+          ? `Face Lock (${secKey})`
+          : `Secondary (${secKey})`;
+        const secSel = document.createElement('select');
+        [
+          { v: 'preset', t: '👤 Subject / Face Preset' },
+          ...(idx > 0 ? [{ v: 'prev', t: `← Step ${idx} Output` }] : []),
+          { v: 'none', t: 'None' }
+        ].forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.v;
+          opt.textContent = o.t;
+          if (step.secondaryMode === o.v) opt.selected = true;
+          secSel.appendChild(opt);
+        });
+        secSel.addEventListener('change', () => {
+          step.secondaryMode = secSel.value;
+          updatePipelineCostSummary();
+        });
+        secField.appendChild(secLbl);
+        secField.appendChild(secSel);
+        wireGrid.appendChild(secField);
+      }
+      body.appendChild(wireGrid);
+
+      if (step.sourceMode === 'custom') {
+        const custField = document.createElement('div');
+        custField.className = 'pipeline-step-field';
+        const custInput = document.createElement('input');
+        custInput.type = 'text';
+        custInput.placeholder = 'Paste image/video URL for this step...';
+        custInput.value = step.customSource?.url || '';
+        custInput.addEventListener('input', () => {
+          step.customSource = custInput.value.trim() ? { url: custInput.value.trim() } : null;
+        });
+        custField.appendChild(custInput);
+        body.appendChild(custField);
+      }
+
+      // Prompt Box (if model takes prompt)
+      const hasPrompt = ('prompt' in props && !props.prompt?.['x-hidden']) || Object.keys(props).length === 0;
+      if (hasPrompt) {
+        const pField = document.createElement('div');
+        pField.className = 'pipeline-step-field';
+        const pLbl = document.createElement('label');
+        pLbl.textContent = `Prompt #${idx + 1}${guide ? ` (${guide.syntaxTag})` : ''}`;
+        const pTa = document.createElement('textarea');
+        pTa.rows = 3;
+        pTa.placeholder = `Enter Prompt for Step ${idx + 1}...`;
+        pTa.value = step.prompt || '';
+        pTa.addEventListener('input', () => {
+          step.prompt = pTa.value;
+          const sumEl = header.querySelector('.pipeline-step-summary');
+          if (sumEl) {
+            sumEl.textContent = `${modelNameShort}${step.prompt ? ` • "${step.prompt.slice(0, 28)}..."` : ''}`;
+          }
+        });
+        pField.appendChild(pLbl);
+        pField.appendChild(pTa);
+        body.appendChild(pField);
+      } else {
+        const noPromptNote = document.createElement('div');
+        noPromptNote.className = 'subtext';
+        noPromptNote.textContent = `No prompt needed — ${model?.name || step.modelId} swaps directly from Primary + Face Lock inputs.`;
+        body.appendChild(noPromptNote);
+      }
+
+      // 3D Angles mini controls if step model exposes horizontal_angle
+      if ('horizontal_angle' in props) {
+        const angRow = document.createElement('div');
+        angRow.className = 'pipeline-step-mini-grid';
+        const hF = document.createElement('div');
+        hF.className = 'pipeline-step-field';
+        hF.innerHTML = '<label>Horizontal Angle</label>';
+        const hSel = document.createElement('select');
+        [0, 45, 90, 135, 180, 225, 270, 315].forEach(deg => {
+          const o = document.createElement('option');
+          o.value = String(deg);
+          o.textContent = `${deg}°`;
+          if (Number(step.horizontal_angle || 0) === deg) o.selected = true;
+          hSel.appendChild(o);
+        });
+        hSel.addEventListener('change', () => { step.horizontal_angle = Number(hSel.value); });
+        hF.appendChild(hSel);
+
+        const vF = document.createElement('div');
+        vF.className = 'pipeline-step-field';
+        vF.innerHTML = '<label>Vertical Tilt</label>';
+        const vSel = document.createElement('select');
+        [{ v: -30, t: '-30° Low' }, { v: 0, t: '0° Eye' }, { v: 30, t: '30° High' }, { v: 60, t: '60° Top' }].forEach(it => {
+          const o = document.createElement('option');
+          o.value = String(it.v);
+          o.textContent = it.t;
+          if (Number(step.vertical_angle || 0) === it.v) o.selected = true;
+          vSel.appendChild(o);
+        });
+        vSel.addEventListener('change', () => { step.vertical_angle = Number(vSel.value); });
+        vF.appendChild(vSel);
+        angRow.appendChild(hF);
+        angRow.appendChild(vF);
+        body.appendChild(angRow);
+      }
+
+      // Compact Params Row (Resolution / Size / Duration)
+      const paramGrid = document.createElement('div');
+      paramGrid.className = 'pipeline-step-mini-grid';
+      const resKey = getResolutionSchemaKey(props);
+      if (resKey) {
+        const rf = document.createElement('div');
+        rf.className = 'pipeline-step-field';
+        rf.innerHTML = '<label>Resolution</label>';
+        const rSel = document.createElement('select');
+        const rEnums = Array.isArray(props[resKey].enum) && props[resKey].enum.length > 0 ? props[resKey].enum : ['1k', '2k'];
+        rEnums.forEach(rv => {
+          const o = document.createElement('option');
+          o.value = rv;
+          o.textContent = rv;
+          if (step.resolution === rv) o.selected = true;
+          rSel.appendChild(o);
+        });
+        rSel.addEventListener('change', () => {
+          step.resolution = rSel.value;
+          renderPipelineSteps();
+          updatePipelineCostSummary();
+        });
+        rf.appendChild(rSel);
+        paramGrid.appendChild(rf);
+      }
+      if ('duration' in props && !props.duration['x-hidden']) {
+        const df = document.createElement('div');
+        df.className = 'pipeline-step-field';
+        df.innerHTML = '<label>Duration</label>';
+        const dSel = document.createElement('select');
+        const dEnums = Array.isArray(props.duration.enum) && props.duration.enum.length > 0 ? props.duration.enum : [5, 10];
+        dEnums.forEach(dv => {
+          const o = document.createElement('option');
+          o.value = String(dv);
+          o.textContent = `${dv}s`;
+          if (String(step.duration) === String(dv)) o.selected = true;
+          dSel.appendChild(o);
+        });
+        dSel.addEventListener('change', () => {
+          step.duration = dSel.value;
+          renderPipelineSteps();
+          updatePipelineCostSummary();
+        });
+        df.appendChild(dSel);
+        paramGrid.appendChild(df);
+      }
+      if (paramGrid.children.length > 0) body.appendChild(paramGrid);
+
+      // Extra refs add-on when model supports multi-image
+      if ('images' in props || 'reference_images' in props) {
+        const refsWrap = document.createElement('div');
+        refsWrap.className = 'pipeline-step-field';
+        const rLbl = document.createElement('label');
+        rLbl.textContent = `Extra References (${step.extraRefs.length})`;
+        const rRow = document.createElement('div');
+        rRow.className = 'pipeline-step-refs-row';
+        step.extraRefs.forEach((xr, rIdx) => {
+          const chip = document.createElement('span');
+          chip.className = 'pipeline-ref-chip';
+          chip.innerHTML = `${escapeHtml(xr.name || `Ref ${rIdx + 1}`)}`;
+          const xb = document.createElement('button');
+          xb.type = 'button';
+          xb.textContent = '✕';
+          xb.addEventListener('click', () => {
+            step.extraRefs.splice(rIdx, 1);
+            renderPipelineSteps();
+            updatePipelineCostSummary();
+          });
+          chip.appendChild(xb);
+          rRow.appendChild(chip);
+        });
+        const addUrlBtn = document.createElement('button');
+        addUrlBtn.type = 'button';
+        addUrlBtn.className = 'btn-tiny';
+        addUrlBtn.textContent = '+ Add Ref URL';
+        addUrlBtn.addEventListener('click', () => {
+          const u = (typeof window.prompt === 'function' ? window.prompt('Paste reference image URL for this step:', '') : '') || '';
+          if (!u.trim()) return;
+          step.extraRefs.push({ name: u.trim().split('/').pop().slice(0, 18) || 'Ref', url: u.trim() });
+          renderPipelineSteps();
+          updatePipelineCostSummary();
+        });
+        rRow.appendChild(addUrlBtn);
+        refsWrap.appendChild(rLbl);
+        refsWrap.appendChild(rRow);
+        body.appendChild(refsWrap);
+      }
+
+      card.appendChild(body);
+      el.pipelineStepsList.appendChild(card);
+    });
+
+    updatePipelineCostSummary();
+  }
+
+  function renderPipelineStageBoard() {
+    if (!el.pipelineStageStrip) return;
+    el.pipelineStageStrip.innerHTML = '';
+
+    // Pill 0: Subject / Face Preset
+    const presetPill = document.createElement('div');
+    presetPill.className = `pipeline-stage-pill ${state.pipeline.preset ? 'is-done' : ''}`;
+    const pThumb = state.pipeline.preset?.previewUrl || state.pipeline.preset?.url || '';
+    presetPill.innerHTML = `
+      ${pThumb ? `<img class="pipeline-stage-thumb" src="${escapeHtml(pThumb)}" alt="Preset">` : '<div class="pipeline-stage-thumb">👤</div>'}
+      <div class="pipeline-stage-meta">
+        <div class="pipeline-stage-meta-title">Subject / Face Preset</div>
+        <div class="pipeline-stage-meta-sub">${escapeHtml(state.pipeline.preset ? state.pipeline.preset.name : 'Optional / None')}</div>
+      </div>
+    `;
+    el.pipelineStageStrip.appendChild(presetPill);
+
+    (state.pipeline.steps || []).forEach((step, idx) => {
+      const arrow = document.createElement('span');
+      arrow.className = 'pipeline-stage-arrow';
+      arrow.textContent = '→';
+      el.pipelineStageStrip.appendChild(arrow);
+
+      const pill = document.createElement('div');
+      const statusCls = step.status === 'completed' ? 'is-done' : (step.status === 'error' ? 'is-error' : '');
+      const activeCls = state.pipeline.activeViewStepIndex === idx ? 'is-active' : '';
+      pill.className = `pipeline-stage-pill ${statusCls} ${activeCls}`;
+      const model = state.models.find(m => m.model_id === step.modelId);
+      const stepCost = calculatePipelineStepCost(step, idx);
+      const previewSrc = step.localUrl || step.outputUrl || '';
+      const thumbMarkup = previewSrc && !step.isVideo
+        ? `<img class="pipeline-stage-thumb" src="${escapeHtml(previewSrc)}" alt="Step ${idx + 1}">`
+        : `<div class="pipeline-stage-thumb">${step.isVideo ? '🎬' : (step.status === 'running' ? '⏳' : (idx + 1))}</div>`;
+      const stateWord = !step.enabled ? 'Skipped'
+        : (step.status === 'completed' ? '✓ Ready'
+          : (step.status === 'running' ? '⏳ Running'
+            : (step.status === 'error' ? '✕ Failed' : `Est $${stepCost.toFixed(3)}`)));
+
+      pill.innerHTML = `
+        ${thumbMarkup}
+        <div class="pipeline-stage-meta">
+          <div class="pipeline-stage-meta-title">Step ${idx + 1}: ${escapeHtml((model?.name || step.modelId).split('(')[0].trim())}</div>
+          <div class="pipeline-stage-meta-sub">${escapeHtml(stateWord)}</div>
+        </div>
+      `;
+      pill.addEventListener('click', () => {
+        state.pipeline.activeViewStepIndex = idx;
+        state.pipeline.expandedStepIndex = idx;
+        renderPipelineSteps();
+        renderPipelineStageBoard();
+        if (previewSrc) {
+          loadOutputIntoViewer({
+            url: previewSrc,
+            local_url: step.localUrl || null,
+            remote_url: step.outputUrl || null,
+            isVideo: step.isVideo,
+            model_id: step.modelId,
+            prompt: step.prompt,
+            price: step.lastCost || stepCost,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+      el.pipelineStageStrip.appendChild(pill);
+    });
+
+    // Checkpoint bar visibility
+    if (el.pipelineCheckpointBar) {
+      const pausedIdx = state.pipeline.pausedAfterStep;
+      const showCp = !state.pipeline.isRunning && pausedIdx !== null && state.pipeline.steps[pausedIdx]?.status === 'completed';
+      el.pipelineCheckpointBar.style.display = showCp ? 'flex' : 'none';
+      if (showCp) {
+        const nextIdx = state.pipeline.steps.findIndex((s, i) => i > pausedIdx && s.enabled);
+        if (el.pipelineRerunStepBtn) el.pipelineRerunStepBtn.textContent = `↻ Re-run Step ${pausedIdx + 1}`;
+        if (el.pipelineApproveNextBtn) {
+          if (nextIdx !== -1) {
+            const nextCost = calculatePipelineStepCost(state.pipeline.steps[nextIdx], nextIdx);
+            el.pipelineApproveNextBtn.style.display = 'inline-flex';
+            el.pipelineApproveNextBtn.textContent = `✓ Approve & Run Step ${nextIdx + 1} ($${nextCost.toFixed(4)})`;
+            el.pipelineApproveNextBtn.dataset.nextIdx = String(nextIdx);
+          } else {
+            el.pipelineApproveNextBtn.style.display = 'none';
+          }
+        }
+      }
+    }
+  }
+
+  async function resolvePipelineAssetUrl(asset) {
+    if (!asset) return '';
+    if (asset.downloadUrl && !asset.downloadUrl.startsWith('/outputs/') && !asset.downloadUrl.startsWith('data:')) {
+      return asset.downloadUrl;
+    }
+    const raw = asset.url || asset.previewUrl || '';
+    if (raw && /^https?:\/\//i.test(raw) && !raw.includes('localhost') && !raw.includes('127.0.0.1')) {
+      return raw;
+    }
+    if (asset.file) {
+      const uploaded = await uploadFileDirect(asset.file);
+      asset.downloadUrl = uploaded;
+      return uploaded;
+    }
+    if (raw && (raw.startsWith('/outputs/') || raw.startsWith('data:'))) {
+      const resp = await fetch(raw);
+      const blob = await resp.blob();
+      const f = new File([blob], asset.name || 'pipeline-asset.png', { type: blob.type || 'image/png' });
+      const uploaded = await uploadFileDirect(f);
+      asset.downloadUrl = uploaded;
+      return uploaded;
+    }
+    return raw;
+  }
+
+  async function resolvePipelineStepSourceUrl(stepIndex, mode) {
+    if (mode === 'none') return '';
+    if (mode === 'preset') {
+      return await resolvePipelineAssetUrl(state.pipeline.preset);
+    }
+    if (mode === 'step1') {
+      const s0 = state.pipeline.steps[0];
+      return s0?.outputUrl || s0?.localUrl || '';
+    }
+    if (mode === 'prev') {
+      for (let i = stepIndex - 1; i >= 0; i--) {
+        const prev = state.pipeline.steps[i];
+        if (prev && (prev.outputUrl || prev.localUrl)) {
+          return prev.outputUrl || prev.localUrl;
+        }
+      }
+      return await resolvePipelineAssetUrl(state.pipeline.preset);
+    }
+    if (mode === 'custom') {
+      return await resolvePipelineAssetUrl(state.pipeline.steps[stepIndex]?.customSource);
+    }
+    return '';
+  }
+
+  async function executePipelineStep(stepIndex, pipelineRunId) {
+    const step = state.pipeline.steps[stepIndex];
+    if (!step) return false;
+    const model = state.models.find(m => m.model_id === step.modelId);
+    if (!model) {
+      showToast(`Model not found: ${step.modelId}`, 'error');
+      return false;
+    }
+    const props = model.schema?.properties || {};
+    const reqList = model.schema?.required || [];
+
+    step.status = 'running';
+    step.error = '';
+    state.pipeline.activeViewStepIndex = stepIndex;
+    renderPipelineSteps();
+    renderPipelineStageBoard();
+    if (el.pipelineStatusText) el.pipelineStatusText.textContent = `Step ${stepIndex + 1}: Preparing inputs for ${model.name || model.model_id}...`;
+
+    try {
+      const primaryUrl = await resolvePipelineStepSourceUrl(stepIndex, step.sourceMode);
+      const extraResolved = [];
+      if (step.sourceMode === 'preset' && Array.isArray(state.pipeline.preset?.packImages) && state.pipeline.preset.packImages.length > 1) {
+        for (let i = 1; i < state.pipeline.preset.packImages.length; i++) {
+          const u = await resolvePipelineAssetUrl(state.pipeline.preset.packImages[i]);
+          if (u) extraResolved.push(u);
+        }
+      }
+      for (const xr of (step.extraRefs || [])) {
+        const u = await resolvePipelineAssetUrl(xr);
+        if (u) extraResolved.push(u);
+      }
+
+      const payload = {};
+      const allImgs = [primaryUrl, ...extraResolved].filter(Boolean);
+      if ('prompt' in props && !props.prompt?.['x-hidden']) {
+        if (step.prompt && step.prompt.trim()) payload.prompt = step.prompt.trim();
+        else if (reqList.includes('prompt')) throw new Error(`Step ${stepIndex + 1} requires a prompt.`);
+      }
+
+      const secKey = getSecondaryImageSchemaKey(props);
+      let secUrl = '';
+      if (secKey && step.secondaryMode && step.secondaryMode !== 'none') {
+        secUrl = await resolvePipelineStepSourceUrl(stepIndex, step.secondaryMode);
+      }
+
+      if (allImgs.length > 0) {
+        if ('target_image' in props) payload.target_image = allImgs[0];
+        if ('image' in props) payload.image = allImgs[0];
+        if ('face_image' in props && !('image' in props)) payload.face_image = allImgs[0];
+        if ('images' in props) payload.images = allImgs;
+        if ('reference_images' in props) payload.reference_images = allImgs;
+      } else if (reqList.includes('image') || reqList.includes('images') || reqList.includes('target_image')) {
+        throw new Error(`Step ${stepIndex + 1} needs a source image (set Subject Preset or run prior step first).`);
+      }
+
+      if (secKey && secUrl) {
+        payload[secKey] = secUrl;
+      } else if (secKey && reqList.includes(secKey)) {
+        throw new Error(`Step ${stepIndex + 1} needs ${secKey} (load Subject / Face Preset at top left).`);
+      }
+
+      const resKey = getResolutionSchemaKey(props);
+      if (resKey && step.resolution) payload[resKey] = step.resolution;
+      if ('size' in props && step.size) payload.size = step.size;
+      if ('duration' in props && step.duration) payload.duration = Number(step.duration);
+      if ('aspect_ratio' in props && step.aspect_ratio) payload.aspect_ratio = step.aspect_ratio;
+      if ('horizontal_angle' in props) payload.horizontal_angle = Number(step.horizontal_angle || 0);
+      if ('vertical_angle' in props) payload.vertical_angle = Number(step.vertical_angle || 0);
+      if ('distance' in props) payload.distance = Number(step.distance ?? 1);
+      const audKey = getAudioSchemaKey(props);
+      if (audKey) payload[audKey] = false;
+
+      const stepCost = calculatePipelineStepCost(step, stepIndex);
+      step.lastCost = stepCost;
+
+      if (el.pipelineStatusText) el.pipelineStatusText.textContent = `Step ${stepIndex + 1}: Running ${model.model_id}...`;
+
+      const submitRes = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_id: model.model_id,
+          model_name: model.name || model.model_id,
+          category: 'pipeline',
+          pipeline_id: pipelineRunId,
+          pipeline_step: stepIndex + 1,
+          payload,
+          input_sources: allImgs.map((u, i) => ({ slot: `pipeline_step${stepIndex + 1}_ref_${i + 1}`, remote_url: u, filename: u.split('/').pop() || 'ref' })),
+          estimated_price: stepCost
+        })
+      });
+      const submitData = await submitRes.json();
+      if (!submitRes.ok || submitData.error) {
+        throw new Error(submitData.error || submitData.message || 'Pipeline step failed to submit');
+      }
+      const taskId = submitData.data?.id || submitData.id;
+      if (!taskId) throw new Error('No task ID returned for pipeline step');
+
+      while (!state.pipeline.stopRequested) {
+        await new Promise(r => setTimeout(r, 1500));
+        const pollRes = await fetch(`/api/task/${taskId}`);
+        const pollJson = await pollRes.json();
+        const d = pollJson.data || pollJson;
+        if (d.status === 'completed') {
+          const outs = Array.isArray(d.outputs) ? d.outputs : [];
+          const localOuts = Array.isArray(d.local_outputs) ? d.local_outputs : [];
+          const remoteOut = outs[0] || localOuts[0]?.remote_url || '';
+          const localOut = localOuts[0]?.local_url || '';
+          const displayOut = localOut || remoteOut;
+          const isVid = Boolean(displayOut.match(/\.(mp4|webm|mov)(\?|$)/i) || model.isImageToVideo || model.isTextToVideoOrEdit);
+
+          step.status = 'completed';
+          step.outputUrl = remoteOut || displayOut;
+          step.localUrl = localOut;
+          step.isVideo = isVid;
+          handleOutputSuccess(outs, model, localOuts, {
+            taskId,
+            model,
+            prompt: step.prompt || '',
+            parameters: payload,
+            estimatedPrice: stepCost,
+            inputImageUrl: allImgs[0] || null
+          });
+          await fetchBalance();
+          renderPipelineSteps();
+          renderPipelineStageBoard();
+          if (el.pipelineStatusText) el.pipelineStatusText.textContent = `Step ${stepIndex + 1} completed ($${stepCost.toFixed(4)}).`;
+          return true;
+        }
+        if (['failed', 'cancelled', 'timeout'].includes(d.status)) {
+          throw new Error(d.error || `Task ended with status: ${d.status}`);
+        }
+      }
+      throw new Error('Stopped by user');
+    } catch (err) {
+      step.status = 'error';
+      step.error = err.message;
+      renderPipelineSteps();
+      renderPipelineStageBoard();
+      if (el.pipelineStatusText) el.pipelineStatusText.textContent = `Step ${stepIndex + 1} failed: ${err.message}`;
+      showToast(`Pipeline Step ${stepIndex + 1} failed: ${err.message}`, 'error', 4200);
+      return false;
+    }
+  }
+
+  async function runPipelineExecution(startIndex = 0, forceSingleCheckpoint = false) {
+    if (state.pipeline.isRunning) return;
+    const steps = state.pipeline.steps || [];
+    if (steps.length === 0) return;
+
+    const isAuto = !forceSingleCheckpoint && state.pipeline.runMode === 'auto';
+    const indicesToRun = isAuto
+      ? steps.map((s, i) => (i >= startIndex && s.enabled ? i : -1)).filter(i => i !== -1)
+      : [startIndex];
+
+    const totalCost = indicesToRun.reduce((sum, idx) => sum + calculatePipelineStepCost(steps[idx], idx), 0);
+    if (state.spendGuardEnabled && totalCost > state.spendGuardThreshold) {
+      const dummyModel = state.models.find(m => m.model_id === steps[indicesToRun[0]].modelId) || { name: 'Multi-Stage Pipeline', model_id: 'pipeline' };
+      const ok = await confirmSpendGuard(dummyModel, {
+        finalPrice: totalCost.toFixed(4),
+        batchCount: indicesToRun.length,
+        batchTotalPrice: totalCost.toFixed(4),
+        breakdownText: `Pipeline (${indicesToRun.length} step${indicesToRun.length > 1 ? 's' : ''}) total`
+      });
+      if (!ok) return;
+    }
+
+    const pipelineRunId = state.pipeline.activeRunId || `pipe-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    state.pipeline.activeRunId = pipelineRunId;
+    state.pipeline.isRunning = true;
+    state.pipeline.stopRequested = false;
+    state.pipeline.pausedAfterStep = null;
+    if (el.pipelineRunBtn) el.pipelineRunBtn.disabled = true;
+    if (el.pipelineStopBtn) el.pipelineStopBtn.style.display = 'inline-flex';
+    updatePipelineCostSummary();
+
+    let lastOkIdx = null;
+    for (const idx of indicesToRun) {
+      if (state.pipeline.stopRequested) break;
+      const ok = await executePipelineStep(idx, pipelineRunId);
+      if (!ok) break;
+      lastOkIdx = idx;
+      if (!isAuto) break;
+    }
+
+    state.pipeline.isRunning = false;
+    if (el.pipelineRunBtn) el.pipelineRunBtn.disabled = false;
+    if (el.pipelineStopBtn) el.pipelineStopBtn.style.display = 'none';
+    if (!isAuto && lastOkIdx !== null) {
+      state.pipeline.pausedAfterStep = lastOkIdx;
+    }
+    renderPipelineStageBoard();
+    updatePipelineCostSummary();
+  }
+
+  function initPipelineBuilder() {
+    loadSavedPipelineRecipes();
+    renderPipelineRecipeSelect();
+    if (!state.pipeline.steps || state.pipeline.steps.length === 0) {
+      applyPipelineRecipe('pose-uncensored-2step');
+    }
+
+    if (el.pipelineRecipeSelect) {
+      el.pipelineRecipeSelect.addEventListener('change', () => {
+        applyPipelineRecipe(el.pipelineRecipeSelect.value);
+        showToast('Loaded pipeline recipe', 'info');
+      });
+    }
+    if (el.pipelineRunModeSwitch) {
+      el.pipelineRunModeSwitch.addEventListener('click', (e) => {
+        const btn = e.target.closest('.seg-btn');
+        if (!btn) return;
+        state.pipeline.runMode = btn.dataset.pmode || 'checkpoint';
+        el.pipelineRunModeSwitch.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+        updatePipelineCostSummary();
+      });
+    }
+    if (el.pipelineAddStepBtn) {
+      el.pipelineAddStepBtn.addEventListener('click', () => {
+        if (state.pipeline.steps.length >= 6) {
+          showToast('Maximum 6 pipeline steps supported.', 'warn');
+          return;
+        }
+        const nextStep = makePipelineStepObj({
+          label: `Step ${state.pipeline.steps.length + 1}`,
+          modelId: resolveAvailablePipelineModelId('wavespeed-ai/qwen-image/edit-plus'),
+          sourceMode: 'prev',
+          enabled: true
+        });
+        applyStepEconomyDefaults(nextStep);
+        state.pipeline.steps.push(nextStep);
+        state.pipeline.expandedStepIndex = state.pipeline.steps.length - 1;
+        renderPipelineSteps();
+        renderPipelineStageBoard();
+      });
+    }
+    if (el.pipelineFacePresetSelect) {
+      el.pipelineFacePresetSelect.addEventListener('change', () => {
+        const idxStr = el.pipelineFacePresetSelect.value;
+        if (idxStr === '') return;
+        const pack = state.facePacks?.[parseInt(idxStr, 10)];
+        if (!pack || !pack.images?.length) return;
+        setPipelinePresetFromAsset({
+          name: pack.name,
+          url: pack.images[0].url,
+          previewUrl: pack.images[0].url,
+          packImages: pack.images.map(x => ({ name: x.name, url: x.url }))
+        });
+        showToast(`Loaded Face Pack "${pack.name}" as Pipeline Subject Preset`, 'good');
+      });
+    }
+    if (el.pipelinePresetDropzone && el.pipelinePresetFileInput) {
+      el.pipelinePresetDropzone.addEventListener('click', () => el.pipelinePresetFileInput.click());
+      el.pipelinePresetFileInput.addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => setPipelinePresetFromAsset({ name: f.name, file: f, previewUrl: ev.target.result, url: ev.target.result });
+        r.readAsDataURL(f);
+      });
+      el.pipelinePresetDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.pipelinePresetDropzone.classList.add('dragover');
+      });
+      el.pipelinePresetDropzone.addEventListener('dragleave', () => el.pipelinePresetDropzone.classList.remove('dragover'));
+      el.pipelinePresetDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.pipelinePresetDropzone.classList.remove('dragover');
+        const f = e.dataTransfer?.files?.[0];
+        if (f && f.type.startsWith('image/')) {
+          const r = new FileReader();
+          r.onload = (ev) => setPipelinePresetFromAsset({ name: f.name, file: f, previewUrl: ev.target.result, url: ev.target.result });
+          r.readAsDataURL(f);
+          return;
+        }
+        const droppedUrl = extractDroppedMediaUrl(e.dataTransfer);
+        if (droppedUrl) setPipelinePresetFromAsset({ name: droppedUrl.split('/').pop(), url: droppedUrl, previewUrl: droppedUrl });
+      });
+    }
+    if (el.pipelinePresetClearBtn) {
+      el.pipelinePresetClearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setPipelinePresetFromAsset(null);
+      });
+    }
+    if (el.pipelinePresetLoadUrlBtn && el.pipelinePresetUrlInput) {
+      el.pipelinePresetLoadUrlBtn.addEventListener('click', () => {
+        const u = el.pipelinePresetUrlInput.value.trim();
+        if (!u) return;
+        setPipelinePresetFromAsset({ name: u.split('/').pop() || 'URL Preset', url: u, previewUrl: u });
+      });
+    }
+    if (el.pipelineRunBtn) {
+      el.pipelineRunBtn.addEventListener('click', () => {
+        state.pipeline.activeRunId = null;
+        const startIdx = state.pipeline.runMode === 'auto'
+          ? 0
+          : Math.max(0, state.pipeline.expandedStepIndex || 0);
+        runPipelineExecution(startIdx, state.pipeline.runMode === 'checkpoint');
+      });
+    }
+    if (el.pipelineStopBtn) {
+      el.pipelineStopBtn.addEventListener('click', () => {
+        state.pipeline.stopRequested = true;
+        showToast('Stopping pipeline after current poll...', 'warn');
+      });
+    }
+    if (el.pipelineRerunStepBtn) {
+      el.pipelineRerunStepBtn.addEventListener('click', () => {
+        const idx = state.pipeline.pausedAfterStep ?? Math.max(0, state.pipeline.expandedStepIndex || 0);
+        runPipelineExecution(idx, true);
+      });
+    }
+    if (el.pipelineApproveNextBtn) {
+      el.pipelineApproveNextBtn.addEventListener('click', () => {
+        const nextIdx = parseInt(el.pipelineApproveNextBtn.dataset.nextIdx || '-1', 10);
+        if (nextIdx >= 0) runPipelineExecution(nextIdx, true);
+      });
+    }
+    if (el.pipelineSaveStagePresetBtn) {
+      el.pipelineSaveStagePresetBtn.addEventListener('click', () => {
+        const idx = state.pipeline.pausedAfterStep ?? state.pipeline.activeViewStepIndex ?? 0;
+        const step = state.pipeline.steps[idx];
+        const url = step?.outputUrl || step?.localUrl;
+        if (!url) return;
+        const name = (typeof window.prompt === 'function' ? window.prompt('Save this output as a reusable Face Pack / Preset:', `Pipeline Preset ${state.facePacks.length + 1}`) : '') || '';
+        if (!name.trim()) return;
+        state.facePacks.push({ name: name.trim(), images: [{ name: name.trim(), url }] });
+        saveFacePacks();
+        renderFacePacksSelect();
+        setPipelinePresetFromAsset({ name: name.trim(), url, previewUrl: step.localUrl || url });
+        showToast(`Saved "${name.trim()}" to Face Packs & active Pipeline Preset`, 'good');
+      });
+    }
+    if (el.pipelineSaveRecipeBtn) {
+      el.pipelineSaveRecipeBtn.addEventListener('click', () => {
+        const name = (typeof window.prompt === 'function' ? window.prompt('Name this Pipeline Recipe:', `Custom Pipeline ${state.pipeline.savedRecipes.length + 1}`) : '') || '';
+        if (!name.trim()) return;
+        state.pipeline.savedRecipes.push({
+          name: name.trim(),
+          steps: state.pipeline.steps.map(s => ({
+            label: s.label,
+            modelId: s.modelId,
+            prompt: s.prompt,
+            sourceMode: s.sourceMode,
+            secondaryMode: s.secondaryMode,
+            enabled: s.enabled,
+            resolution: s.resolution,
+            size: s.size,
+            duration: s.duration,
+            aspect_ratio: s.aspect_ratio,
+            horizontal_angle: s.horizontal_angle,
+            vertical_angle: s.vertical_angle,
+            distance: s.distance
+          }))
+        });
+        savePipelineRecipesToStorage();
+        renderPipelineRecipeSelect();
+        el.pipelineRecipeSelect.value = `saved:${state.pipeline.savedRecipes.length - 1}`;
+        showToast(`Saved pipeline recipe "${name.trim()}"`, 'good');
+      });
+    }
+    if (el.pipelineExportJsonBtn) {
+      el.pipelineExportJsonBtn.addEventListener('click', () => {
+        const payload = {
+          version: 'wavespeed-studio-pipeline-v1',
+          exportedAt: new Date().toISOString(),
+          steps: state.pipeline.steps.map(s => ({
+            label: s.label,
+            modelId: s.modelId,
+            prompt: s.prompt,
+            sourceMode: s.sourceMode,
+            secondaryMode: s.secondaryMode,
+            enabled: s.enabled,
+            resolution: s.resolution,
+            size: s.size,
+            duration: s.duration,
+            aspect_ratio: s.aspect_ratio,
+            horizontal_angle: s.horizontal_angle,
+            vertical_angle: s.vertical_angle,
+            distance: s.distance
+          }))
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `wavespeed-pipeline-${Date.now()}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        showToast('Exported pipeline recipe JSON', 'good');
+      });
+    }
+    if (el.pipelineImportJsonBtn && el.pipelineImportFileInput) {
+      el.pipelineImportJsonBtn.addEventListener('click', () => el.pipelineImportFileInput.click());
+      el.pipelineImportFileInput.addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => {
+          try {
+            const parsed = JSON.parse(ev.target.result);
+            if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+              throw new Error('Invalid pipeline JSON');
+            }
+            state.pipeline.steps = parsed.steps.slice(0, 6).map((s, i) => makePipelineStepObj({
+              ...s,
+              modelId: resolveAvailablePipelineModelId(s.modelId),
+              sourceMode: s.sourceMode || (i === 0 ? 'preset' : 'prev')
+            }));
+            state.pipeline.expandedStepIndex = 0;
+            applyDefaultsToAllPipelineSteps();
+            renderPipelineSteps();
+            renderPipelineStageBoard();
+            showToast(`Imported ${state.pipeline.steps.length}-step pipeline JSON`, 'good');
+          } catch (err) {
+            showToast(`Import failed: ${err.message}`, 'error');
+          }
+        };
+        r.readAsText(f);
+      });
+    }
   }
 
   // Start app

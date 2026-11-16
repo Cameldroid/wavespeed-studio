@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WaveSpeed Studio — AI Image & Video Studio</title>
   <link rel="icon" type="image/png" href="/assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=1.0.9">
+  <link rel="stylesheet" href="style.css?v=1.1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -38,6 +38,12 @@
         </button>
         <button class="mode-btn" data-category="video-gen" title="Text to Video, Video Edit (V2V) & Video Extend">
           <span class="icon">🎬</span> <span class="mode-label">Video &amp; Edit</span>
+        </button>
+        <button class="mode-btn" data-category="faces-swaps" title="Multi-Photo Face Study, Angle Studio, PuLID & Face/Head/Body Swaps">
+          <span class="icon">🎭</span> <span class="mode-label">Faces &amp; Swaps</span>
+        </button>
+        <button class="mode-btn" data-category="pipeline" title="Multi-Stage Pipeline: Chain 2–4 prompts & models (SFW Pose → Uncensored Edit → Face Lock / I2V)">
+          <span class="icon">⛓️</span> <span class="mode-label">Pipeline</span>
         </button>
         <button class="mode-btn" data-category="utility" title="Image/Video Upscalers, Background Removal & Tools">
           <span class="icon">✂️</span> <span class="mode-label">Tools</span>
@@ -133,7 +139,7 @@
         </div>
 
         <!-- Model Selection Section -->
-        <section class="section-box">
+        <section class="section-box" id="modelSelectionSection">
           <div class="section-header">
             <h3>Select Model</h3>
             <span class="model-count-badge" id="modelsCountBadge">0 models</span>
@@ -177,6 +183,13 @@
             <div class="model-info-header">
               <span class="model-title" id="infoModelTitle">—</span>
               <span class="price-pill" id="infoModelPrice">$0.000 / run</span>
+            </div>
+            <div class="model-mixing-tip-wrap" id="modelMixingTipWrap" style="display: none;">
+              <button type="button" class="model-mixing-badge-btn" id="modelMixingBadgeBtn" title="Hover or click to view this model's exact multi-photo mixing, pose &amp; angle workflow">
+                <span id="modelMixingBadgeText">ℹ️ Workflow Guide</span>
+                <span class="mixing-tip-caret">▾</span>
+              </button>
+              <div class="model-mixing-popover" id="modelMixingPopover" style="display: none;"></div>
             </div>
             <div class="price-breakdown-bar" id="infoPriceBreakdown" style="display: none;"></div>
             <div class="model-advice-banner" id="infoUseAdvice" style="display: none;"></div>
@@ -347,12 +360,15 @@
               <span class="subtext">Drag &amp; drop, browse, or paste URLs — referenced as Image 1, Image 2...</span>
             </div>
             <div class="face-study-bar" id="faceStudyBar">
-              <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill multi-angle Face Study identity prompt using attached photos">🧬 Face Study Prompt</button>
+              <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill model-aware multi-photo Face Study prompt (&lt;Picture N&gt; for MiniMax H3, Image N for Seedream/Qwen)">🧬 Face Study Prompt</button>
+              <button type="button" class="btn-tiny" id="buildFaceSheetBtn" title="Locally stitch attached photos into one 2x2 / 3x2 reference sheet ($0.00 Canvas — saves 46% on Seedream 5.5)">🧩 $0.00 Face Sheet</button>
+              <button type="button" class="btn-tiny" id="preUploadFacePackBtn" title="Cache local files onto WaveSpeed CDN once ($0.00) before saving Face Pack">☁️ Cache URLs ($0)</button>
               <button type="button" class="btn-tiny" id="saveFacePackBtn" title="Save current uploaded reference photos as a reusable Face Pack (1-click load, $0 re-upload)">👤 Save Face Pack</button>
               <select id="facePackSelect" class="face-pack-select" title="Load a saved multi-photo Face / Character Pack">
                 <option value="">👤 Saved Face Packs...</option>
               </select>
               <button type="button" class="btn-tiny" id="deleteFacePackBtn" title="Delete selected Face Pack" style="display: none;">🗑️</button>
+              <button type="button" class="btn-tiny" id="sendRefsToPipelineBtn" title="Send current reference photos / Face Pack to Pipeline tab">⛓️ → Pipeline</button>
             </div>
             <div class="upload-dropzone upload-dropzone-compact" id="multiImageDropzone">
               <span class="drop-icon">🖼️</span>
@@ -570,6 +586,47 @@
             <input type="range" id="strengthSlider" min="0.05" max="1.0" step="0.05" value="0.70">
           </div>
 
+          <!-- 3D Camera Angle Controls (for Qwen Multiple Angles & camera-pose models) -->
+          <div class="param-row angle-controls-group" id="angleControlsGroup" style="display: none;">
+            <div class="slider-header">
+              <label>📐 3D Camera Angle &amp; Framing</label>
+              <span class="subtext" id="angleReadoutText">0° Front • Eye • Medium</span>
+            </div>
+            <div class="angle-presets-row" id="horizontalAnglePills">
+              <button type="button" class="ratio-pill active" data-hangle="0">0° Front</button>
+              <button type="button" class="ratio-pill" data-hangle="45">45° 3/4 R</button>
+              <button type="button" class="ratio-pill" data-hangle="90">90° Right</button>
+              <button type="button" class="ratio-pill" data-hangle="135">135° Back R</button>
+              <button type="button" class="ratio-pill" data-hangle="180">180° Back</button>
+              <button type="button" class="ratio-pill" data-hangle="270">270° Left</button>
+              <button type="button" class="ratio-pill" data-hangle="315">315° 3/4 L</button>
+            </div>
+            <div class="angle-slider-row">
+              <label for="horizontalAngleSlider">Orbit (0–359°):</label>
+              <input type="range" id="horizontalAngleSlider" min="0" max="359" step="5" value="0">
+              <span class="angle-val-badge" id="horizontalAngleValue">0°</span>
+            </div>
+            <div class="param-grid" style="margin-top: 6px;">
+              <div class="param-col" id="verticalAngleCol">
+                <label for="verticalAngleSelect">Vertical Tilt</label>
+                <select id="verticalAngleSelect">
+                  <option value="-30">-30° Low Angle</option>
+                  <option value="0" selected>0° Eye Level</option>
+                  <option value="30">30° Elevated</option>
+                  <option value="60">60° High Angle</option>
+                </select>
+              </div>
+              <div class="param-col" id="cameraDistanceCol">
+                <label for="cameraDistanceSelect">Zoom Distance</label>
+                <select id="cameraDistanceSelect">
+                  <option value="0">0 — Close-up</option>
+                  <option value="1" selected>1 — Medium Shot</option>
+                  <option value="2">2 — Wide Shot</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <!-- Extra Motion / Camera / Shot Controls (shown only if model schema includes them) -->
           <div class="param-row" id="advancedMotionGroup" style="display: none;">
             <div class="param-grid">
@@ -630,7 +687,7 @@
         </section>
 
         <!-- Big Launch Button & Live Affordability + Pre-Flight Safety Shield -->
-        <div class="action-footer">
+        <div class="action-footer" id="singleActionFooter">
           <div class="safety-shield-banner" id="safetyShieldBanner" style="display: none;">
             <span id="safetyShieldText"></span>
             <button type="button" class="safety-switch-btn" id="safetySwitchBtn" style="display: none;">Switch to Uncensored</button>
@@ -642,6 +699,77 @@
             <span class="btn-price" id="btnPriceBadge">• $0.000</span>
           </button>
         </div>
+
+        <!-- Multi-Stage Pipeline Builder Panel (Shown only in Pipeline Tab) -->
+        <div class="pipeline-builder-panel" id="pipelineBuilderPanel" style="display: none;">
+          <section class="section-box pipeline-header-box">
+            <div class="section-header">
+              <h3>⛓️ Multi-Stage Pipeline</h3>
+              <span class="price-pill" id="pipelineTotalCostBadge">Est: $0.000</span>
+            </div>
+            <div class="pipeline-recipe-row">
+              <select id="pipelineRecipeSelect" title="Load a built-in or saved multi-stage pipeline recipe">
+                <option value="pose-uncensored-facelock">🎭 SFW Pose/Angle → Uncensored Edit → Face Lock</option>
+                <option value="face-study-spicy-i2v">🧬 Face Prep / Pose → Spicy I2V</option>
+                <option value="uncensored-edit-faceswap">🔓 Uncensored Scene Edit → Face Swap Lock</option>
+              </select>
+              <button type="button" class="btn-tiny" id="pipelineSaveRecipeBtn" title="Save current pipeline steps as reusable recipe">+ Save</button>
+              <button type="button" class="btn-tiny" id="pipelineExportJsonBtn" title="Export pipeline recipe as JSON file">⬇ JSON</button>
+              <button type="button" class="btn-tiny" id="pipelineImportJsonBtn" title="Import pipeline recipe JSON file">⬆ JSON</button>
+              <input type="file" id="pipelineImportFileInput" accept=".json,application/json" class="file-hidden">
+            </div>
+            <div class="pipeline-runmode-row">
+              <span class="subtext">Execution Mode:</span>
+              <div class="segmented-control" id="pipelineRunModeSwitch">
+                <button type="button" class="seg-btn active" data-pmode="checkpoint" title="Pause after each step so you can inspect, re-run, or approve before spending on the next step">⏸ Checkpoint</button>
+                <button type="button" class="seg-btn" data-pmode="auto" title="Automatically chain Step 1 → Step 2 → Step 3 end-to-end">⚡ Auto-Run All</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Shared Face Preset / Anchor Source -->
+          <section class="section-box pipeline-preset-box">
+            <div class="section-header">
+              <h3>👤 Subject / Face Preset</h3>
+              <select id="pipelineFacePresetSelect" class="face-pack-select" title="Load from Saved Face Packs">
+                <option value="">Load Saved Face Pack...</option>
+              </select>
+            </div>
+            <div class="upload-dropzone upload-dropzone-compact" id="pipelinePresetDropzone">
+              <input type="file" id="pipelinePresetFileInput" accept="image/*" class="file-hidden">
+              <div class="dropzone-content" id="pipelinePresetDropPrompt">
+                <span class="drop-icon">👤</span>
+                <p>Drag &amp; drop Subject / Face image, or <span class="browse-link">browse</span></p>
+                <small>Used by Step 1 and/or Face Swap Lock steps</small>
+              </div>
+              <div class="dropzone-preview" id="pipelinePresetPreviewWrap" style="display: none;">
+                <img id="pipelinePresetPreviewImg" alt="Pipeline face preset">
+                <button type="button" class="remove-upload-btn" id="pipelinePresetClearBtn">✕</button>
+              </div>
+            </div>
+            <div class="url-input-row">
+              <input type="text" id="pipelinePresetUrlInput" placeholder="Or paste Subject / Face image URL...">
+              <button type="button" class="btn-sm" id="pipelinePresetLoadUrlBtn">Load</button>
+            </div>
+          </section>
+
+          <!-- Collapsible Step Cards -->
+          <div class="pipeline-steps-list" id="pipelineStepsList"></div>
+
+          <button type="button" class="btn-secondary pipeline-add-step-btn" id="pipelineAddStepBtn">+ Add Step (Prompt &amp; Source)</button>
+
+          <div class="action-footer pipeline-action-footer">
+            <div class="affordability-banner" id="pipelineAffordabilityBanner" style="display: none;"></div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="primary-launch-btn" id="pipelineRunBtn" style="flex: 1;">
+                <span class="btn-icon">⛓️</span>
+                <span class="btn-label" id="pipelineRunBtnLabel">Run Step 1</span>
+                <span class="btn-price" id="pipelineRunBtnPrice">• $0.000</span>
+              </button>
+              <button type="button" class="btn-cancel" id="pipelineStopBtn" style="display: none;">■ Stop</button>
+            </div>
+          </div>
+        </div>
       </aside>
 
       <!-- Draggable Splitter Divider -->
@@ -651,6 +779,20 @@
 
       <!-- Right Output & Gallery Workspace -->
       <section class="workspace-panel" id="workspacePanel">
+        <!-- Compact Pipeline Stage Strip (Shown only in Pipeline Tab; shares the single Viewer below) -->
+        <div class="pipeline-stage-board" id="pipelineStageBoard" style="display: none;">
+          <div class="pipeline-stage-header">
+            <span class="pipeline-stage-title">⛓️ Pipeline Stage Progression</span>
+            <span class="pipeline-stage-status" id="pipelineStatusText">Configure steps on the left, then run Step 1 or Auto-Run All.</span>
+          </div>
+          <div class="pipeline-stage-strip" id="pipelineStageStrip"></div>
+          <div class="pipeline-checkpoint-bar" id="pipelineCheckpointBar" style="display: none;">
+            <button type="button" class="btn-secondary-sm" id="pipelineRerunStepBtn">↻ Re-run Active Step</button>
+            <button type="button" class="btn-sm" id="pipelineApproveNextBtn">✓ Approve &amp; Run Next Step</button>
+            <button type="button" class="btn-secondary-sm" id="pipelineSaveStagePresetBtn">👤 Save Output as Face Preset</button>
+          </div>
+        </div>
+
         <!-- Live Concurrent Execution Monitor (Parallel Multi-Generation) -->
         <div class="execution-card" id="executionCard" style="display: none;">
           <div class="exec-header">
@@ -967,6 +1109,6 @@
   </div>
 
   <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
-  <script src="app.js?v=1.0.9"></script>
+  <script src="app.js?v=1.1.0"></script>
 </body>
 </html>

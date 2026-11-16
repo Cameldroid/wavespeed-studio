@@ -3,6 +3,7 @@ Coding Project Note: true
 Note Creation Date: "2026-11-16T13:52:00-03:00"
 Note Modified Date:
   - "2026-11-16T13:52:00-03:00"
+  - "2026-11-16T15:05:00-03:00"
 ---
 
 # 2026-11-16T13:52:00-03:00 — Project Log V3 (Continuation — `v1.0.9`)
@@ -22,3 +23,19 @@ Note Modified Date:
   - Headless Chromium Playwright (`http://127.0.0.1:39114`, isolated temp data dir, route-mocked `/api/models`, `/api/balance`, `/api/model-pricing`, `/api/generate`): `0` `pageerror`s; verified compact empty viewer (`185px`), Expand Gallery (`display: none`), click-card restore + inspector (`ref_image_1: gf_original_01.jpg`), Previous Prompts apply, Seedream 5.5 Edit `💰 +$0.0076 / extra ref` vs Wan 3.0 `✨ Extra refs: $0.00 FREE`, Brush/Erase toggle, `⚡ Use Flux Fill Inpaint`, dual `image`+`face_image` upload groups, and unclipped `workspacePanel` (`maxHeight: none`).
   - Re-running `npm test`, `npx electron . --smoke-test`, and secret scan after final version/doc edits before pushing `v1.0.9`.
 - **Next Action:** Push `main` + annotated tag `v1.0.9`, confirm GitHub Release workflow passes, and restart `http://localhost:3000`.
+
+
+# 2026-11-16T15:05:00-03:00 — v1.1.0 Shipped: Multi-Stage Pipeline Tab, Faces & Swaps Studio, Model Mixing Guide & 3D Angles
+
+- **Changes Applied in `v1.1.0`:**
+  - `documentation/features/02-pipeline-and-face-studio/SPEC.md`: Created feature specification and acceptance criteria per `FEATURE PIPELINE.md`.
+  - `database/history_db.js`: Added safe `ALTER TABLE` migration for `pipeline_id` and `pipeline_step` columns + index (`idx_generations_pipeline`), persisted in `recordSubmission`, `recordOutputs`, `syncFromExistingFiles`, and `exportCsv`.
+  - `server.js`: Added `isFaceOrSwap` classification, pinned & titled `flux-pulid`, `qwen-image/edit-multiple-angles`, `edit-2509-multiple-angles`, `qwen-image/edit-plus`, `seedream-v5.0-flash/edit`, `seedream-v4.5/edit-sequential`, `infinite-you`, `video-face-swap`, `face-enhancer/video`, `flux-kontext-dev/multi`, `vidu/reference-to-image-q2`, `instant-character`, and `ideogram-character`; forwarded `pipeline_id` and `pipeline_step` into `/api/generate`, metadata JSON, and SQLite.
+  - `public/index.html`, `public/style.css`, `public/app.js`: Added `🎭 Faces & Swaps` and `⛓️ Pipeline` tabs (`?v=1.1.0`), hover+click **Model Mixing & Workflow Guide** (`getModelWorkflowMixingGuide`), **3D Camera Angle Controls** (`#angleControlsGroup`), `target_image` + `source_image` support (`wavespeed-ai/infinite-you`), per-ref Role Tags, model-aware `<Picture N>` / `Image N` Face Study prompt generator, `$0.00` Canvas **Face Sheet** builder, `$0.00` **Cache URLs** pre-uploader, `⛓️ → Pipeline` handoff buttons, and the **Multi-Stage Pipeline Engine** (2 default collapsible steps + `+ Add Step`, live per-step `$price` selectors, **Checkpoint** & **Auto-Run All** modes, compact horizontal Stage Progression strip sharing `#viewerCard`, built-in recipes, and `.json` export/import).
+  - `scripts/verify_studio_isolated.js`: Added isolated DB `pipeline_id` / `pipeline_step` checks and simulated DOM assertions for `faces-swaps`, `pipeline`, 3D angles, Mixing Guide, `<Picture 1>` syntax, and `infinite-you` dual slots.
+- **Verification (Zero Live API Spend):**
+  - `node --check` passed on `server.js`, `database/history_db.js`, `public/app.js`, and `scripts/verify_studio_isolated.js`.
+  - `npm test` (`ALL_ISOLATED_TESTS_PASSED`) passed all suites including 209 formulas × 7 resolutions, empty-cache healing, SQLite provenance + pipeline IDs, and simulated DOM integration.
+  - Headless Chromium Playwright E2E (`http://127.0.0.1:39115`, isolated temp data dir, route-mocked `/api/models`, `/api/balance`, `/api/model-pricing`, `/api/upload`, `/api/generate`, `/api/task/*`, `https://cdn.mock.invalid/**`): `0` page errors and `0` console errors; verified `🎭 Faces & Swaps`, Mixing Guide popover, 3D angle pills, `$0.00` Canvas Face Sheet, `⛓️ Pipeline` 2-step default + `+ Add Step`, Checkpoint pause & Step 1 → Step 2 URL handoff, and Auto-Run All with automatic `face_image` preset binding.
+  - Re-running final `npm test`, `npx electron . --smoke-test`, and secret scan before committing/tagging `v1.1.0`.
+- **Next Action:** Push `main` + annotated tag `v1.1.0`, confirm GitHub Actions release completes, and restart `http://localhost:3000`.

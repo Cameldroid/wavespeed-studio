@@ -562,9 +562,22 @@ function getCleanModelTitle(modelId) {
     'ideogram-ai/ideogram-v3-turbo': 'Ideogram V3 Turbo (Gen & Mask)',
     'wavespeed-ai/image-face-swap': 'Image Face Swap ($0.01)',
     'wavespeed-ai/image-face-swap-pro': 'Image Face Swap Pro ($0.025)',
+    'wavespeed-ai/infinite-you': 'InfiniteYou Zero-Shot Face Swap ($0.05)',
     'wavespeed-ai/image-head-swap': 'Image Head Swap ($0.025)',
     'wavespeed-ai/image-body-swap': 'Image Body Swap ($0.05)',
+    'wavespeed-ai/video-face-swap': 'Video Face Swap ($0.01/s)',
     'wavespeed-ai/face-enhancer/image': 'Face Enhancer (Image • $0.01)',
+    'wavespeed-ai/face-enhancer/video': 'Face Enhancer (Video • $0.01/s)',
+    'wavespeed-ai/flux-pulid': 'FLUX PuLID (Face ID Lock • $0.02)',
+    'wavespeed-ai/qwen-image/edit-multiple-angles': 'Qwen Multiple Angles (96-Pose 3D • $0.025)',
+    'wavespeed-ai/qwen-image/edit-2509-multiple-angles': 'Qwen 2509 Multiple Angles (3D • $0.025)',
+    'wavespeed-ai/qwen-image/edit-plus': 'Qwen Edit Plus (Open-Weights • $0.02 Flat)',
+    'bytedance/seedream-v5.0-flash/edit': 'Seedream 5.0 Flash (Image Edit • Flat Refs)',
+    'bytedance/seedream-v4.5/edit-sequential': 'Seedream 4.5 Sequential (Turnaround Sheets)',
+    'wavespeed-ai/flux-kontext-dev/multi': 'FLUX Kontext Multi (Multi-Image Edit)',
+    'vidu/reference-to-image-q2': 'Vidu Q2 Reference-to-Image (1–7 Refs)',
+    'wavespeed-ai/instant-character': 'Instant Character (Full Scene Identity)',
+    'ideogram-ai/ideogram-character': 'Ideogram Character (Consistent Persona)',
     // Text to Image
     'wavespeed-ai/minimax-h3-image/text-to-image': 'MiniMax H3 Economy (Text-to-Image)',
     'wavespeed-ai/minimax-h3/text-to-image': 'MiniMax H3 (WaveSpeed Text-to-Image)',
@@ -730,7 +743,12 @@ async function getModels(forceRefresh = false) {
     'openai/gpt-image-2.6-flare/text-to-image',
     // Image Edit Top Picks
     'bytedance/seedream-v5.5/edit',
+    'wavespeed-ai/minimax-h3/image-edit',
     'wavespeed-ai/minimax-h3-image/edit',
+    'wavespeed-ai/qwen-image/edit-plus',
+    'wavespeed-ai/qwen-image/edit-multiple-angles',
+    'wavespeed-ai/flux-pulid',
+    'bytedance/seedream-v5.0-flash/edit',
     'google/nano-banana-2.1/edit',
     'minimax/h3-image/edit',
     'openai/gpt-image-2.6-flare/edit',
@@ -757,9 +775,16 @@ async function getModels(forceRefresh = false) {
     // Quick Tools, Face/Head Swap & Upscalers Top Picks
     'wavespeed-ai/image-face-swap-pro',
     'wavespeed-ai/image-face-swap',
+    'wavespeed-ai/infinite-you',
     'wavespeed-ai/image-head-swap',
     'wavespeed-ai/image-body-swap',
+    'wavespeed-ai/video-face-swap',
     'wavespeed-ai/face-enhancer/image',
+    'wavespeed-ai/face-enhancer/video',
+    'wavespeed-ai/qwen-image/edit-2509-multiple-angles',
+    'bytedance/seedream-v4.5/edit-sequential',
+    'wavespeed-ai/flux-kontext-dev/multi',
+    'vidu/reference-to-image-q2',
     'wavespeed-ai/feynobg',
     'wavespeed-ai/real-esrgan',
     'wavespeed-ai/image-upscaler',
@@ -857,6 +882,30 @@ async function getModels(forceRefresh = false) {
     const isSpicy = mid.includes('spicy') || mid.includes('nsfw') || mid.includes('uncensored') ||
       desc.includes('nsfw') || desc.includes('uncensored');
 
+    const isFaceOrSwap = !isNonVisual && (
+      type === 'image-face-swap' ||
+      type === 'video-face-swap' ||
+      mid.includes('face-swap') ||
+      mid.includes('head-swap') ||
+      mid.includes('body-swap') ||
+      mid.includes('face-enhancer') ||
+      mid.includes('infinite-you') ||
+      mid.includes('pulid') ||
+      mid.includes('multiple-angles') ||
+      mid.includes('instant-character') ||
+      mid.includes('ideogram-character') ||
+      mid.includes('character-swap') ||
+      mid === 'bytedance/seedream-v5.5/edit' ||
+      mid === 'bytedance/seedream-v5.0-flash/edit' ||
+      mid === 'bytedance/seedream-v4.5/edit-sequential' ||
+      mid === 'wavespeed-ai/minimax-h3/image-edit' ||
+      mid === 'wavespeed-ai/minimax-h3-image/edit' ||
+      mid === 'minimax/h3-image/edit' ||
+      mid === 'wavespeed-ai/qwen-image/edit-plus' ||
+      mid === 'wavespeed-ai/flux-kontext-dev/multi' ||
+      mid === 'vidu/reference-to-image-q2'
+    );
+
     return {
       model_id: m.model_id,
       name: getCleanModelTitle(m.model_id),
@@ -878,6 +927,7 @@ async function getModels(forceRefresh = false) {
       isImageEdit,
       isImageGen,
       isUtility,
+      isFaceOrSwap,
       isSpicy,
       isPinned,
       pinnedRank,
@@ -1040,6 +1090,8 @@ async function saveOutputLocally(taskId, outputUrls, taskMeta = {}) {
         prompt: taskMeta.payload?.prompt || taskMeta.prompt || '',
         parameters: taskMeta.payload || {},
         input_sources: Array.isArray(taskMeta.input_sources) ? taskMeta.input_sources : [],
+        pipeline_id: taskMeta.pipeline_id || null,
+        pipeline_step: taskMeta.pipeline_step ?? null,
         estimated_price: taskMeta.estimated_price ?? null,
         is_video: isVideo,
         remote_url: remoteUrl,
@@ -1078,6 +1130,8 @@ async function saveOutputLocally(taskId, outputUrls, taskMeta = {}) {
           prompt: taskMeta.payload?.prompt || taskMeta.prompt || '',
           payload: taskMeta.payload || {},
           input_sources: Array.isArray(taskMeta.input_sources) ? taskMeta.input_sources : [],
+          pipeline_id: taskMeta.pipeline_id || null,
+          pipeline_step: taskMeta.pipeline_step ?? null,
           estimated_price: taskMeta.estimated_price ?? null,
           submitted_at: taskMeta.submitted_at || now.toISOString(),
           completed_at: now.toISOString(),
@@ -1581,13 +1635,15 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/generate' && req.method === 'POST') {
       const body = await parseJsonBody(req);
-      const { model_id, model_name, category, payload, estimated_price, input_sources } = body;
+      const { model_id, model_name, category, payload, estimated_price, input_sources, pipeline_id, pipeline_step } = body;
       if (!model_id || !payload) {
         return sendJson(res, 400, { error: 'model_id and payload are required' });
       }
       const cleanInputSources = Array.isArray(input_sources) ? input_sources : [];
+      const cleanPipelineId = pipeline_id ? String(pipeline_id) : null;
+      const cleanPipelineStep = (pipeline_step !== undefined && pipeline_step !== null && Number.isFinite(Number(pipeline_step))) ? Number(pipeline_step) : null;
       const submittedAt = new Date().toISOString();
-      logServerEvent('INFO', `Submitting generation task to ${model_id}`, { estimated_price, payload, input_sources: cleanInputSources });
+      logServerEvent('INFO', `Submitting generation task to ${model_id}`, { estimated_price, payload, input_sources: cleanInputSources, pipeline_id: cleanPipelineId, pipeline_step: cleanPipelineStep });
       try {
         const taskResult = await runModel(model_id, payload);
         const taskId = taskResult.data?.id || taskResult.id;
@@ -1598,6 +1654,8 @@ const server = http.createServer(async (req, res) => {
             category: category || null,
             payload,
             input_sources: cleanInputSources,
+            pipeline_id: cleanPipelineId,
+            pipeline_step: cleanPipelineStep,
             estimated_price,
             submitted_at: submittedAt
           });
@@ -1610,6 +1668,8 @@ const server = http.createServer(async (req, res) => {
                 category: category || null,
                 payload,
                 input_sources: cleanInputSources,
+                pipeline_id: cleanPipelineId,
+                pipeline_step: cleanPipelineStep,
                 estimated_price,
                 submitted_at: submittedAt,
                 status: 'submitted'
@@ -1629,6 +1689,8 @@ const server = http.createServer(async (req, res) => {
               category: category || null,
               payload,
               input_sources: cleanInputSources,
+              pipeline_id: cleanPipelineId,
+              pipeline_step: cleanPipelineStep,
               estimated_price,
               submitted_at: submittedAt,
               status: 'failed'

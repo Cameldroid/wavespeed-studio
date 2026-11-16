@@ -94,6 +94,13 @@ function createHistoryDatabase(options = {}) {
     if (!existingCols.has('input_filepaths')) {
       db.exec("ALTER TABLE generations ADD COLUMN input_filepaths TEXT DEFAULT '';");
     }
+    if (!existingCols.has('pipeline_id')) {
+      db.exec('ALTER TABLE generations ADD COLUMN pipeline_id TEXT DEFAULT NULL;');
+    }
+    if (!existingCols.has('pipeline_step')) {
+      db.exec('ALTER TABLE generations ADD COLUMN pipeline_step INTEGER DEFAULT NULL;');
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_generations_pipeline ON generations(pipeline_id);');
   } catch (migErr) {
     console.warn('History DB column migration warning:', migErr.message);
   }
@@ -187,14 +194,17 @@ function createHistoryDatabase(options = {}) {
     const nowIso = new Date().toISOString();
     const submittedAt = entry.submitted_at || nowIso;
 
+    const pipelineId = entry.pipeline_id ? String(entry.pipeline_id) : null;
+    const pipelineStep = Number.isFinite(Number(entry.pipeline_step)) ? Number(entry.pipeline_step) : null;
+
     db.prepare(`
       INSERT INTO generations (
         task_id, model_id, model_name, category, status, prompt, parameters_json,
         input_sources_json, input_filenames, input_filepaths,
         input_image_url, input_video_url, resolution, duration, aspect_ratio, size,
         quality, audio_enabled, seed, estimated_price, is_video, submitted_at,
-        source_provenance, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        pipeline_id, pipeline_step, source_provenance, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET
         model_id = COALESCE(excluded.model_id, generations.model_id),
         model_name = COALESCE(excluded.model_name, generations.model_name),
@@ -214,6 +224,8 @@ function createHistoryDatabase(options = {}) {
         audio_enabled = COALESCE(excluded.audio_enabled, generations.audio_enabled),
         seed = COALESCE(excluded.seed, generations.seed),
         estimated_price = COALESCE(excluded.estimated_price, generations.estimated_price),
+        pipeline_id = COALESCE(excluded.pipeline_id, generations.pipeline_id),
+        pipeline_step = COALESCE(excluded.pipeline_step, generations.pipeline_step),
         submitted_at = COALESCE(generations.submitted_at, excluded.submitted_at),
         updated_at = excluded.updated_at
     `).run(
@@ -239,6 +251,8 @@ function createHistoryDatabase(options = {}) {
       entry.estimated_price ?? null,
       cols.is_video_guess,
       submittedAt,
+      pipelineId,
+      pipelineStep,
       entry.source_provenance || 'live_api',
       nowIso
     );
@@ -262,6 +276,9 @@ function createHistoryDatabase(options = {}) {
     const completedAt = entry.completed_at || primary.saved_at || nowIso;
     const promptVal = entry.prompt || primary.prompt || cols.prompt || '';
     const isVideoVal = primary.is_video !== undefined ? (primary.is_video ? 1 : 0) : cols.is_video_guess;
+    const pipelineId = entry.pipeline_id ? String(entry.pipeline_id) : (primary.pipeline_id ? String(primary.pipeline_id) : null);
+    const pipelineStepRaw = entry.pipeline_step ?? primary.pipeline_step ?? null;
+    const pipelineStep = (pipelineStepRaw !== null && Number.isFinite(Number(pipelineStepRaw))) ? Number(pipelineStepRaw) : null;
 
     db.prepare(`
       INSERT INTO generations (
@@ -270,8 +287,8 @@ function createHistoryDatabase(options = {}) {
         input_image_url, input_video_url, resolution, duration, aspect_ratio, size,
         quality, audio_enabled, seed, estimated_price, is_video,
         remote_url, local_url, local_path, filename, size_bytes,
-        submitted_at, completed_at, source_provenance, updated_at
-      ) VALUES (?, ?, ?, ?, 'completed', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        submitted_at, completed_at, pipeline_id, pipeline_step, source_provenance, updated_at
+      ) VALUES (?, ?, ?, ?, 'completed', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET
         model_id = CASE WHEN excluded.model_id != 'unknown' THEN excluded.model_id ELSE generations.model_id END,
         model_name = COALESCE(excluded.model_name, generations.model_name),
@@ -300,6 +317,8 @@ function createHistoryDatabase(options = {}) {
         filename = COALESCE(excluded.filename, generations.filename),
         size_bytes = COALESCE(excluded.size_bytes, generations.size_bytes),
         completed_at = COALESCE(generations.completed_at, excluded.completed_at),
+        pipeline_id = COALESCE(excluded.pipeline_id, generations.pipeline_id),
+        pipeline_step = COALESCE(excluded.pipeline_step, generations.pipeline_step),
         updated_at = excluded.updated_at
     `).run(
       taskId,
@@ -329,6 +348,8 @@ function createHistoryDatabase(options = {}) {
       primary.size_bytes ?? null,
       entry.submitted_at || completedAt,
       completedAt,
+      pipelineId,
+      pipelineStep,
       entry.source_provenance || 'live_api',
       nowIso
     );
@@ -536,7 +557,7 @@ function createHistoryDatabase(options = {}) {
   function exportCsv(filters = {}) {
     const res = queryHistory({ ...filters, limit: 5000, offset: 0 });
     const cols = [
-      'task_id', 'status', 'model_id', 'is_video', 'resolution', 'duration',
+      'task_id', 'status', 'model_id', 'pipeline_id', 'pipeline_step', 'is_video', 'resolution', 'duration',
       'aspect_ratio', 'size', 'quality', 'audio_enabled', 'estimated_price',
       'prompt', 'error_message', 'input_filenames', 'input_filepaths', 'input_image_url', 'input_video_url',
       'local_path', 'remote_url', 'is_favorite', 'submitted_at', 'completed_at', 'source_provenance'

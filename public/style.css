@@ -3381,3 +3381,431 @@ body[data-viewer-stage="gallery"] .viewer-card {
   border-radius: 6px;
   word-break: break-word;
 }
+
+/* Model Mixing & Workflow Guide Info Tip (Hover + Click) */
+.model-mixing-tip-wrap {
+  position: relative;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.model-mixing-badge-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 9px;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: var(--radius-sm);
+  color: #a5f3fc;
+  font-family: inherit;
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.model-mixing-badge-btn:hover,
+.model-mixing-tip-wrap.is-open .model-mixing-badge-btn {
+  background: rgba(6, 182, 212, 0.18);
+  border-color: rgba(6, 182, 212, 0.55);
+}
+
+.model-mixing-popover {
+  margin-top: 6px;
+  padding: 9px 11px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--text-main);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.model-mixing-tip-wrap:hover .model-mixing-popover {
+  display: block !important;
+}
+
+.model-mixing-popover strong {
+  color: #67e8f9;
+}
+
+.model-mixing-popover code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  color: #fde68a;
+}
+
+.mixing-guide-list {
+  margin: 5px 0 0 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Multi-Image Role Tag Pill */
+.multi-img-role-select {
+  width: 100%;
+  margin-top: 3px;
+  padding: 2px 4px;
+  font-size: 0.65rem;
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+/* 3D Camera Angle Controls */
+.angle-controls-group {
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.angle-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+
+.angle-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+}
+
+.angle-slider-row input[type="range"] {
+  flex: 1;
+}
+
+.angle-val-badge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Pipeline Tab Left Builder & Collapsible Step Cards */
+.pipeline-builder-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pipeline-recipe-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pipeline-recipe-row select {
+  flex: 1 1 180px;
+  min-width: 150px;
+  font-size: 0.75rem;
+  padding: 5px 8px;
+}
+
+.pipeline-runmode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pipeline-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-step-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 120ms ease;
+}
+
+.pipeline-step-card.is-expanded {
+  border-color: var(--accent-purple);
+}
+
+.pipeline-step-card.is-disabled {
+  opacity: 0.62;
+}
+
+.pipeline-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pipeline-step-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pipeline-step-head-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pipeline-step-num {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #ddd6fe;
+  flex-shrink: 0;
+}
+
+.pipeline-step-summary {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-step-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pipeline-step-cost {
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: var(--accent-emerald);
+}
+
+.pipeline-step-body {
+  padding: 10px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-step-card.is-collapsed .pipeline-step-body {
+  display: none;
+}
+
+.pipeline-step-field label {
+  display: block;
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.pipeline-step-field select,
+.pipeline-step-field input,
+.pipeline-step-field textarea {
+  width: 100%;
+  font-size: 0.76rem;
+}
+
+.pipeline-step-field textarea {
+  resize: vertical;
+  min-height: 58px;
+}
+
+.pipeline-step-model-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pipeline-step-model-row select {
+  flex: 1;
+}
+
+.pipeline-step-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pipeline-step-refs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.pipeline-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 0.68rem;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 4px;
+  color: #cffafe;
+}
+
+.pipeline-ref-chip button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.pipeline-add-step-btn {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+}
+
+/* Compact Right-Side Pipeline Stage Strip */
+.pipeline-stage-board {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pipeline-stage-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.pipeline-stage-status {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+}
+
+.pipeline-stage-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.pipeline-stage-arrow {
+  color: var(--text-sub);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.pipeline-stage-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 165px;
+  max-width: 220px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.pipeline-stage-pill:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pipeline-stage-pill.is-active {
+  border-color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.pipeline-stage-pill.is-done {
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.pipeline-stage-pill.is-error {
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+.pipeline-stage-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.pipeline-stage-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.pipeline-stage-meta-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-stage-meta-sub {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-checkpoint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+}

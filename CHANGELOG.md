@@ -2,6 +2,23 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.1.0] - 2026-11-16
+### Added
+- **Multi-Stage `⛓️ Pipeline` Tab (2+ Collapsible Steps, Checkpoints & Auto-Run All):**
+  - Defaults to a 2-step collapsible accordion (`Step 1` + `Step 2`) with **`+ Add Step`** (up to 6 steps), independent prompt boxes, per-step model selectors showing live `$price` and capability/safety tags (`[Open]`, `[🌶️ Spicy]`, `[📐 3D Angles]`, `[🛡️ SFW]`, `[🎭 Swap]`), source wiring (`👤 Subject / Face Preset`, `← Previous Step Output`, `← Step 1 Output`, `Custom URL`, `Extra Refs`), and automatic secondary `face_image`/`source_image` binding for Face Swap steps.
+  - Supports **⏸ Checkpoint Mode** (default: pauses after each step inside a compact horizontal **Stage Progression Strip** with `↻ Re-run Active Step`, `✓ Approve & Run Next Step`, and `👤 Save Output as Face Preset`) and **⚡ Auto-Run All Mode** with combined Spend Guard protection.
+  - Includes built-in pipeline recipes (`2-Step SFW Pose/Angle → Uncensored Edit`, `3-Step SFW Pose/Angle → Uncensored Edit → Face Lock`, `Face Prep / Pose → Spicy I2V`, `Uncensored Edit → Face Swap Lock`), custom recipe saving (`localStorage`), and `.json` workflow Export/Import.
+- **Dedicated `🎭 Faces & Swaps` Tab + Model Mixing & Workflow Guide:**
+  - Curates Face Study, Multi-Angle, `flux-pulid`, `infinite-you`, `minimax-h3/image-edit`, `seedream-v5.5/edit`, `qwen-image/edit-multiple-angles`, and Face/Head/Body/Video Swap models in one hub.
+  - Added hover + clickable **Model Mixing & Workflow Guide** (`#modelMixingBadgeBtn` / `#modelMixingPopover`) explaining each model's exact multi-photo mixing syntax (`<Picture 1>` for MiniMax H3 vs `Image 1..N` roles for Seedream/Qwen vs 96-pose 3D camera vs Swap slots).
+  - Added **3D Camera Angle Controls (`#angleControlsGroup`)** (`horizontal_angle`, `vertical_angle`, `distance`) for `qwen-image/edit-multiple-angles` and `edit-2509-multiple-angles`.
+  - Added **`source_image` + `target_image`** dual-slot mapping for ByteDance `wavespeed-ai/infinite-you` (`$0.05`).
+- **Upgraded Face Study Studio (`#faceStudyBar`) & `$0.00` Face Sheet Stitcher:**
+  - Added per-reference **Role Tags** (`Face ID`, `3/4 Angle`, `Side Profile`, `Pose / Outfit`, `Scene / BG`) and model-aware `🧬 Face Study Prompt` generation (`<Picture N>` vs `Image N`).
+  - Added **`🧩 $0.00 Face Sheet`** local Canvas stitcher (merges 2–6 photos into 1 reference sheet at `$0.00` API cost, saving 46% on per-ref models like Seedream 5.5), **`☁️ Cache URLs ($0)`** pre-upload helper, and 1-click **`⛓️ → Pipeline`** handoff buttons.
+- **SQLite Pipeline Provenance (`database/history_db.js` + `server.js`):**
+  - Added safe `ALTER TABLE` migration for `pipeline_id` and `pipeline_step` columns on `generations`, forwarded through `/api/generate`, metadata JSON, `generations.jsonl`, and CSV export.
+
 ## [1.0.9] - 2026-11-16
 ### Added
 - **Per-Ref Pricing Transparency Badge (`#multiImageCostBadge`):**

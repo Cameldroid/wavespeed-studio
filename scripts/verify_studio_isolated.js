@@ -637,6 +637,7 @@ async function runMockDomAppTests() {
       closest() { return null; },
       querySelector(sel) {
         if (sel === '.ratio-pill.active') return children.find(c => c.classList.contains('active')) || null;
+        if (sel === '.pipeline-step-summary') return makeElement('span');
         if (sel === '.input-header label') return makeElement('label');
         if (sel === '.input-header .subtext') return makeElement('span');
         if (sel === '.active-job-right') return makeElement('div');
@@ -644,7 +645,7 @@ async function runMockDomAppTests() {
         return null;
       },
       querySelectorAll(sel) {
-        if (sel === '.ratio-pill') return children;
+        if (sel === '.ratio-pill' || sel === '.seg-btn') return children;
         if (sel === '.combobox-item') return children;
         return [];
       },
@@ -671,7 +672,7 @@ async function runMockDomAppTests() {
   elementsById.get('seedInput').value = '-1';
   elementsById.get('strengthSlider').value = '0.70';
 
-  const modeBtns = ['image-gen', 'image-edit', 'image-to-video', 'ref-to-video', 'video-gen', 'utility'].map(cat => {
+  const modeBtns = ['image-gen', 'image-edit', 'image-to-video', 'ref-to-video', 'video-gen', 'faces-swaps', 'pipeline', 'utility'].map(cat => {
     const b = makeElement('button');
     b.dataset.category = cat;
     if (cat === 'image-gen') b.classList.add('active');
@@ -802,8 +803,44 @@ async function runMockDomAppTests() {
       base_price: 0.025, base_price_micro: 25000, effective_price: 0.025,
       discount_rate: 100, discount_percent: 0,
       formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
-      category: 'utility', isUtility: true, isPinned: true, pinnedRank: 14,
+      category: 'utility', isUtility: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 14,
       schema: { required: ['image', 'face_image'], properties: { image: {}, face_image: {}, output_format: { default: 'jpeg', enum: ['jpeg', 'png'] } } }
+    },
+    {
+      model_id: 'wavespeed-ai/qwen-image/edit-multiple-angles',
+      name: 'Qwen Multiple Angles (96-Pose 3D • $0.025)',
+      base_price: 0.025, base_price_micro: 25000, effective_price: 0.025,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'image-edit', isImageEdit: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 15,
+      schema: { required: ['images'], properties: { prompt: {}, images: { maxItems: 3 }, horizontal_angle: { default: 0 }, vertical_angle: { default: 0 }, distance: { default: 1 } } }
+    },
+    {
+      model_id: 'wavespeed-ai/minimax-h3/image-edit',
+      name: 'MiniMax H3 (WaveSpeed Image Edit)',
+      base_price: 0.03, base_price_micro: 30000, effective_price: 0.03,
+      discount_rate: 100, discount_percent: 0,
+      formula: formulasJson['wavespeed-ai/minimax-h3/image-edit']?.formula || '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'image-edit', isImageEdit: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 16,
+      schema: { required: ['prompt', 'images'], properties: { prompt: {}, images: { maxItems: 9 }, resolution: { default: '1k', enum: ['1k', '1.5k', '2k'] } } }
+    },
+    {
+      model_id: 'wavespeed-ai/qwen-image/edit-plus',
+      name: 'Qwen Edit Plus (Open-Weights • $0.02 Flat)',
+      base_price: 0.02, base_price_micro: 20000, effective_price: 0.02,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'image-edit', isImageEdit: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 17,
+      schema: { required: ['prompt', 'images'], properties: { prompt: {}, images: { maxItems: 3 } } }
+    },
+    {
+      model_id: 'wavespeed-ai/infinite-you',
+      name: 'InfiniteYou Zero-Shot Face Swap ($0.05)',
+      base_price: 0.05, base_price_micro: 50000, effective_price: 0.05,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'utility', isUtility: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 18,
+      schema: { required: ['source_image', 'target_image'], properties: { source_image: {}, target_image: {} } }
     }
   ];
 
@@ -850,6 +887,7 @@ async function runMockDomAppTests() {
       if (tag === 'img' || tag === 'video') createdMediaEls.push(m);
       return m;
     },
+    createTextNode: (txt) => ({ nodeType: 3, textContent: String(txt || '') }),
     addEventListener: (evt, fn) => { (docListeners[evt] = docListeners[evt] || []).push(fn); },
     removeEventListener: (evt, fn) => { if (docListeners[evt]) docListeners[evt] = docListeners[evt].filter(x => x !== fn); }
   };
@@ -991,7 +1029,7 @@ async function runMockDomAppTests() {
   assert(elementsById.get('multiImageCostBadge').textContent.includes('+$0.0076'), `Expected Seedream per-ref cost badge +$0.0076, got ${elementsById.get('multiImageCostBadge').textContent}`);
   assert.strictEqual(elementsById.get('maskCanvasGroup').style.display, 'flex', 'Expected Paint Region / Mask studio visible on image-edit models');
   elementsById.get('insertFaceStudyPromptBtn').click();
-  assert(elementsById.get('promptInput').value.includes('Study all reference images'), 'Expected Face Study Prompt helper to populate prompt');
+  assert(elementsById.get('promptInput').value.includes('facial identity') && elementsById.get('promptInput').value.includes('Image 1'), 'Expected Face Study Prompt helper to populate role-aware prompt');
   elementsById.get('toggleExpandGalleryBtn').click();
   assert.strictEqual(elementsById.get('toggleExpandGalleryBtn').textContent, '🖼️ Show Viewer', 'Expected gallery expand toggle');
   elementsById.get('toggleExpandGalleryBtn').click();
@@ -1097,7 +1135,46 @@ async function runMockDomAppTests() {
   assert(batchPrompts.includes('Portrait at sunset beach') && batchPrompts.includes('Portrait at neon beach'));
   elementsById.get('cancelTaskBtn').click();
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image swap slot, batch prompt matrix, Video Upscaler target_resolution, bounded onerror fallback)');
+  // 10. Verify Faces & Swaps tab, Model Mixing Guide (<Picture 1> vs Image 1), 3D Angle Controls, InfiniteYou dual slots, and Pipeline tab (2 default steps + Add Step)
+  const facesTab = modeBtns.find(b => b.dataset.category === 'faces-swaps');
+  facesTab.click();
+  assert(elementsById.get('comboboxList').children.length >= 4, 'Expected Faces & Swaps tab to list face mixing, angle & swap models');
+  // Select Qwen Multiple Angles via search
+  elementsById.get('modelAutocompleteInput').value = 'multiple-angles';
+  elementsById.get('modelAutocompleteInput').dispatch('input');
+  elementsById.get('comboboxList').children[0].click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/qwen-image/edit-multiple-angles');
+  assert.strictEqual(elementsById.get('angleControlsGroup').style.display, 'block', 'Expected 3D Angle Controls to show for Qwen Multiple Angles');
+  assert.strictEqual(elementsById.get('modelMixingTipWrap').style.display, 'block', 'Expected Model Mixing Guide tip badge to show');
+  assert(elementsById.get('modelMixingBadgeText').textContent.includes('96-Pose'));
+
+  // Select MiniMax H3 Image Edit -> verify model-aware Face Study inserts <Picture 1>
+  elementsById.get('modelAutocompleteInput').value = 'minimax-h3/image-edit';
+  elementsById.get('modelAutocompleteInput').dispatch('input');
+  elementsById.get('comboboxList').children[0].click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/minimax-h3/image-edit');
+  elementsById.get('promptInput').value = '';
+  elementsById.get('insertFaceStudyPromptBtn').click();
+  assert(elementsById.get('promptInput').value.includes('<Picture 1>'), 'Expected MiniMax H3 Face Study prompt to use <Picture 1> syntax');
+
+  // Select InfiniteYou -> verify target_image + source_image dual slots
+  elementsById.get('modelAutocompleteInput').value = 'infinite-you';
+  elementsById.get('modelAutocompleteInput').dispatch('input');
+  elementsById.get('comboboxList').children[0].click();
+  assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('lastImageGroup').style.display, 'flex');
+
+  // Switch to Pipeline tab -> verify 2 default steps, Add Step -> 3 steps, and total cost calculation
+  const pipelineTab = modeBtns.find(b => b.dataset.category === 'pipeline');
+  pipelineTab.click();
+  assert.strictEqual(elementsById.get('pipelineBuilderPanel').style.display, 'flex');
+  assert.strictEqual(elementsById.get('pipelineStageBoard').style.display, 'flex');
+  assert.strictEqual(elementsById.get('pipelineStepsList').children.length, 2, 'Expected default 2-step pipeline');
+  assert(elementsById.get('pipelineTotalCostBadge').textContent.includes('$0.0450'), 'Expected $0.025 + $0.020 = $0.0450');
+  elementsById.get('pipelineAddStepBtn').click();
+  assert.strictEqual(elementsById.get('pipelineStepsList').children.length, 3, 'Expected + Add Step to append Step 3');
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, and Pipeline 2+ steps)');
 }
 
 async function runHistoryDatabaseTests() {
@@ -1110,6 +1187,8 @@ async function runHistoryDatabaseTests() {
     hdb.recordSubmission({
       task_id: 't-ok-1',
       model_id: 'wavespeed-ai/minimax-h3/image-to-video-spicy',
+      pipeline_id: 'pipe-test-123',
+      pipeline_step: 2,
       payload: { prompt: 'beach sunset dance', image: 'https://cdn.example/a.png', resolution: '480p', duration: 10 },
       input_sources: [{ slot: 'image', filename: 'gf_portrait_01.jpg', filepath: 'D:\\Photos\\gf_portrait_01.jpg', remote_url: 'https://cdn.example/a.png', size_bytes: 54321 }],
       estimated_price: 0.2,
@@ -1118,6 +1197,8 @@ async function runHistoryDatabaseTests() {
     hdb.recordOutputs({
       task_id: 't-ok-1',
       model_id: 'wavespeed-ai/minimax-h3/image-to-video-spicy',
+      pipeline_id: 'pipe-test-123',
+      pipeline_step: 2,
       payload: { prompt: 'beach sunset dance', image: 'https://cdn.example/a.png', resolution: '480p', duration: 10 },
       input_sources: [{ slot: 'image', filename: 'gf_portrait_01.jpg', filepath: 'D:\\Photos\\gf_portrait_01.jpg', remote_url: 'https://cdn.example/a.png', size_bytes: 54321 }],
       estimated_price: 0.2,
@@ -1163,6 +1244,8 @@ async function runHistoryDatabaseTests() {
     assert.strictEqual(searchSunset.items[0].is_favorite, true);
     assert.strictEqual(searchSunset.items[0].input_filenames, 'gf_portrait_01.jpg');
     assert.strictEqual(searchSunset.items[0].input_sources[0].filepath, 'D:\\Photos\\gf_portrait_01.jpg');
+    assert.strictEqual(searchSunset.items[0].pipeline_id, 'pipe-test-123');
+    assert.strictEqual(searchSunset.items[0].pipeline_step, 2);
 
     const searchByInputFile = hdb.queryHistory({ q: 'gf_portrait_01' });
     assert.strictEqual(searchByInputFile.items.length, 1, 'Expected FTS5 search by original input filename to match');
