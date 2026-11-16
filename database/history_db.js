@@ -406,30 +406,41 @@ function createHistoryDatabase(options = {}) {
         COUNT(*) AS total_runs,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_runs,
         SUM(CASE WHEN status IN ('failed', 'cancelled', 'timeout', 'logged_uncompleted') THEN 1 ELSE 0 END) AS failed_runs,
+        SUM(CASE WHEN is_favorite = 1 AND status = 'completed' THEN 1 ELSE 0 END) AS favorited_runs,
         SUM(CASE WHEN is_video = 1 AND status = 'completed' THEN 1 ELSE 0 END) AS total_videos,
         SUM(CASE WHEN is_video = 0 AND status = 'completed' THEN 1 ELSE 0 END) AS total_images,
         SUM(CASE WHEN status = 'completed' THEN COALESCE(estimated_price, 0) ELSE 0 END) AS completed_spend,
+        SUM(CASE WHEN is_favorite = 1 AND status = 'completed' THEN COALESCE(estimated_price, 0) ELSE 0 END) AS favorited_spend,
         SUM(COALESCE(estimated_price, 0)) AS total_submitted_spend,
         COUNT(DISTINCT model_id) AS distinct_models
       FROM generations
     `).get();
 
     const modelRows = db.prepare(`
-      SELECT model_id, COUNT(*) AS run_count
+      SELECT
+        model_id,
+        COUNT(*) AS run_count,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN status IN ('failed', 'cancelled', 'timeout', 'logged_uncompleted') THEN 1 ELSE 0 END) AS failed_count
       FROM generations
       GROUP BY model_id
       ORDER BY run_count DESC, model_id ASC
     `).all();
 
+    const completedSpend = Number((statsRow?.completed_spend || 0).toFixed(4));
+    const favoritedRuns = Number(statsRow?.favorited_runs || 0);
     return {
       db_path: dbPath,
       stats: {
         total_runs: Number(statsRow?.total_runs || 0),
         completed_runs: Number(statsRow?.completed_runs || 0),
         failed_runs: Number(statsRow?.failed_runs || 0),
+        favorited_runs: favoritedRuns,
         total_videos: Number(statsRow?.total_videos || 0),
         total_images: Number(statsRow?.total_images || 0),
-        completed_spend: Number((statsRow?.completed_spend || 0).toFixed(4)),
+        completed_spend: completedSpend,
+        favorited_spend: Number((statsRow?.favorited_spend || 0).toFixed(4)),
+        cost_per_favorite: favoritedRuns > 0 ? Number((completedSpend / favoritedRuns).toFixed(4)) : null,
         total_submitted_spend: Number((statsRow?.total_submitted_spend || 0).toFixed(4)),
         distinct_models: Number(statsRow?.distinct_models || 0)
       },

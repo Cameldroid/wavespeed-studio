@@ -65,6 +65,8 @@ let OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
 let OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
 const LOGS_DIR = path.join(USER_DATA_DIR, 'logs');
 const DATABASE_DIR = path.join(USER_DATA_DIR, 'database');
+const CACHE_DIR = path.join(USER_DATA_DIR, 'cache');
+const MODELS_CACHE_FILE = path.join(CACHE_DIR, 'models-cache.json');
 const SERVER_LOG_FILE = path.join(LOGS_DIR, 'server.log');
 const GENERATIONS_LOG_FILE = path.join(LOGS_DIR, 'generations.jsonl');
 const HISTORY_DB_FILE = path.join(DATABASE_DIR, 'studio_history.sqlite');
@@ -77,7 +79,8 @@ function ensureRuntimeDirs() {
     OUTPUTS_VIDEOS_DIR,
     OUTPUTS_META_DIR,
     LOGS_DIR,
-    DATABASE_DIR
+    DATABASE_DIR,
+    CACHE_DIR
   ].forEach(dir => {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -130,7 +133,10 @@ function logServerEvent(level, message, meta = null) {
 
 let cachedModels = null;
 let cachedModelsTime = 0;
+let modelsBgRefreshInFlight = null;
 let lastPriceSyncTime = 0;
+let cachedUpdateCheck = null;
+let cachedUpdateCheckTime = 0;
 
 // Track submitted tasks so auto-saved outputs include full prompt & parameter provenance
 const pendingTasksMap = new Map();
@@ -551,11 +557,42 @@ function isPathInside(candidatePath, rootDir) {
   return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(resolvedRoot + path.sep);
 }
 
-// Fetch all models and enrich with live catalog prices & formulas
+function loadDiskModelsCache() {
+  try {
+    if (!fs.existsSync(MODELS_CACHE_FILE)) return null;
+    const parsed = JSON.parse(fs.readFileSync(MODELS_CACHE_FILE, 'utf8'));
+    if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
+      return parsed;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveDiskModelsCache(models, savedAt) {
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(MODELS_CACHE_FILE, JSON.stringify({ savedAt, data: models }));
+  } catch (e) {}
+}
+
+// Fetch all models and enrich with live catalog prices & formulas (Stale-While-Revalidate disk cache)
 async function getModels(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedModels && (now - cachedModelsTime < 900000)) {
     return cachedModels;
+  }
+  if (!forceRefresh && !cachedModels) {
+    const disk = loadDiskModelsCache();
+    if (disk) {
+      cachedModels = disk.data;
+      cachedModelsTime = Number(disk.savedAt) || 0;
+      if ((now - cachedModelsTime >= 900000) && !modelsBgRefreshInFlight) {
+        modelsBgRefreshInFlight = getModels(true)
+          .catch(() => null)
+          .finally(() => { modelsBgRefreshInFlight = null; });
+      }
+      return cachedModels;
+    }
   }
 
   // Reload pricing formulas (bundled fallback + user cache) if updated on disk
@@ -792,7 +829,98 @@ async function getModels(forceRefresh = false) {
   });
   cachedModels = validModels;
   cachedModelsTime = now;
+  saveDiskModelsCache(validModels, now);
   return validModels;
+}
+
+function resolveFfmpegBinary() {
+  const os = require('os');
+  const candidates = [];
+  if (process.env.FFMPEG_PATH) candidates.push(process.env.FFMPEG_PATH);
+  if (process.platform === 'win32') {
+    const localApp = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    candidates.push(path.join(localApp, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe'));
+    candidates.push('C:\\ffmpeg\\bin\\ffmpeg.exe');
+  }
+  candidates.push('ffmpeg');
+  for (const c of candidates) {
+    if (c === 'ffmpeg') return 'ffmpeg';
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch (e) {}
+  }
+  return 'ffmpeg';
+}
+
+function runFfmpegExec(args, timeoutMs = 120000) {
+  const bin = resolveFfmpegBinary();
+  return new Promise((resolve, reject) => {
+    execFile(bin, args, { windowsHide: true, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        const msg = err.code === 'ENOENT'
+          ? 'FFmpeg binary not found. Install FFmpeg (e.g. winget install Gyan.FFmpeg) or set FFMPEG_PATH.'
+          : (stderr ? String(stderr).split(/\r?\n/).slice(-5).join(' ') : err.message);
+        const outErr = new Error(msg);
+        outErr.code = err.code || 'FFMPEG_ERROR';
+        outErr.statusCode = err.code === 'ENOENT' ? 422 : 500;
+        return reject(outErr);
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+function recordLocalDerivedVideo(localPath, filename, modelId, promptText, paramsMeta = {}) {
+  const localUrl = `/outputs/videos/${filename}`;
+  const stat = fs.statSync(localPath);
+  const taskId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const metaRecord = {
+    task_id: taskId,
+    model_id: modelId,
+    prompt: promptText,
+    parameters: paramsMeta,
+    estimated_price: 0,
+    output_index: 0,
+    is_video: true,
+    remote_url: null,
+    local_url: localUrl,
+    local_path: localPath,
+    filename,
+    size_bytes: stat.size,
+    saved_at: new Date().toISOString()
+  };
+  try {
+    ensureRuntimeDirs();
+    fs.writeFileSync(path.join(OUTPUTS_META_DIR, `${path.basename(filename, path.extname(filename))}.json`), JSON.stringify(metaRecord, null, 2));
+    fs.appendFileSync(GENERATIONS_LOG_FILE, JSON.stringify(metaRecord) + '\n', 'utf8');
+    if (historyDb) {
+      historyDb.recordOutputs({
+        task_id: taskId,
+        model_id: modelId,
+        model_name: modelId,
+        category: 'utility',
+        prompt: promptText,
+        payload: paramsMeta,
+        estimated_price: 0,
+        completed_at: metaRecord.saved_at,
+        source_provenance: 'local_ffmpeg',
+        items: [metaRecord]
+      });
+    }
+  } catch (e) {
+    logServerEvent('WARN', 'Failed saving derived video metadata', { error: e.message });
+  }
+  return metaRecord;
+}
+
+function compareSemver(a, b) {
+  const pa = String(a || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
 }
 
 // Automatically download and save completed outputs to ./outputs
@@ -1518,13 +1646,199 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/config' && req.method === 'GET') {
       const masked = API_KEY ? `${API_KEY.slice(0, 8)}...${API_KEY.slice(-4)}` : 'Not set';
+      let appVersion = '1.0.6';
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(APP_RESOURCES_DIR, 'package.json'), 'utf8'));
+        if (pkg?.version) appVersion = pkg.version;
+      } catch (e) {}
       return sendJson(res, 200, {
         hasApiKey: Boolean(API_KEY),
         apiKey: masked,
+        version: appVersion,
         projectRoot: PROJECT_ROOT,
         outputsDir: OUTPUTS_DIR,
         logsDir: LOGS_DIR
       });
+    }
+
+    if (pathname === '/api/check-update' && req.method === 'GET') {
+      let currentVersion = '1.0.6';
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(APP_RESOURCES_DIR, 'package.json'), 'utf8'));
+        if (pkg?.version) currentVersion = pkg.version;
+      } catch (e) {}
+
+      const now = Date.now();
+      if (cachedUpdateCheck && (now - cachedUpdateCheckTime < 900000)) {
+        return sendJson(res, 200, cachedUpdateCheck);
+      }
+
+      let result = {
+        currentVersion,
+        latestVersion: currentVersion,
+        hasUpdate: false,
+        releaseUrl: 'https://github.com/Cameldroid/wavespeed-studio/releases'
+      };
+      try {
+        const resp = await fetch('https://api.github.com/repos/Cameldroid/wavespeed-studio/releases/latest', {
+          headers: { 'User-Agent': 'WaveSpeed-Studio-Updater', 'Accept': 'application/vnd.github+json' },
+          signal: AbortSignal.timeout(4000)
+        });
+        if (resp.ok) {
+          const rel = await resp.json();
+          const latest = String(rel?.tag_name || '').replace(/^v/i, '').trim();
+          if (latest) {
+            result = {
+              currentVersion,
+              latestVersion: latest,
+              hasUpdate: compareSemver(latest, currentVersion) > 0,
+              releaseUrl: rel.html_url || result.releaseUrl
+            };
+          }
+        }
+      } catch (e) {}
+      cachedUpdateCheck = result;
+      cachedUpdateCheckTime = now;
+      return sendJson(res, 200, result);
+    }
+
+    if (pathname === '/api/video/trim' && req.method === 'POST') {
+      const os = require('os');
+      const startSec = Math.max(0, Number(parsedUrl.searchParams.get('start') ?? 0) || 0);
+      const endSecRaw = Number(parsedUrl.searchParams.get('end') ?? 0);
+      const durationSec = (Number.isFinite(endSecRaw) && endSecRaw > startSec) ? (endSecRaw - startSec) : 0;
+      if (durationSec <= 0.1) {
+        return sendJson(res, 400, { error: 'End time must be greater than Start time by at least 0.1s' });
+      }
+      const localUrlHdr = parsedUrl.searchParams.get('local_url') || req.headers['x-local-url'] || '';
+      let inputPath = null;
+      let tmpInputPath = null;
+      const resolvedRoot = path.resolve(OUTPUTS_DIR);
+      if (localUrlHdr && String(localUrlHdr).startsWith('/outputs/')) {
+        const rel = String(localUrlHdr).replace(/^\/outputs\//, '').replace(/\//g, path.sep);
+        const candidate = path.resolve(resolvedRoot, rel);
+        if (!isPathInside(candidate, resolvedRoot) || !fs.existsSync(candidate)) {
+          return sendJson(res, 403, { error: 'Invalid or missing local video path' });
+        }
+        inputPath = candidate;
+      } else {
+        const rawBuf = await parseRawBody(req);
+        if (!rawBuf || rawBuf.length === 0) {
+          return sendJson(res, 400, { error: 'Provide x-local-url or raw video bytes' });
+        }
+        tmpInputPath = path.join(os.tmpdir(), `ws-trim-in-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.mp4`);
+        fs.writeFileSync(tmpInputPath, rawBuf);
+        inputPath = tmpInputPath;
+      }
+
+      ensureRuntimeDirs();
+      const tsPrefix = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const outFilename = `${tsPrefix}_local-trim_${startSec.toFixed(1)}-${(startSec + durationSec).toFixed(1)}s.mp4`;
+      const outPath = path.join(OUTPUTS_VIDEOS_DIR, outFilename);
+
+      try {
+        // Re-encode with -ss/-t cleanly so exact frame bounds & Wan 3.0 keyframes stay clean
+        await runFfmpegExec([
+          '-y',
+          '-ss', startSec.toFixed(3),
+          '-i', inputPath,
+          '-t', durationSec.toFixed(3),
+          '-c:v', 'libx264',
+          '-preset', 'veryfast',
+          '-crf', '20',
+          '-pix_fmt', 'yuv420p',
+          '-c:a', 'aac',
+          '-movflags', '+faststart',
+          outPath
+        ]).catch(async () => {
+          // Retry without audio stream if source clip has no audio track
+          await runFfmpegExec([
+            '-y',
+            '-ss', startSec.toFixed(3),
+            '-i', inputPath,
+            '-t', durationSec.toFixed(3),
+            '-an',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '20',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            outPath
+          ]);
+        });
+        const rec = recordLocalDerivedVideo(
+          outPath,
+          outFilename,
+          'local/ffmpeg-trim',
+          `Trimmed ${startSec.toFixed(2)}s–${(startSec + durationSec).toFixed(2)}s (${durationSec.toFixed(1)}s)`,
+          { start_sec: startSec, duration_sec: durationSec }
+        );
+        logServerEvent('INFO', 'Local FFmpeg trim saved', { filename: outFilename, startSec, durationSec });
+        return sendJson(res, 200, { code: 200, data: rec });
+      } finally {
+        if (tmpInputPath && fs.existsSync(tmpInputPath)) {
+          try { fs.unlinkSync(tmpInputPath); } catch (e) {}
+        }
+      }
+    }
+
+    if (pathname === '/api/video/concat' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const urls = Array.isArray(body?.urls) ? body.urls : [];
+      if (urls.length < 2) {
+        return sendJson(res, 400, { error: 'Select at least 2 local output videos to stitch together.' });
+      }
+      if (urls.length > 10) {
+        return sendJson(res, 400, { error: 'Stitch up to 10 clips at once.' });
+      }
+      const resolvedRoot = path.resolve(OUTPUTS_DIR);
+      const inputPaths = [];
+      for (const u of urls) {
+        const s = String(u || '');
+        if (!s.startsWith('/outputs/')) {
+          return sendJson(res, 400, { error: 'Only locally saved /outputs/ videos can be stitched offline.' });
+        }
+        const rel = s.replace(/^\/outputs\//, '').replace(/\//g, path.sep);
+        const candidate = path.resolve(resolvedRoot, rel);
+        if (!isPathInside(candidate, resolvedRoot) || !fs.existsSync(candidate)) {
+          return sendJson(res, 403, { error: `Clip missing or outside outputs folder: ${s}` });
+        }
+        inputPaths.push(candidate);
+      }
+
+      ensureRuntimeDirs();
+      const tsPrefix = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const outFilename = `${tsPrefix}_local-stitch_${inputPaths.length}clips.mp4`;
+      const outPath = path.join(OUTPUTS_VIDEOS_DIR, outFilename);
+
+      const ffArgs = ['-y'];
+      inputPaths.forEach(p => { ffArgs.push('-i', p); });
+      const scaleChain = inputPaths.map((_, idx) =>
+        `[${idx}:v]scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v${idx}]`
+      ).join(';');
+      const concatInputs = inputPaths.map((_, idx) => `[v${idx}]`).join('');
+      const filterComplex = `${scaleChain};${concatInputs}concat=n=${inputPaths.length}:v=1:a=0[vout]`;
+
+      ffArgs.push(
+        '-filter_complex', filterComplex,
+        '-map', '[vout]',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '20',
+        '-movflags', '+faststart',
+        outPath
+      );
+
+      await runFfmpegExec(ffArgs, 180000);
+      const rec = recordLocalDerivedVideo(
+        outPath,
+        outFilename,
+        'local/ffmpeg-stitch',
+        `Stitched ${inputPaths.length} clips locally`,
+        { clip_count: inputPaths.length, source_urls: urls }
+      );
+      logServerEvent('INFO', 'Local FFmpeg concat saved', { filename: outFilename, clipCount: inputPaths.length });
+      return sendJson(res, 200, { code: 200, data: rec });
     }
 
     // Serve locally saved outputs from ./outputs

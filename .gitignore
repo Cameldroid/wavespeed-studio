@@ -11,6 +11,7 @@ database/*.sqlite-wal
 database/*.sqlite-shm
 database/*.db
 logs/
+cache/
 
 # Private / Optional Local Scratch
 Inspo/

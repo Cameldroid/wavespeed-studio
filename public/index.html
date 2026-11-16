@@ -89,6 +89,10 @@
           </div>
         </div>
 
+        <a class="settings-btn update-pill-btn" id="updateNotifierBtn" href="https://github.com/Cameldroid/wavespeed-studio/releases" target="_blank" rel="noopener noreferrer" style="display: none;" title="A newer WaveSpeed Studio release is available on GitHub">
+          <span class="icon">⬆️</span> <span id="updateNotifierLabel">Update</span>
+        </a>
+
         <button class="settings-btn" id="syncPricesBtn" title="Force live sync of WaveSpeed catalog prices, discounts, and RSC formulas">
           <span class="icon">💲</span> <span id="syncPricesLabel">Sync</span>
         </button>
@@ -301,6 +305,7 @@
             <div class="url-input-row">
               <input type="text" id="videoUrlInput" placeholder="Or paste video URL...">
               <button type="button" class="btn-secondary-sm" id="openSourceVideoTimelineBtn" title="Open loaded Source Video in the Frame Timeline Picker" style="display: none;">🎞️ Timeline</button>
+              <button type="button" class="btn-secondary-sm" id="clearSourceVideoBtn" title="Clear loaded Source Video and reset duration pricing" style="display: none;">✕ Clear</button>
             </div>
           </div>
 
@@ -390,6 +395,12 @@
                   <button type="button" class="btn-sm" id="extractFrameSourceBtn">📸 Use Frame → Source Image</button>
                   <button type="button" class="btn-secondary-sm" id="extractFrameLastBtn" style="display: none;">🏁 Use as End Frame</button>
                   <button type="button" class="btn-secondary-sm" id="extractFrameRefBtn" style="display: none;">🖼️ Add to Ref Images</button>
+                </div>
+                <div class="timeline-trim-bar" id="timelineTrimBar">
+                  <span class="trim-range-label">✂️ Local Trim ($0 FFmpeg):</span>
+                  <button type="button" class="btn-tiny" id="tlSetTrimStartBtn" title="Set trim Start to current playhead">In: <span id="trimStartLabel">0.0s</span></button>
+                  <button type="button" class="btn-tiny" id="tlSetTrimEndBtn" title="Set trim End to current playhead">Out: <span id="trimEndLabel">15.0s</span></button>
+                  <button type="button" class="btn-secondary-sm" id="tlRunTrimBtn" title="Losslessly cut & encode selected range to outputs/videos ($0.00)">✂️ Cut &amp; Use Clip</button>
                 </div>
               </div>
             </div>
@@ -540,6 +551,33 @@
             </div>
             <input type="number" id="seedInput" value="-1" placeholder="-1">
           </div>
+
+          <!-- Batch / Matrix Repeats & Multi-Step Quick Chain -->
+          <div class="param-row param-grid">
+            <div class="param-col">
+              <div class="slider-header">
+                <label for="batchSeedsSelect">Batch / Variants</label>
+              </div>
+              <select id="batchSeedsSelect" title="Use {opt1 | opt2} in prompt to auto-expand prompt matrix, or pick seed repeats">
+                <option value="1" selected>1× Single Run</option>
+                <option value="2">2× Seed Variants</option>
+                <option value="3">3× Seed Variants</option>
+                <option value="4">4× Seed Variants</option>
+              </select>
+            </div>
+            <div class="param-col">
+              <div class="slider-header">
+                <label for="postChainSelect">Auto-Chain Next</label>
+              </div>
+              <select id="postChainSelect" title="Automatically prepare or run next pipeline step on completion">
+                <option value="none" selected>None (Single Step)</option>
+                <option value="load-timeline">→ Load Video in Timeline</option>
+                <option value="animate-spicy">→ Load Still → MiniMax H3 Spicy</option>
+                <option value="upscale-video">→ Stage Video Upscaler (Tools)</option>
+              </select>
+            </div>
+          </div>
+          <small id="batchMatrixHint" style="display: none; color: var(--accent-cyan); font-size: 0.72rem; margin-top: 4px;"></small>
         </section>
 
         <!-- Big Launch Button & Live Affordability + Pre-Flight Safety Shield -->
@@ -684,7 +722,8 @@
                 <button type="button" class="history-filter-btn active" data-gsize="md">M</button>
                 <button type="button" class="history-filter-btn" data-gsize="lg">L</button>
               </div>
-              <button type="button" class="btn-secondary-sm" id="toggleBulkSelectBtn" title="Select multiple outputs to bulk delete">☑️ Select</button>
+              <button type="button" class="btn-secondary-sm" id="toggleBulkSelectBtn" title="Select multiple outputs to bulk delete or stitch clips">☑️ Select</button>
+              <button type="button" class="btn-secondary-sm" id="bulkStitchSelectedBtn" style="display: none;" title="Locally stitch 2+ selected videos into one MP4 ($0.00 FFmpeg)">🎞️ Stitch (<span id="bulkVideoCount">0</span>)</button>
               <button type="button" class="btn-secondary-sm btn-danger-outline" id="bulkDeleteSelectedBtn" style="display: none;">🗑️ Delete Selected (<span id="bulkSelectedCount">0</span>)</button>
               <button type="button" class="btn-secondary-sm" id="openCompareBtn" title="Compare 2–4 pinned or recent outputs side by side">⚖️ Compare <span id="compareCountBadge"></span></button>
               <button type="button" class="btn-secondary-sm" id="openHistoryDbSectionBtn">🗄️ Full Database</button>

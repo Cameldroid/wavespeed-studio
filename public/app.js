@@ -35,6 +35,11 @@
     sourceVideoDuration: null,
     timelineVideo: null, // { src, objectUrl, name, width, height, duration }
     timelineIsObjectUrl: false,
+    timelineSource: null,
+    timelineScanToken: 0,
+    trimStartSec: 0,
+    trimEndSec: 15,
+    historyModelStats: new Map(),
     maskDataUrl: null,
     isDrawing: false,
     hasDrawnMask: false,
@@ -311,8 +316,21 @@
     baDivider: document.getElementById('baDivider'),
     gallerySizePills: document.getElementById('gallerySizePills'),
     toggleBulkSelectBtn: document.getElementById('toggleBulkSelectBtn'),
+    bulkStitchSelectedBtn: document.getElementById('bulkStitchSelectedBtn'),
+    bulkVideoCount: document.getElementById('bulkVideoCount'),
     bulkDeleteSelectedBtn: document.getElementById('bulkDeleteSelectedBtn'),
     bulkSelectedCount: document.getElementById('bulkSelectedCount'),
+    updateNotifierBtn: document.getElementById('updateNotifierBtn'),
+    updateNotifierLabel: document.getElementById('updateNotifierLabel'),
+    clearSourceVideoBtn: document.getElementById('clearSourceVideoBtn'),
+    tlSetTrimStartBtn: document.getElementById('tlSetTrimStartBtn'),
+    tlSetTrimEndBtn: document.getElementById('tlSetTrimEndBtn'),
+    tlRunTrimBtn: document.getElementById('tlRunTrimBtn'),
+    trimStartLabel: document.getElementById('trimStartLabel'),
+    trimEndLabel: document.getElementById('trimEndLabel'),
+    batchSeedsSelect: document.getElementById('batchSeedsSelect'),
+    postChainSelect: document.getElementById('postChainSelect'),
+    batchMatrixHint: document.getElementById('batchMatrixHint'),
     studioToastContainer: document.getElementById('studioToastContainer')
   };
 
@@ -334,7 +352,9 @@
     await Promise.all([
       fetchBalance(),
       fetchModels(),
-      fetchSavedOutputs()
+      fetchSavedOutputs(),
+      fetchHistoryStatsForInsights(),
+      checkForAppUpdate()
     ]);
   }
 
@@ -714,7 +734,14 @@
       const m = expr.match(/^\{\s*"total_price"\s*:\s*([\s\S]+)\}$/);
       if (m) expr = m[1].trim();
 
-      expr = expr.replace(/get_duration\(\s*([a-zA-Z0-9_]+)(?:\s*,[^)]*)?\)/g, '__get_duration($1)');
+      expr = expr.replace(/get_duration\(\s*([a-zA-Z0-9_]+)(?:\s*,([^)]*))?\)/g, (_, targetArg, optRaw) => {
+        if (!optRaw || !optRaw.trim()) return `__get_duration(${targetArg}, {})`;
+        const kvParts = [];
+        for (const mOpt of optRaw.matchAll(/\b(min|max|total)\s*=\s*([0-9.]+)/g)) {
+          kvParts.push(`${mOpt[1]}: ${mOpt[2]}`);
+        }
+        return `__get_duration(${targetArg}, { ${kvParts.join(', ')} })`;
+      });
       expr = expr.replace(/:=/g, '__ASSIGN__');
       expr = expr.replace(/(?<![!<>=])=(?!=)/g, '===');
       expr = expr.replace(/__ASSIGN__/g, '=');
@@ -745,7 +772,7 @@
         enable_web_search: Boolean(params.enable_web_search ?? false),
         enable_image_search: Boolean(params.enable_image_search ?? false),
         images: Array.isArray(params.images) ? params.images : ['img1'],
-        image: params.image ?? 'img1',
+        image: params.image !== undefined ? params.image : 'img1',
         mask_image: params.mask_image ?? '',
         markup_image: params.markup_image ?? '',
         video: params.video ?? '',
@@ -759,15 +786,24 @@
         target_resolution: String(params.target_resolution ?? params.resolution ?? '1080p'),
         max_images: params.max_images !== undefined ? Number(params.max_images) : undefined,
         audio: params.audio ?? '',
-        __get_duration: (media) => {
+        __get_duration: (media, opts = {}) => {
+          const clampDur = (sec) => {
+            let v = Number(sec) || 0;
+            if (typeof opts.min === 'number' && !isNaN(opts.min)) v = Math.max(opts.min, v);
+            if (typeof opts.max === 'number' && !isNaN(opts.max)) v = Math.min(opts.max, v);
+            return v;
+          };
           if (Array.isArray(media)) {
             if (media.length === 0) return 0;
-            if (Array.isArray(params.reference_video_durations) && params.reference_video_durations.length === media.length) {
-              return params.reference_video_durations.reduce((acc, sec) => acc + (Number(sec) || Number(params.duration ?? 5)), 0);
-            }
-            return Number(params.video_duration ?? params.duration ?? 5) * media.length;
+            const durs = (Array.isArray(params.reference_video_durations) && params.reference_video_durations.length === media.length)
+              ? params.reference_video_durations.map(s => clampDur(s || Number(params.duration ?? 5)))
+              : media.map(() => clampDur(Number(params.video_duration ?? params.duration ?? 5)));
+            let total = durs.reduce((acc, sec) => acc + sec, 0);
+            if (typeof opts.total === 'number' && !isNaN(opts.total)) total = Math.min(opts.total, total);
+            return total;
           }
-          return Number(params.video_duration ?? params.duration ?? 5);
+          if (media === '' && params.strictEmptyVideoDuration) return 0;
+          return clampDur(Number(params.video_duration ?? params.duration ?? 5));
         },
         __count: (arr) => Array.isArray(arr) ? arr.length : (arr ? 1 : 0),
         __min: (arr) => Math.min(...(Array.isArray(arr) ? arr : [arr])),
@@ -970,15 +1006,22 @@
     };
   }
 
-  function getPlannedInputImageCount() {
-    const props = state.selectedModel?.schema?.properties || {};
+  function getPlannedInputImageCount(model = state.selectedModel) {
+    if (!model) return 0;
+    const props = model.schema?.properties || {};
+    const reqList = model.schema?.required || [];
     const singleKey = getSingleImageSchemaKey(props);
-    const hasSingleSlot = Boolean(
-      state.selectedModel &&
-      (singleKey || state.selectedModel.isImageToVideo || (!('images' in props) && !('reference_images' in props)))
-    );
+    const hasSingleAttached = Boolean(state.sourceImage || el.imageUrlInput?.value.trim());
+    const singleRequired = Boolean(singleKey && (reqList.includes(singleKey) || model.isImageToVideo));
+    const singleCount = (singleKey && (hasSingleAttached || singleRequired)) || model.isImageToVideo ? 1 : 0;
+
     const extraCount = Array.isArray(state.extraImages) ? state.extraImages.length : 0;
-    return hasSingleSlot ? Math.max(1, 1 + extraCount) : Math.max(0, extraCount);
+    const hasArrayImgs = Boolean('images' in props || 'reference_images' in props || (isR2VModel(model) && 'reference_files' in props));
+    const arrayRequired = reqList.includes('images') || reqList.includes('reference_images') || reqList.includes('reference_files');
+    const arrayCount = hasArrayImgs
+      ? (extraCount > 0 ? extraCount : (singleCount === 0 && arrayRequired ? 1 : 0))
+      : extraCount;
+    return singleCount + arrayCount;
   }
 
   function buildDummyImageArray(count) {
@@ -1001,82 +1044,137 @@
     const durations = activeVids.length > 0
       ? activeVids.map(v => Math.max(1, Math.ceil(Number(v.duration) || Number(el.durationSelect?.value) || 5)))
       : dummyVids.map(() => Number(el.durationSelect?.value) || 5);
-    return { dummyVids, durations };
+    const totalSec = durations.reduce((acc, s) => acc + s, 0);
+    return { dummyVids, durations, totalSec };
   }
 
-  // Price and Discount Calculation Helper for current active form state
-  function getModelPricing(model) {
-    if (!model) return { basePrice: 0, finalPrice: 0, hasDiscount: false, percentOff: 0, breakdownText: '' };
-    const props = model.schema?.properties || {};
+  function expandPromptBraces(rawPrompt, maxVariants = 12) {
+    const text = String(rawPrompt || '');
+    const m = text.match(/\{([^{}|]+\|[^{}]+)\}/);
+    if (!m) return [text];
+    const choices = m[1].split('|').map(s => s.trim()).filter(Boolean);
+    if (choices.length <= 1) return [text];
+    const results = [];
+    for (const choice of choices) {
+      const next = text.slice(0, m.index) + choice + text.slice(m.index + m[0].length);
+      for (const expanded of expandPromptBraces(next, maxVariants)) {
+        results.push(expanded);
+        if (results.length >= maxVariants) return results;
+      }
+    }
+    return results;
+  }
+
+  function getPlannedBatchCount(model = state.selectedModel) {
+    const props = model?.schema?.properties || {};
+    const promptActive = Boolean('prompt' in props && !props.prompt?.['x-hidden']);
+    const braceCount = promptActive ? expandPromptBraces(el.promptInput?.value || '', 12).length : 1;
+    const seedRepeats = Math.max(1, Math.min(4, parseInt(el.batchSeedsSelect?.value || '1', 10) || 1));
+    return Math.min(12, Math.max(1, braceCount * seedRepeats));
+  }
+
+  function buildPricingParams(model, overrides = {}) {
+    const props = model?.schema?.properties || {};
+    const reqList = model?.schema?.required || [];
     const resKey = getResolutionSchemaKey(props) || 'resolution';
     const resProp = props[resKey];
 
-    const resVal = (resProp && el.resolutionSelect?.value)
+    const resVal = overrides.resolution ?? ((resProp && el.resolutionSelect?.value)
       ? el.resolutionSelect.value
-      : (resProp?.default || '720p');
+      : (resProp?.default || '720p'));
     const hiddenDurDefault = !('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
       ? 0
       : (props.duration?.default ?? 5);
-    const durVal = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
+    const durVal = overrides.duration ?? (('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
       ? Number(el.durationSelect.value)
-      : hiddenDurDefault;
-    const sizeVal = ('size' in props && !props.size['x-hidden'] && el.sizeSelect?.value)
+      : hiddenDurDefault);
+    const sizeVal = overrides.size ?? (('size' in props && !props.size['x-hidden'] && el.sizeSelect?.value)
       ? el.sizeSelect.value
-      : (props.size?.default || '1024*1024');
+      : (props.size?.default || '1024*1024'));
     const rawQual = ('quality' in props && !props.quality['x-hidden'] && el.qualitySelect?.value)
       ? el.qualitySelect.value
       : (props.quality?.default ?? 'medium');
-    const qualVal = props.quality?.type === 'integer'
+    const qualVal = overrides.quality ?? (props.quality?.type === 'integer'
       ? parseInt(rawQual, 10)
-      : (props.quality?.type === 'number' ? parseFloat(rawQual) : rawQual);
-    const numImagesVal = ('num_images' in props && !props.num_images['x-hidden'] && el.numImagesSelect?.value)
+      : (props.quality?.type === 'number' ? parseFloat(rawQual) : rawQual));
+    const numImagesVal = overrides.num_images ?? (('num_images' in props && !props.num_images['x-hidden'] && el.numImagesSelect?.value)
       ? parseInt(el.numImagesSelect.value, 10)
-      : (props.num_images?.default ?? 1);
-    const fmtVal = ('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect?.value)
+      : (props.num_images?.default ?? 1));
+    const fmtVal = overrides.output_format ?? (('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect?.value)
       ? el.outputFormatSelect.value
-      : (props.output_format?.default || 'png');
+      : (props.output_format?.default || 'png'));
+
     const genAudioVal = readAudioParamValue(props, 'generate_audio');
     const soundVal = readAudioParamValue(props, 'sound');
     const saveAudioVal = readAudioParamValue(props, 'save_audio');
     const keepAudioVal = readAudioParamValue(props, 'keep_audio');
     const keepOrigSoundVal = readAudioParamValue(props, 'keep_original_sound');
-    const imgCount = getPlannedInputImageCount();
+
+    const singleImgKey = getSingleImageSchemaKey(props);
+    const hasSingleAttached = Boolean(state.sourceImage || el.imageUrlInput?.value.trim());
+    const hasSingleSlotValue = Boolean(singleImgKey && (hasSingleAttached || reqList.includes(singleImgKey) || model?.isImageToVideo));
+    const imgCount = getPlannedInputImageCount(model);
     const dummyImgs = buildDummyImageArray(imgCount);
     const refImgs = ('reference_images' in props) ? dummyImgs : [];
-    const maskVal = ('mask_image' in props && (state.hasDrawnMask || model.schema?.required?.includes('mask_image'))) ? 'mask.png' : '';
+    const maskVal = ('mask_image' in props && (state.hasDrawnMask || reqList.includes('mask_image'))) ? 'mask.png' : '';
     const refVidMeta = getPlannedRefVideoMeta();
     const refVidKey = getRefVideosSchemaKey(props, model);
     const refAudCount = Array.isArray(state.refAudios) ? state.refAudios.length : 0;
     const dummyAuds = Array.from({ length: refAudCount }, (_, i) => `aud${i + 1}`);
+    const hasSourceVidAttached = Boolean(state.sourceVideo || el.videoUrlInput?.value.trim());
 
-    const params = {
-      resolution: resVal,
-      target_resolution: resVal,
-      duration: durVal,
-      video_duration: state.sourceVideoDuration ?? (durVal || 5),
-      size: sizeVal,
-      quality: qualVal,
-      num_images: numImagesVal,
-      max_images: props.max_images?.default,
-      enable_web_search: Boolean(props.enable_web_search?.default ?? false),
-      enable_image_search: Boolean(props.enable_image_search?.default ?? false),
-      output_format: fmtVal,
-      generate_audio: genAudioVal,
-      sound: soundVal,
-      save_audio: saveAudioVal,
-      keep_audio: keepAudioVal,
-      keep_original_sound: keepOrigSoundVal,
-      images: dummyImgs.length > 0 ? dummyImgs : ['img1'],
-      reference_images: refImgs,
-      videos: refVidKey === 'videos' ? refVidMeta.dummyVids : [],
-      ref_videos: refVidKey === 'ref_videos' ? refVidMeta.dummyVids : [],
-      reference_videos: (!refVidKey || refVidKey === 'reference_videos') ? refVidMeta.dummyVids : [],
-      reference_files: refVidKey === 'reference_files' ? [...dummyImgs, ...refVidMeta.dummyVids] : [],
-      reference_video_durations: refVidMeta.durations,
-      reference_audios: dummyAuds,
-      audios: dummyAuds,
-      mask_image: maskVal
+    return {
+      resKey,
+      resProp,
+      imgCount,
+      refVidMeta,
+      refAudCount,
+      hasSourceVidAttached,
+      params: {
+        resolution: resVal,
+        target_resolution: resVal,
+        duration: durVal,
+        video_duration: overrides.video_duration ?? (state.sourceVideoDuration ?? (durVal || 5)),
+        size: sizeVal,
+        quality: qualVal,
+        num_images: numImagesVal,
+        max_images: props.max_images?.default,
+        enable_web_search: Boolean(props.enable_web_search?.default ?? false),
+        enable_image_search: Boolean(props.enable_image_search?.default ?? false),
+        output_format: fmtVal,
+        generate_audio: genAudioVal,
+        sound: soundVal,
+        save_audio: saveAudioVal,
+        keep_audio: keepAudioVal,
+        keep_original_sound: keepOrigSoundVal,
+        image: hasSingleSlotValue ? 'img1' : '',
+        images: dummyImgs,
+        reference_images: refImgs,
+        video: ('video' in props) ? (hasSourceVidAttached || reqList.includes('video') ? 'vid1' : '') : '',
+        videos: refVidKey === 'videos' ? refVidMeta.dummyVids : [],
+        ref_videos: refVidKey === 'ref_videos' ? refVidMeta.dummyVids : [],
+        reference_videos: (!refVidKey || refVidKey === 'reference_videos') ? refVidMeta.dummyVids : [],
+        reference_files: refVidKey === 'reference_files' ? [...dummyImgs, ...refVidMeta.dummyVids] : [],
+        reference_video_durations: refVidMeta.durations,
+        reference_audios: dummyAuds,
+        audios: dummyAuds,
+        mask_image: maskVal,
+        ...overrides
+      }
     };
+  }
+
+  // Price and Discount Calculation Helper for current active form state
+  function getModelPricing(model) {
+    if (!model) {
+      return {
+        basePrice: 0, finalPrice: 0, batchCount: 1, batchTotalPrice: 0,
+        hasDiscount: false, percentOff: 0, breakdownText: ''
+      };
+    }
+    const props = model.schema?.properties || {};
+    const built = buildPricingParams(model);
+    const { params, resProp, imgCount, refVidMeta, refAudCount } = built;
 
     const calc = calculateModelCost(model, params);
     const preUpscaleExtra = (el.preUpscaleCheckbox?.checked && el.preUpscaleLabel?.style.display !== 'none')
@@ -1084,46 +1182,65 @@
       : 0;
     const totalBasePrice = parseFloat((calc.basePrice + preUpscaleExtra).toFixed(4));
     const totalFinalPrice = parseFloat((calc.finalPrice + preUpscaleExtra).toFixed(4));
+    const batchCount = getPlannedBatchCount(model);
+    const batchTotalPrice = parseFloat((totalFinalPrice * batchCount).toFixed(4));
+
+    // Explicit counted assets summary for R2V / Video-Edit / Multi-Image confidence
+    const countedAssets = [];
+    if (('reference_images' in props || 'images' in props || 'reference_files' in props) && imgCount > 0) {
+      countedAssets.push(`${imgCount} img`);
+    }
+    if (refVidMeta.dummyVids.length > 0) {
+      countedAssets.push(`${refVidMeta.dummyVids.length} ref vid (${refVidMeta.totalSec}s)`);
+    }
+    if (refAudCount > 0) {
+      countedAssets.push(`${refAudCount} audio`);
+    }
+    const assetsNote = countedAssets.length > 0 ? ` • Inputs: ${countedAssets.join(' + ')}` : '';
+    const batchNote = batchCount > 1 ? ` • Batch: ×${batchCount} = $${batchTotalPrice}` : '';
 
     // Build transparent formula breakdown text
     let breakdownText = '';
-    const imgCountNote = numImagesVal > 1 ? ` × ${numImagesVal} images` : '';
+    const imgCountNote = params.num_images > 1 ? ` × ${params.num_images} images` : '';
     const preUpNote = preUpscaleExtra > 0 ? ` + Pre-Upscale ($${preUpscaleExtra.toFixed(4)})` : '';
-    if (calc.isPerSecond && durVal > 0) {
-      const perSecBase = parseFloat((calc.basePrice / durVal).toFixed(4));
-      const perSecFinal = parseFloat((calc.finalPrice / durVal).toFixed(4));
-      const resLabel = resProp ? ` @ ${resVal}` : '';
+    if (calc.isPerSecond && params.duration > 0) {
+      const perSecBase = parseFloat((calc.basePrice / params.duration).toFixed(4));
+      const perSecFinal = parseFloat((calc.finalPrice / params.duration).toFixed(4));
+      const resLabel = resProp ? ` @ ${params.resolution}` : '';
       if (calc.hasDiscount) {
-        breakdownText = `Formula: $${perSecBase}/s${resLabel} × ${durVal}s = $${calc.basePrice} → $${calc.finalPrice} (${calc.percentOff}% OFF • $${perSecFinal}/s)${preUpNote}`;
+        breakdownText = `Formula: $${perSecBase}/s${resLabel} × ${params.duration}s = $${calc.basePrice} → $${calc.finalPrice} (${calc.percentOff}% OFF • $${perSecFinal}/s)${assetsNote}${preUpNote}${batchNote}`;
       } else {
-        breakdownText = `Formula: $${perSecFinal}/s${resLabel} × ${durVal}s = $${calc.finalPrice} total${preUpNote}`;
+        breakdownText = `Formula: $${perSecFinal}/s${resLabel} × ${params.duration}s = $${calc.finalPrice} total${assetsNote}${preUpNote}${batchNote}`;
       }
     } else if ('duration' in props && (model.isReferenceToVideo || model.isImageToVideo || model.isTextToVideoOrEdit)) {
-      breakdownText = `Clip tier (${durVal}s): $${calc.finalPrice} total${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+      breakdownText = `Clip tier (${params.duration}s): $${calc.finalPrice} total${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${assetsNote}${preUpNote}${batchNote}`;
     } else if ('video' in props && (model.isTextToVideoOrEdit || (model.price_inputs || []).includes('video'))) {
       const srcSec = state.sourceVideoDuration ?? 5;
-      const resLabel = resProp ? ` @ ${resVal}` : '';
-      breakdownText = `Video clip (~${srcSec}s source${resLabel}): $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+      const srcSuffix = state.sourceVideoDuration ? 's probed' : 's est.';
+      const resLabel = resProp ? ` @ ${params.resolution}` : '';
+      breakdownText = `Video clip (${srcSec}${srcSuffix}${resLabel}): $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${assetsNote}${preUpNote}${batchNote}`;
     } else if ((model.price_inputs || []).includes('images') || (model.price_inputs || []).includes('reference_images')) {
-      const resLabel = resProp ? ` (${resVal})` : '';
+      const resLabel = resProp ? ` (${params.resolution})` : '';
       const maskNote = params.mask_image ? ' + mask' : '';
-      breakdownText = `Formula: Output${resLabel} + ${Math.max(1, imgCount)} input image${imgCount > 1 ? 's' : ''}${maskNote}${imgCountNote} = $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+      breakdownText = `Formula: Output${resLabel} + ${Math.max(1, imgCount)} input image${imgCount > 1 ? 's' : ''}${maskNote}${imgCountNote} = $${calc.finalPrice}${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}${batchNote}`;
     } else if (resProp) {
-      breakdownText = `Selected tier: ${resVal}${imgCountNote} → $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${preUpNote}`;
+      breakdownText = `Selected tier: ${params.resolution}${imgCountNote} → $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF from $${calc.basePrice})` : ''}${assetsNote}${preUpNote}${batchNote}`;
     } else {
-      breakdownText = `Flat rate${imgCountNote}: $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF)` : ''}${preUpNote}`;
+      breakdownText = `Flat rate${imgCountNote}: $${calc.finalPrice} per run${calc.hasDiscount ? ` (${calc.percentOff}% OFF)` : ''}${assetsNote}${preUpNote}${batchNote}`;
     }
 
     return {
       ...calc,
       basePrice: totalBasePrice,
       finalPrice: totalFinalPrice,
+      batchCount,
+      batchTotalPrice,
       preUpscaleExtra,
-      resVal,
-      durVal,
-      numImagesVal,
-      qualVal,
-      fmtVal,
+      resVal: params.resolution,
+      durVal: params.duration,
+      numImagesVal: params.num_images,
+      qualVal: params.quality,
+      fmtVal: params.output_format,
       breakdownText
     };
   }
@@ -1132,62 +1249,7 @@
   function refreshParameterOptionPrices(model) {
     if (!model) return;
     const props = model.schema?.properties || {};
-    const resKey = getResolutionSchemaKey(props) || 'resolution';
-    const resProp = props[resKey];
-    const curRes = (resProp && el.resolutionSelect?.value) ? el.resolutionSelect.value : (resProp?.default || '720p');
-    const hiddenDurDef = !('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
-      ? 0
-      : (props.duration?.default ?? 5);
-    const curDur = ('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
-      ? Number(el.durationSelect.value)
-      : hiddenDurDef;
-    const curSize = ('size' in props && !props.size['x-hidden'] && el.sizeSelect?.value) ? el.sizeSelect.value : (props.size?.default || '1024*1024');
-    const rawQual = ('quality' in props && !props.quality['x-hidden'] && el.qualitySelect?.value) ? el.qualitySelect.value : (props.quality?.default ?? 'medium');
-    const curQual = props.quality?.type === 'integer'
-      ? parseInt(rawQual, 10)
-      : (props.quality?.type === 'number' ? parseFloat(rawQual) : rawQual);
-    const curNumImgs = ('num_images' in props && !props.num_images['x-hidden'] && el.numImagesSelect?.value) ? parseInt(el.numImagesSelect.value, 10) : (props.num_images?.default ?? 1);
-    const curFmt = ('output_format' in props && !props.output_format['x-hidden'] && el.outputFormatSelect?.value) ? el.outputFormatSelect.value : (props.output_format?.default || 'png');
-    const curGenAudio = readAudioParamValue(props, 'generate_audio');
-    const curSound = readAudioParamValue(props, 'sound');
-    const curSaveAudio = readAudioParamValue(props, 'save_audio');
-    const curKeepAudio = readAudioParamValue(props, 'keep_audio');
-    const curKeepOrigSound = readAudioParamValue(props, 'keep_original_sound');
-    const curDummyImgs = buildDummyImageArray(getPlannedInputImageCount());
-    const curRefImgs = ('reference_images' in props) ? curDummyImgs : [];
-    const curMask = ('mask_image' in props && (state.hasDrawnMask || model.schema?.required?.includes('mask_image'))) ? 'mask.png' : '';
-    const refVidMeta = getPlannedRefVideoMeta();
-    const refVidKey = getRefVideosSchemaKey(props, model);
-    const dummyAuds = Array.from({ length: (state.refAudios || []).length }, (_, i) => `aud${i + 1}`);
-
-    const baseParams = {
-      resolution: curRes,
-      target_resolution: curRes,
-      duration: curDur,
-      video_duration: state.sourceVideoDuration ?? (curDur || 5),
-      size: curSize,
-      quality: curQual,
-      num_images: curNumImgs,
-      max_images: props.max_images?.default,
-      enable_web_search: Boolean(props.enable_web_search?.default ?? false),
-      enable_image_search: Boolean(props.enable_image_search?.default ?? false),
-      output_format: curFmt,
-      generate_audio: curGenAudio,
-      sound: curSound,
-      save_audio: curSaveAudio,
-      keep_audio: curKeepAudio,
-      keep_original_sound: curKeepOrigSound,
-      images: curDummyImgs.length > 0 ? curDummyImgs : ['img1'],
-      reference_images: curRefImgs,
-      videos: refVidKey === 'videos' ? refVidMeta.dummyVids : [],
-      ref_videos: refVidKey === 'ref_videos' ? refVidMeta.dummyVids : [],
-      reference_videos: (!refVidKey || refVidKey === 'reference_videos') ? refVidMeta.dummyVids : [],
-      reference_files: refVidKey === 'reference_files' ? [...curDummyImgs, ...refVidMeta.dummyVids] : [],
-      reference_video_durations: refVidMeta.durations,
-      reference_audios: dummyAuds,
-      audios: dummyAuds,
-      mask_image: curMask
-    };
+    const { resProp, params: baseParams } = buildPricingParams(model);
 
     if (resProp && el.resolutionSelect) {
       Array.from(el.resolutionSelect.options).forEach(opt => {
@@ -1486,6 +1548,8 @@
     el.infoModelTitle.innerHTML = `${escapeHtml(cleanTitle)} ${model.isPinned ? '<span class="badge-pinned">⭐ Top Pick</span>' : ''}`;
     
     const pricing = getModelPricing(model);
+    const totalPlannedCost = pricing.batchCount > 1 ? pricing.batchTotalPrice : pricing.finalPrice;
+    const batchSuffix = pricing.batchCount > 1 ? ` ×${pricing.batchCount}` : '';
     if (pricing.hasDiscount) {
       el.infoModelPrice.innerHTML = `
         <div class="price-pill-wrapper">
@@ -1494,29 +1558,45 @@
           <span class="badge-discount">${pricing.percentOff}% OFF</span>
         </div>
       `;
-      el.btnPriceBadge.textContent = `• $${pricing.finalPrice} (${pricing.percentOff}% OFF)`;
+      el.btnPriceBadge.textContent = pricing.batchCount > 1
+        ? `• $${totalPlannedCost} (${pricing.batchCount}× $${pricing.finalPrice})`
+        : `• $${pricing.finalPrice} (${pricing.percentOff}% OFF)`;
     } else {
-      el.infoModelPrice.innerHTML = `<span class="price-pill">$${pricing.finalPrice} / run</span>`;
-      el.btnPriceBadge.textContent = `• $${pricing.finalPrice}`;
+      el.infoModelPrice.innerHTML = `<span class="price-pill">$${pricing.finalPrice} / run${batchSuffix}</span>`;
+      el.btnPriceBadge.textContent = pricing.batchCount > 1
+        ? `• $${totalPlannedCost} (${pricing.batchCount}× $${pricing.finalPrice})`
+        : `• $${pricing.finalPrice}`;
+    }
+
+    if (el.batchMatrixHint) {
+      if (pricing.batchCount > 1) {
+        const bCount = ('prompt' in (model.schema?.properties || {})) ? expandPromptBraces(el.promptInput?.value || '', 12).length : 1;
+        const sCount = Math.max(1, Math.min(4, parseInt(el.batchSeedsSelect?.value || '1', 10) || 1));
+        el.batchMatrixHint.style.display = 'block';
+        el.batchMatrixHint.textContent = `Batch matrix: ${bCount} prompt variant${bCount > 1 ? 's' : ''} × ${sCount} seed${sCount > 1 ? 's' : ''} = ${pricing.batchCount} concurrent runs ($${totalPlannedCost} total)`;
+      } else {
+        el.batchMatrixHint.style.display = 'none';
+      }
     }
 
     const pendingSpend = getPendingJobsSpend();
+    const afterAllPendingAndNext = Math.max(0, state.balance - pendingSpend - totalPlannedCost);
     const balanceProjectionText = (state.balance > 0)
-      ? ` • After run: $${Math.max(0, state.balance - pricing.finalPrice).toFixed(4)} (-$${Number(pricing.finalPrice).toFixed(4)})`
+      ? ` • After run${pendingSpend > 0 ? ' (+active)' : ''}: $${afterAllPendingAndNext.toFixed(4)} (-$${Number(totalPlannedCost).toFixed(4)})`
       : '';
     if (el.infoPriceBreakdown) {
       if (pricing.breakdownText || balanceProjectionText) {
         el.infoPriceBreakdown.style.display = 'block';
-        el.infoPriceBreakdown.textContent = `${pricing.breakdownText || `Run Cost: $${pricing.finalPrice}`}${balanceProjectionText}`;
+        el.infoPriceBreakdown.textContent = `${pricing.breakdownText || `Run Cost: $${totalPlannedCost}`}${balanceProjectionText}`;
       } else {
         el.infoPriceBreakdown.style.display = 'none';
       }
     }
 
-    // Live Balance & Affordability Banner (with exact post-run reduction & pending concurrent spend)
+    // Live Balance & Affordability Banner (with exact post-run reduction, batch multiplier & pending concurrent spend)
     if (el.affordabilityBanner && state.balance > 0) {
       el.affordabilityBanner.style.display = 'block';
-      const costNum = Number(pricing.finalPrice) || 0;
+      const costNum = Number(totalPlannedCost) || 0;
       const pctOfBal = state.balance > 0 ? ((costNum / state.balance) * 100).toFixed(1) : '0.0';
       const afterSingle = state.balance - costNum;
       const afterAll = afterSingle - pendingSpend;
@@ -1530,11 +1610,12 @@
         el.affordabilityBanner.innerHTML = `⚠️ <strong>Exceeds Balance:</strong> Reduces balance by <strong>-$${costNum.toFixed(4)}</strong> (${pctOfBal}%). Total with active runs short by <strong>$${diff}</strong> (current: $${state.balance.toFixed(4)}).`;
         el.generateBtn.classList.add('insufficient-warning');
       } else {
-        const rem = Math.max(0, afterSingle).toFixed(4);
-        const maxRuns = costNum > 0 ? Math.floor(state.balance / costNum) : 0;
-        const runsNote = maxRuns > 0 ? ` • <strong>~${maxRuns} runs</strong> possible` : '';
+        const rem = Math.max(0, afterAll).toFixed(4);
+        const unitCost = Number(pricing.finalPrice) || 0;
+        const maxRuns = unitCost > 0 ? Math.floor(Math.max(0, state.balance - pendingSpend) / unitCost) : 0;
+        const runsNote = maxRuns > 0 ? ` • <strong>~${maxRuns} runs</strong> left` : '';
         el.affordabilityBanner.className = 'affordability-banner affordable';
-        el.affordabilityBanner.innerHTML = `✓ <strong>Cost Impact: -$${costNum.toFixed(4)}</strong> (-${pctOfBal}%) • Balance: <strong>$${state.balance.toFixed(4)} → $${rem}</strong>${pendingNote}${runsNote}`;
+        el.affordabilityBanner.innerHTML = `✓ <strong>Cost Impact: -$${costNum.toFixed(4)}</strong>${batchSuffix} (-${pctOfBal}%) • Remaining: <strong>$${state.balance.toFixed(4)} → $${rem}</strong>${pendingNote}${runsNote}`;
         el.generateBtn.classList.remove('insufficient-warning');
       }
     } else if (el.affordabilityBanner) {
@@ -2166,18 +2247,21 @@
 
   // Accidental Spend Guard Confirmation Modal
   function confirmSpendGuard(model, pricing) {
+    const batchCount = Number(pricing.batchCount) || 1;
+    const totalCost = batchCount > 1 ? Number(pricing.batchTotalPrice || pricing.finalPrice) : Number(pricing.finalPrice);
+    const pendingSpend = getPendingJobsSpend();
     return new Promise((resolve) => {
       if (!el.spendConfirmModal) {
-        const ok = window.confirm(`Confirm generation on ${model.name || model.model_id} for $${pricing.finalPrice}?`);
+        const ok = window.confirm(`Confirm generation on ${model.name || model.model_id} for $${totalCost}?`);
         resolve(ok);
         return;
       }
 
       const props = model.schema?.properties || {};
-      const exceedsBal = state.balance > 0 && pricing.finalPrice > state.balance;
+      const exceedsBal = state.balance > 0 && (totalCost + pendingSpend) > state.balance;
       el.spendConfirmHeadline.textContent = exceedsBal
-        ? `Warning: Estimated cost ($${pricing.finalPrice}) exceeds your current WaveSpeed balance ($${state.balance.toFixed(4)}).`
-        : `This generation exceeds your Spend Guard threshold of $${state.spendGuardThreshold.toFixed(2)}.`;
+        ? `Warning: Total estimated cost ($${totalCost.toFixed(4)}${pendingSpend > 0 ? ` + $${pendingSpend.toFixed(4)} active` : ''}) exceeds your current WaveSpeed balance ($${state.balance.toFixed(4)}).`
+        : `This ${batchCount > 1 ? `batch (${batchCount}× runs)` : 'generation'} exceeds your Spend Guard threshold of $${state.spendGuardThreshold.toFixed(2)}.`;
 
       const paramParts = [];
       if ('resolution' in props && !props.resolution['x-hidden']) paramParts.push(pricing.resVal);
@@ -2185,32 +2269,33 @@
       if ('duration' in props && !props.duration['x-hidden']) paramParts.push(`${pricing.durVal}s`);
       if ('quality' in props && !props.quality['x-hidden']) paramParts.push(`quality: ${pricing.qualVal}`);
       if ('num_images' in props && !props.num_images['x-hidden']) paramParts.push(`${pricing.numImagesVal} img`);
+      if (batchCount > 1) paramParts.push(`${batchCount}× batch`);
       if (getAudioSchemaKey(props)) {
         paramParts.push(el.audioCheckbox?.checked ? 'audio: ON' : 'audio: OFF');
       }
 
-      const remaining = state.balance > 0 ? Math.max(0, state.balance - pricing.finalPrice).toFixed(4) : 'N/A';
+      const remaining = state.balance > 0 ? Math.max(0, state.balance - pendingSpend - totalCost).toFixed(4) : 'N/A';
       el.spendConfirmDetails.innerHTML = `
         <span class="spend-summary-label">Model</span>
         <span class="spend-summary-value">${escapeHtml(model.name || model.model_id)}</span>
         <span class="spend-summary-label">Configuration</span>
         <span class="spend-summary-value">${escapeHtml(paramParts.join(' • ') || 'Default')}</span>
         <span class="spend-summary-label">Estimated Cost</span>
-        <span class="spend-summary-value highlight">$${pricing.finalPrice.toFixed(4)}</span>
+        <span class="spend-summary-value highlight">$${totalCost.toFixed(4)}${batchCount > 1 ? ` (${batchCount}× $${pricing.finalPrice.toFixed(4)})` : ''}</span>
         <span class="spend-summary-label">Current Balance</span>
-        <span class="spend-summary-value">$${state.balance.toFixed(4)}</span>
+        <span class="spend-summary-value">$${state.balance.toFixed(4)}${pendingSpend > 0 ? ` (-$${pendingSpend.toFixed(4)} in-flight)` : ''}</span>
         <span class="spend-summary-label">Balance After Run</span>
         <span class="spend-summary-value">${remaining === 'N/A' ? 'N/A' : `$${remaining}`}</span>
       `;
 
       if (exceedsBal) {
         el.spendConfirmWarning.style.display = 'block';
-        el.spendConfirmWarning.textContent = `This run is $${(pricing.finalPrice - state.balance).toFixed(4)} above your balance and will likely be rejected. Lower resolution or duration to save credits.`;
+        el.spendConfirmWarning.textContent = `Short by $${((totalCost + pendingSpend) - state.balance).toFixed(4)} vs current balance. Lower resolution, duration, or batch count to save credits.`;
       } else {
         el.spendConfirmWarning.style.display = 'none';
       }
 
-      el.confirmSpendBtn.textContent = `Confirm & Run ($${pricing.finalPrice})`;
+      el.confirmSpendBtn.textContent = batchCount > 1 ? `Confirm & Run ×${batchCount} ($${totalCost.toFixed(4)})` : `Confirm & Run ($${totalCost.toFixed(4)})`;
       el.spendConfirmModal.style.display = 'flex';
 
       const cleanup = (result) => {
@@ -2257,14 +2342,15 @@
       return;
     }
     const p = pricing || (model ? getModelPricing(model) : null);
-    const runCost = p ? (Number(p.finalPrice) || 0) : 0;
+    const runCost = p ? (Number(p.batchCount > 1 ? p.batchTotalPrice : p.finalPrice) || 0) : 0;
+    const bTag = (p && p.batchCount > 1) ? ` (×${p.batchCount})` : '';
     if (pendingSpend > 0 && runCost > 0) {
-      el.sidebarBalanceProjection.textContent = `This run: -$${runCost.toFixed(4)} • Active: -$${pendingSpend.toFixed(4)} → Left: $${Math.max(0, bal - pendingSpend - runCost).toFixed(4)}`;
+      el.sidebarBalanceProjection.textContent = `This run${bTag}: -$${runCost.toFixed(4)} • Active: -$${pendingSpend.toFixed(4)} → Left: $${Math.max(0, bal - pendingSpend - runCost).toFixed(4)}`;
     } else if (pendingSpend > 0) {
       el.sidebarBalanceProjection.textContent = `Active runs: -$${pendingSpend.toFixed(4)} → After active: $${Math.max(0, bal - pendingSpend).toFixed(4)}`;
     } else if (runCost > 0) {
       const pct = ((runCost / bal) * 100).toFixed(1);
-      el.sidebarBalanceProjection.textContent = `Next run: -$${runCost.toFixed(4)} (-${pct}%) → $${Math.max(0, bal - runCost).toFixed(4)}`;
+      el.sidebarBalanceProjection.textContent = `Next run${bTag}: -$${runCost.toFixed(4)} (-${pct}%) → $${Math.max(0, bal - runCost).toFixed(4)}`;
     } else {
       el.sidebarBalanceProjection.textContent = 'Select a model to preview balance after run';
     }
@@ -2419,72 +2505,94 @@
       (imageUrlSnapshot || imageFileSnapshot)
     );
 
-    // 2. Accidental Spend Guard check
+    // 2. Accidental Spend Guard check (covers full batch matrix + active concurrent spend)
     const pricing = getModelPricing(model);
     const estimatedPrice = Number(pricing.finalPrice) || 0;
+    const totalBatchPrice = pricing.batchCount > 1 ? Number(pricing.batchTotalPrice || estimatedPrice) : estimatedPrice;
     const pendingSpend = getPendingJobsSpend();
-    const overThreshold = state.spendGuardEnabled && estimatedPrice > state.spendGuardThreshold;
-    const overBalance = state.balance > 0 && (estimatedPrice + pendingSpend) > state.balance;
+    const overThreshold = state.spendGuardEnabled && totalBatchPrice > state.spendGuardThreshold;
+    const overBalance = state.balance > 0 && (totalBatchPrice + pendingSpend) > state.balance;
     if (overThreshold || overBalance) {
       const approved = await confirmSpendGuard(model, pricing);
       if (!approved) return;
     }
 
-    // 3. Dispatch job concurrently WITHOUT disabling Run button
-    state.jobCounter += 1;
-    const job = {
-      jobId: `job-${state.jobCounter}`,
-      taskId: null,
-      model,
-      modelId: model.model_id,
-      modelName: model.name || model.model_id,
-      category: model.category || state.currentCategory,
-      prompt: promptVal || el.promptInput.value || '',
-      inputImageUrl: imageUrlSnapshot || sourceImageObjSnapshot?.url || null,
-      parameters: { ...payload },
-      estimatedPrice,
-      balanceBefore: state.balance,
-      status: 'running',
-      stageText: 'Preparing assets...',
-      errorTip: '',
-      startTime: Date.now(),
-      elapsedSec: 0,
-      pollTimer: null,
-      cancelled: false
-    };
+    // Expand {a | b} prompt variants × batch seed count (capped safely at 12 runs)
+    const promptVariants = ('prompt' in props && !props.prompt['x-hidden'])
+      ? expandPromptBraces(promptVal, 12)
+      : [promptVal];
+    const seedRepeats = Math.max(1, Math.min(4, parseInt(el.batchSeedsSelect?.value || '1', 10) || 1));
+    const runSpecs = [];
+    for (const pv of promptVariants) {
+      for (let r = 0; r < seedRepeats; r++) {
+        if (runSpecs.length >= 12) break;
+        const jobPayload = { ...payload };
+        if (pv) jobPayload.prompt = pv;
+        if ('seed' in props && !isNaN(seed) && seed !== -1) {
+          jobPayload.seed = seed + runSpecs.length;
+        }
+        runSpecs.push({ promptText: pv || el.promptInput.value || '', jobPayload });
+      }
+      if (runSpecs.length >= 12) break;
+    }
 
-    state.activeJobs.set(job.jobId, job);
-    ensureActiveJobsTicker();
-    renderActiveJobs();
-    if (state.selectedModel) updateModelInfo(state.selectedModel);
+    // 3. Dispatch job(s) concurrently WITHOUT disabling Run button
+    runSpecs.forEach((spec) => {
+      state.jobCounter += 1;
+      const job = {
+        jobId: `job-${state.jobCounter}`,
+        taskId: null,
+        model,
+        modelId: model.model_id,
+        modelName: model.name || model.model_id,
+        category: model.category || state.currentCategory,
+        prompt: spec.promptText,
+        inputImageUrl: imageUrlSnapshot || sourceImageObjSnapshot?.url || null,
+        parameters: { ...spec.jobPayload },
+        estimatedPrice,
+        balanceBefore: state.balance,
+        status: 'running',
+        stageText: 'Preparing assets...',
+        errorTip: '',
+        startTime: Date.now(),
+        elapsedSec: 0,
+        pollTimer: null,
+        cancelled: false
+      };
 
-    // Fire asynchronously without awaiting so user can launch additional jobs right away
-    executeConcurrentJob(job, {
-      model,
-      props,
-      reqList,
-      payload,
-      hasSingleImageSlot,
-      hasImageInput,
-      imageUrlSnapshot,
-      imageFileSnapshot,
-      sourceImageObjSnapshot,
-      extraImagesSnapshot,
-      hasLastImageInput,
-      lastImageUrlSnapshot,
-      lastImageFileSnapshot,
-      lastImageObjSnapshot,
-      hasVideoInput,
-      videoUrlSnapshot,
-      videoFileSnapshot,
-      sourceVideoObjSnapshot,
-      refVidKey,
-      refVideosSnapshot,
-      manualRefVids,
-      refAudKey,
-      refAudiosSnapshot,
-      needsMaskUpload,
-      preUpscaleEnabled
+      state.activeJobs.set(job.jobId, job);
+      ensureActiveJobsTicker();
+      renderActiveJobs();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+
+      // Fire asynchronously without awaiting so user can launch additional jobs right away
+      executeConcurrentJob(job, {
+        model,
+        props,
+        reqList,
+        payload: spec.jobPayload,
+        hasSingleImageSlot,
+        hasImageInput,
+        imageUrlSnapshot,
+        imageFileSnapshot,
+        sourceImageObjSnapshot,
+        extraImagesSnapshot,
+        hasLastImageInput,
+        lastImageUrlSnapshot,
+        lastImageFileSnapshot,
+        lastImageObjSnapshot,
+        hasVideoInput,
+        videoUrlSnapshot,
+        videoFileSnapshot,
+        sourceVideoObjSnapshot,
+        refVidKey,
+        refVideosSnapshot,
+        manualRefVids,
+        refAudKey,
+        refAudiosSnapshot,
+        needsMaskUpload,
+        preUpscaleEnabled
+      });
     });
   }
 
@@ -2975,8 +3083,7 @@
     const firstRemoteUrl = (primaryUrl && /^https?:\/\//i.test(primaryUrl) && !primaryUrl.includes('localhost')) ? primaryUrl : null;
     const firstDisplayUrl = firstLocalUrl || primaryUrl;
     const firstIsVideo = Boolean(firstDisplayUrl.match(/\.(mp4|webm|mov)(\?|$)/i) || model.isImageToVideo || model.isTextToVideoOrEdit || model.isVideoGen || model.isVideoEdit);
-
-    loadOutputIntoViewer({
+    const activeItemObj = {
       task_id: completedTaskId || primarySaved?.task_id || null,
       url: firstDisplayUrl,
       local_url: firstLocalUrl,
@@ -2989,7 +3096,29 @@
       parameters: job?.parameters || primarySaved?.parameters || null,
       price: priceUsed,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    loadOutputIntoViewer(activeItemObj);
+    fetchHistoryStatsForInsights();
+
+    // Multi-Step Quick Chain Post-Action (stages next workflow step without auto-spending credits)
+    const chainAction = el.postChainSelect?.value || 'none';
+    if (chainAction === 'load-timeline' && firstIsVideo) {
+      openVideoInTimeline(firstDisplayUrl, 'Completed Output Clip');
+    } else if (chainAction === 'animate-spicy' && !firstIsVideo) {
+      const i2vBtn = document.querySelector('.mode-btn[data-category="image-to-video"]');
+      if (i2vBtn) i2vBtn.click();
+      selectModel('wavespeed-ai/minimax-h3/image-to-video-spicy', true).catch(() => {});
+      state.sourceImage = { url: firstDisplayUrl, downloadUrl: firstRemoteUrl || firstDisplayUrl };
+      if (el.imagePreview) el.imagePreview.src = firstDisplayUrl;
+      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+      const dp = document.getElementById('dropzonePrompt');
+      if (dp) dp.style.display = 'none';
+      if (el.imageUrlInput) el.imageUrlInput.value = firstRemoteUrl || firstDisplayUrl;
+      showToast('Auto-Chained still → MiniMax H3 Spicy (review & click Run)', 'good', 3500);
+    } else if (chainAction === 'upscale-video' && firstIsVideo) {
+      routeVideoToUpscaler({ url: firstRemoteUrl || firstDisplayUrl, local_url: firstLocalUrl, remote_url: firstRemoteUrl });
+    }
   }
 
   // Legacy Execution Helpers kept safe for compatibility
@@ -3457,9 +3586,18 @@
   function renderHistoryDbModal(json) {
     if (!el.historyDbList) return;
     const stats = json?.stats || {};
+    if (Array.isArray(json?.models)) {
+      const mStats = new Map();
+      json.models.forEach(m => mStats.set(m.model_id, m));
+      state.historyModelStats = mStats;
+      evaluatePreFlightSafety();
+    }
     if (el.historyDbStatsBar) {
+      const keepStr = (stats.cost_per_favorite !== null && stats.cost_per_favorite !== undefined)
+        ? ` • 💎 Cost/Keep (⭐${stats.favorited_runs || 0}): $${Number(stats.cost_per_favorite).toFixed(4)}`
+        : '';
       el.historyDbStatsBar.textContent =
-        `Runs: ${stats.total_runs || 0} (✓ ${stats.completed_runs || 0} completed • ✕ ${stats.failed_runs || 0} failed/logged) • Videos: ${stats.total_videos || 0} • Images: ${stats.total_images || 0} • Est. Completed Spend: $${Number(stats.completed_spend || 0).toFixed(4)} • DB: studio_history.sqlite`;
+        `Runs: ${stats.total_runs || 0} (✓ ${stats.completed_runs || 0} completed • ✕ ${stats.failed_runs || 0} failed/logged) • Videos: ${stats.total_videos || 0} • Images: ${stats.total_images || 0} • Est. Completed Spend: $${Number(stats.completed_spend || 0).toFixed(4)}${keepStr} • DB: studio_history.sqlite`;
     }
 
     if (el.historyModelFilterSelect && Array.isArray(json?.models)) {
@@ -3495,7 +3633,7 @@
         const media = document.createElement(item.is_video ? 'video' : 'img');
         if (item.is_video) {
           media.muted = true;
-          media.preload = 'metadata';
+          media.preload = 'none';
         }
         media.src = outputSrc;
         media.onerror = () => {
@@ -4354,7 +4492,7 @@
       if (item.isVideo) {
         mediaEl.muted = true;
         mediaEl.loop = true;
-        mediaEl.preload = 'metadata';
+        mediaEl.preload = 'none';
         card.addEventListener('mouseenter', () => {
           const p = mediaEl.play();
           if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -4817,25 +4955,29 @@
     });
 
     // Load Image via URL
-    el.loadUrlBtn.addEventListener('click', () => {
-      const url = el.imageUrlInput.value.trim();
-      if (url) {
-        state.sourceImage = { url, downloadUrl: url };
-        state.sourceImageDimensions = null;
-        el.imagePreview.onload = () => {
-          if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
-            state.sourceImageDimensions = {
-              width: el.imagePreview.naturalWidth,
-              height: el.imagePreview.naturalHeight
-            };
-            updateInputQualityAdvisory();
-          }
-        };
-        el.imagePreview.src = url;
-        el.imagePreviewContainer.style.display = 'flex';
-        document.getElementById('dropzonePrompt').style.display = 'none';
-      }
-    });
+      el.loadUrlBtn.addEventListener('click', () => {
+        const url = el.imageUrlInput.value.trim();
+        if (url) {
+          state.sourceImage = { url, downloadUrl: url };
+          state.sourceImageDimensions = null;
+          el.imagePreview.onload = () => {
+            if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
+              state.sourceImageDimensions = {
+                width: el.imagePreview.naturalWidth,
+                height: el.imagePreview.naturalHeight
+              };
+              updateInputQualityAdvisory();
+            }
+          };
+          el.imagePreview.src = url;
+          el.imagePreviewContainer.style.display = 'flex';
+          document.getElementById('dropzonePrompt').style.display = 'none';
+          if (state.selectedModel) updateModelInfo(state.selectedModel);
+        }
+      });
+      el.imageUrlInput.addEventListener('change', () => {
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
 
     // Optional End Frame (Last Image) Dropzone & URL
     if (el.lastImageDropzone && el.lastImageFileInput) {
@@ -4921,6 +5063,7 @@
       state.sourceVideoDimensions = null;
       el.videoDropzone.querySelector('p').textContent = `Loaded: ${file.name}`;
       if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+      if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'inline-flex';
       probeVideoFileMeta(file, (meta) => {
         if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
         if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
@@ -4953,6 +5096,7 @@
         const vUrl = el.videoUrlInput.value.trim();
         if (vUrl) {
           if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+          if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'inline-flex';
           probeVideoUrlMeta(vUrl, (meta) => {
             if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
             if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
@@ -4960,12 +5104,29 @@
             if (state.selectedModel) updateModelInfo(state.selectedModel);
           });
         } else {
+          state.sourceVideo = null;
           state.sourceVideoDuration = null;
           state.sourceVideoDimensions = null;
           if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'none';
+          if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'none';
           updateInputQualityAdvisory();
           if (state.selectedModel) updateModelInfo(state.selectedModel);
         }
+      });
+    }
+    if (el.clearSourceVideoBtn) {
+      el.clearSourceVideoBtn.addEventListener('click', () => {
+        state.sourceVideo = null;
+        state.sourceVideoDuration = null;
+        state.sourceVideoDimensions = null;
+        if (el.videoUrlInput) el.videoUrlInput.value = '';
+        if (el.videoFileInput) el.videoFileInput.value = '';
+        const dpP = el.videoDropzone?.querySelector('p');
+        if (dpP) dpP.textContent = 'Click or drag video file here';
+        if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'none';
+        el.clearSourceVideoBtn.style.display = 'none';
+        updateInputQualityAdvisory();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
     }
     if (el.openSourceVideoTimelineBtn) {
@@ -5060,15 +5221,58 @@
       });
     }
     if (el.timelineVideoPlayer && el.timelineScrubber) {
+      let pendingSeekSec = null;
+      let seekRafId = null;
+      let seekBusy = false;
+
+      const pumpTimelineSeek = (exact = false) => {
+        const v = el.timelineVideoPlayer;
+        if (!v || pendingSeekSec === null) return;
+        const target = pendingSeekSec;
+        if (seekBusy && !exact) return;
+        seekBusy = true;
+        pendingSeekSec = null;
+        if (!exact && typeof v.fastSeek === 'function') {
+          try { v.fastSeek(target); } catch (e) { v.currentTime = target; }
+        } else {
+          v.currentTime = target;
+        }
+      };
+
       el.timelineScrubber.addEventListener('input', () => {
-        const dur = el.timelineVideoPlayer.duration;
+        const v = el.timelineVideoPlayer;
+        const dur = v.duration;
         if (Number.isFinite(dur) && dur > 0) {
-          el.timelineVideoPlayer.pause();
-          el.timelineVideoPlayer.currentTime = (Number(el.timelineScrubber.value) / 1000) * dur;
+          v.pause();
+          const targetSec = (Number(el.timelineScrubber.value) / 1000) * dur;
+          if (el.timelineTimecode) {
+            el.timelineTimecode.textContent = `${formatTimecode(targetSec)} / ${formatTimecode(dur)}`;
+          }
+          pendingSeekSec = targetSec;
+          if (!seekRafId) {
+            seekRafId = window.requestAnimationFrame(() => {
+              seekRafId = null;
+              pumpTimelineSeek(false);
+            });
+          }
+        }
+      });
+      el.timelineScrubber.addEventListener('change', () => {
+        const v = el.timelineVideoPlayer;
+        const dur = v.duration;
+        if (Number.isFinite(dur) && dur > 0) {
+          pendingSeekSec = (Number(el.timelineScrubber.value) / 1000) * dur;
+          pumpTimelineSeek(true);
+        }
+      });
+      el.timelineVideoPlayer.addEventListener('seeked', () => {
+        seekBusy = false;
+        syncTimelineTimecodeUI();
+        if (pendingSeekSec !== null) {
+          pumpTimelineSeek(false);
         }
       });
       el.timelineVideoPlayer.addEventListener('timeupdate', syncTimelineTimecodeUI);
-      el.timelineVideoPlayer.addEventListener('seeked', syncTimelineTimecodeUI);
     }
     const stepTimeline = (deltaSec, absPos = null) => {
       const v = el.timelineVideoPlayer;
@@ -5088,6 +5292,35 @@
     if (el.extractFrameSourceBtn) el.extractFrameSourceBtn.addEventListener('click', () => extractTimelineFrame('source'));
     if (el.extractFrameLastBtn) el.extractFrameLastBtn.addEventListener('click', () => extractTimelineFrame('last'));
     if (el.extractFrameRefBtn) el.extractFrameRefBtn.addEventListener('click', () => extractTimelineFrame('ref'));
+    if (el.tlSetTrimStartBtn) {
+      el.tlSetTrimStartBtn.addEventListener('click', () => {
+        const t = Number(el.timelineVideoPlayer?.currentTime || 0);
+        state.trimStartSec = Math.max(0, t);
+        if (state.trimEndSec <= state.trimStartSec + 0.1) {
+          const maxD = Number(el.timelineVideoPlayer?.duration || 15);
+          state.trimEndSec = Math.min(maxD, state.trimStartSec + 5);
+        }
+        syncTrimLabelsUI();
+      });
+    }
+    if (el.tlSetTrimEndBtn) {
+      el.tlSetTrimEndBtn.addEventListener('click', () => {
+        const t = Number(el.timelineVideoPlayer?.currentTime || 0);
+        state.trimEndSec = Math.max(state.trimStartSec + 0.2, t);
+        syncTrimLabelsUI();
+      });
+    }
+    if (el.tlRunTrimBtn) {
+      el.tlRunTrimBtn.addEventListener('click', () => runTimelineLocalTrim());
+    }
+    if (el.batchSeedsSelect) {
+      el.batchSeedsSelect.addEventListener('change', () => {
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+    }
+    if (el.bulkStitchSelectedBtn) {
+      el.bulkStitchSelectedBtn.addEventListener('click', () => executeBulkStitch());
+    }
 
     if (el.preUpscaleCheckbox) {
       el.preUpscaleCheckbox.addEventListener('change', () => {
@@ -5496,7 +5729,12 @@
 
     // Pre-Flight Censorship Shield live listeners
     if (el.promptInput) {
-      el.promptInput.addEventListener('input', () => evaluatePreFlightSafety());
+      el.promptInput.addEventListener('input', () => {
+        evaluatePreFlightSafety();
+        if (state.selectedModel && el.promptInput.value.includes('{')) {
+          updateModelInfo(state.selectedModel);
+        }
+      });
     }
     if (el.negativePromptInput) {
       el.negativePromptInput.addEventListener('input', () => evaluatePreFlightSafety());
@@ -5789,22 +6027,42 @@
     if (!el.safetyShieldBanner || !el.safetyShieldText || !el.safetySwitchBtn) return;
     const model = state.selectedModel;
     const text = `${el.promptInput?.value || ''} ${el.negativePromptInput?.value || ''}`;
-    if (!model || !NSFW_PROMPT_REGEX.test(text) || !isLikelyStrictSfwModel(model.model_id)) {
-      el.safetyShieldBanner.style.display = 'none';
-      state.recommendedUncensoredModelId = null;
+    const hasSfwRisk = Boolean(model && NSFW_PROMPT_REGEX.test(text) && isLikelyStrictSfwModel(model.model_id));
+    if (hasSfwRisk) {
+      const fallbackId = pickUncensoredFallbackId(model);
+      state.recommendedUncensoredModelId = fallbackId;
+      el.safetyShieldText.textContent = `⚠️ Safety Pre-Flight: ${model.model_id} enforces upstream SFW moderation and will likely block explicit prompts.`;
+      if (fallbackId && fallbackId !== model.model_id) {
+        el.safetySwitchBtn.style.display = 'inline-flex';
+        el.safetySwitchBtn.textContent = `Switch to ${fallbackId.split('/').slice(-2).join('/')}`;
+      } else {
+        el.safetySwitchBtn.style.display = 'none';
+      }
+      el.safetyShieldBanner.style.display = 'flex';
       return;
     }
 
-    const fallbackId = pickUncensoredFallbackId(model);
-    state.recommendedUncensoredModelId = fallbackId;
-    el.safetyShieldText.textContent = `⚠️ Safety Pre-Flight: ${model.model_id} enforces upstream SFW moderation and will likely block explicit prompts.`;
-    if (fallbackId && fallbackId !== model.model_id) {
-      el.safetySwitchBtn.style.display = 'inline-flex';
-      el.safetySwitchBtn.textContent = `Switch to ${fallbackId.split('/').slice(-2).join('/')}`;
-    } else {
-      el.safetySwitchBtn.style.display = 'none';
+    // Historical high-failure advisory from local SQLite history stats
+    const histStat = (model && state.historyModelStats instanceof Map) ? state.historyModelStats.get(model.model_id) : null;
+    if (histStat && Number(histStat.failed_count) >= 2 && Number(histStat.run_count) >= 3) {
+      const failPct = Math.round((Number(histStat.failed_count) / Number(histStat.run_count)) * 100);
+      if (failPct >= 50) {
+        const fallbackId = pickUncensoredFallbackId(model);
+        state.recommendedUncensoredModelId = fallbackId;
+        el.safetyShieldText.textContent = `📉 History Alert: ${model.model_id} failed ${histStat.failed_count}/${histStat.run_count} past runs (${failPct}% failure rate). Consider switching.`;
+        if (fallbackId && fallbackId !== model.model_id) {
+          el.safetySwitchBtn.style.display = 'inline-flex';
+          el.safetySwitchBtn.textContent = `Switch to ${fallbackId.split('/').slice(-2).join('/')}`;
+        } else {
+          el.safetySwitchBtn.style.display = 'none';
+        }
+        el.safetyShieldBanner.style.display = 'flex';
+        return;
+      }
     }
-    el.safetyShieldBanner.style.display = 'flex';
+
+    el.safetyShieldBanner.style.display = 'none';
+    state.recommendedUncensoredModelId = null;
   }
 
   function syncGalleryActiveHighlight() {
@@ -5832,6 +6090,16 @@
     const n = state.bulkSelectedKeys.length;
     el.bulkSelectedCount.textContent = String(n);
     el.bulkDeleteSelectedBtn.style.display = (state.bulkSelectMode && n > 0) ? 'inline-flex' : 'none';
+    if (el.bulkStitchSelectedBtn && el.bulkVideoCount) {
+      const selectedVids = state.history.filter(h =>
+        state.bulkSelectedKeys.includes(getItemCompareKey(h)) &&
+        h.isVideo &&
+        h.local_url &&
+        h.local_url.startsWith('/outputs/')
+      );
+      el.bulkVideoCount.textContent = String(selectedVids.length);
+      el.bulkStitchSelectedBtn.style.display = (state.bulkSelectMode && selectedVids.length >= 2) ? 'inline-flex' : 'none';
+    }
   }
 
   async function executeBulkDelete() {
@@ -6068,6 +6336,7 @@
       rmBtn.addEventListener('click', () => {
         state.refAudios = state.refAudios.filter(x => x.id !== ra.id);
         renderRefAudiosList();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
       actions.appendChild(rmBtn);
       card.appendChild(info);
@@ -6088,6 +6357,7 @@
       });
     });
     renderRefAudiosList();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
   function addRefAudioUrl(url) {
@@ -6102,6 +6372,7 @@
       name
     });
     renderRefAudiosList();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
   function syncTimelineTimecodeUI() {
@@ -6115,14 +6386,20 @@
     }
   }
 
+  function syncTrimLabelsUI() {
+    if (el.trimStartLabel) el.trimStartLabel.textContent = `${Number(state.trimStartSec || 0).toFixed(1)}s`;
+    if (el.trimEndLabel) el.trimEndLabel.textContent = `${Number(state.trimEndSec || 15).toFixed(1)}s`;
+  }
+
   async function generateTimelineFilmstrip(videoSrc, duration, width, height) {
     if (!el.timelineFilmstrip || !Number.isFinite(duration) || duration <= 0) return;
+    const scanToken = (state.timelineScanToken = (state.timelineScanToken || 0) + 1);
     el.timelineFilmstrip.innerHTML = '';
     const count = 8;
     const probe = document.createElement('video');
     probe.muted = true;
     probe.playsInline = true;
-    probe.preload = 'auto';
+    probe.preload = 'metadata';
     if (!videoSrc.startsWith('blob:') && !videoSrc.startsWith('/outputs/')) {
       probe.crossOrigin = 'anonymous';
     }
@@ -6139,16 +6416,18 @@
         probe.src = videoSrc;
       });
       for (let i = 0; i < count; i++) {
+        if (state.timelineScanToken !== scanToken) return;
         const targetSec = Math.min(Math.max(0, duration - 0.04), (duration * (i + 0.5)) / count);
         await new Promise((resolve) => {
           const onS = () => { probe.removeEventListener('seeked', onS); resolve(); };
           probe.addEventListener('seeked', onS);
           probe.currentTime = targetSec;
         });
+        if (state.timelineScanToken !== scanToken) return;
         ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
         const img = document.createElement('img');
         img.className = 'timeline-filmstrip-thumb';
-        img.src = canvas.toDataURL('image/jpeg', 0.65);
+        img.src = canvas.toDataURL('image/jpeg', 0.6);
         img.title = `Jump to ${formatTimecode(targetSec)}`;
         img.addEventListener('click', () => {
           if (el.timelineVideoPlayer) {
@@ -6157,9 +6436,18 @@
           }
         });
         el.timelineFilmstrip.appendChild(img);
+        await new Promise(r => setTimeout(r, 0));
       }
     } catch (e) {
-      el.timelineFilmstrip.innerHTML = '<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 0.7rem; padding: 6px; text-align: center;">Timeline filmstrip unavailable for CORS video (scrubber &amp; frame capture still work)</div>';
+      if (state.timelineScanToken === scanToken) {
+        el.timelineFilmstrip.innerHTML = '<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 0.7rem; padding: 6px; text-align: center;">Timeline filmstrip unavailable for CORS video (scrubber &amp; frame capture still work)</div>';
+      }
+    } finally {
+      try {
+        probe.pause();
+        probe.removeAttribute('src');
+        probe.load();
+      } catch (cleanupErr) {}
     }
   }
 
@@ -6175,6 +6463,7 @@
       try { URL.revokeObjectURL(state.timelineVideo.src); } catch (e) {}
     }
 
+    state.timelineSource = source;
     const isFile = (typeof File !== 'undefined' && source instanceof File) || (typeof Blob !== 'undefined' && source instanceof Blob);
     const srcUrl = isFile ? URL.createObjectURL(source) : String(source);
     state.timelineIsObjectUrl = isFile;
@@ -6184,6 +6473,9 @@
       const h = el.timelineVideoPlayer.videoHeight || 0;
       const dur = Number.isFinite(el.timelineVideoPlayer.duration) ? el.timelineVideoPlayer.duration : 0;
       state.timelineVideo = { src: srcUrl, name: label, width: w, height: h, duration: dur };
+      state.trimStartSec = 0;
+      state.trimEndSec = dur > 0 ? Math.min(dur, 15) : 15;
+      syncTrimLabelsUI();
       if (el.timelineMetaReadout) {
         el.timelineMetaReadout.textContent = `${w && h ? `${w}×${h} • ` : ''}${dur ? `${dur.toFixed(1)}s` : ''}`;
       }
@@ -6194,6 +6486,153 @@
     el.timelineVideoPlayer.src = srcUrl;
     el.timelineVideoPlayer.load();
     el.videoTimelineGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function runTimelineLocalTrim() {
+    const src = state.timelineSource;
+    if (!src) {
+      showToast('Load a video in Timeline before trimming.', 'warn');
+      return;
+    }
+    const start = Math.max(0, Number(state.trimStartSec) || 0);
+    const end = Math.max(start + 0.2, Number(state.trimEndSec) || 15);
+    const btn = el.tlRunTrimBtn;
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '✂️ Trimming...'; }
+    try {
+      const isFile = (typeof File !== 'undefined' && src instanceof File) || (typeof Blob !== 'undefined' && src instanceof Blob);
+      const q = `start=${encodeURIComponent(start.toFixed(3))}&end=${encodeURIComponent(end.toFixed(3))}`;
+      let res;
+      if (isFile) {
+        res = await fetch(`/api/video/trim?${q}`, {
+          method: 'POST',
+          headers: { 'Content-Type': src.type || 'video/mp4', 'x-file-name': encodeURIComponent(src.name || 'clip.mp4') },
+          body: src
+        });
+      } else if (String(src).startsWith('/outputs/')) {
+        res = await fetch(`/api/video/trim?${q}&local_url=${encodeURIComponent(String(src))}`, { method: 'POST' });
+      } else {
+        throw new Error('Only PC files or locally saved /outputs/ clips can be trimmed offline.');
+      }
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'FFmpeg trim failed');
+      const rec = json.data;
+      addToHistory({
+        task_id: rec.task_id,
+        url: rec.local_url,
+        local_url: rec.local_url,
+        remote_url: null,
+        local_path: rec.local_path,
+        isVideo: true,
+        model_id: rec.model_id,
+        prompt: rec.prompt,
+        price: 0,
+        timestamp: rec.saved_at
+      });
+      loadOutputIntoViewer({
+        task_id: rec.task_id,
+        url: rec.local_url,
+        local_url: rec.local_url,
+        local_path: rec.local_path,
+        isVideo: true,
+        model_id: rec.model_id,
+        prompt: rec.prompt,
+        price: 0
+      });
+      if (state.selectedModel && 'video' in (state.selectedModel.schema?.properties || {})) {
+        if (el.videoUrlInput) el.videoUrlInput.value = rec.local_url;
+        state.sourceVideo = { url: rec.local_url, downloadUrl: null };
+        state.sourceVideoDuration = Math.ceil(end - start);
+        if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+        if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'inline-flex';
+        updateModelInfo(state.selectedModel);
+      }
+      showToast(`Trimmed ${start.toFixed(1)}s–${end.toFixed(1)}s ($0.00) & loaded cleanly`, 'good', 3500);
+    } catch (err) {
+      showToast(`Trim error: ${err.message}`, 'error', 4500);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+    }
+  }
+
+  async function executeBulkStitch() {
+    const selectedVids = state.history.filter(h =>
+      state.bulkSelectedKeys.includes(getItemCompareKey(h)) &&
+      h.isVideo &&
+      h.local_url &&
+      h.local_url.startsWith('/outputs/')
+    );
+    if (selectedVids.length < 2) {
+      showToast('Select 2 or more locally saved videos to stitch.', 'warn');
+      return;
+    }
+    const urls = selectedVids.map(v => v.local_url);
+    const btn = el.bulkStitchSelectedBtn;
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch('/api/video/concat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls })
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'FFmpeg stitch failed');
+      const rec = json.data;
+      addToHistory({
+        task_id: rec.task_id,
+        url: rec.local_url,
+        local_url: rec.local_url,
+        local_path: rec.local_path,
+        isVideo: true,
+        model_id: rec.model_id,
+        prompt: rec.prompt,
+        price: 0,
+        timestamp: rec.saved_at
+      });
+      loadOutputIntoViewer({
+        task_id: rec.task_id,
+        url: rec.local_url,
+        local_url: rec.local_url,
+        local_path: rec.local_path,
+        isVideo: true,
+        model_id: rec.model_id,
+        prompt: rec.prompt,
+        price: 0
+      });
+      showToast(`Stitched ${selectedVids.length} clips locally ($0.00 FFmpeg)`, 'good', 3500);
+    } catch (err) {
+      showToast(`Stitch error: ${err.message}`, 'error', 4500);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function fetchHistoryStatsForInsights() {
+    try {
+      const res = await fetch('/api/history?limit=1');
+      if (!res.ok) return;
+      const json = await res.json();
+      if (Array.isArray(json?.models)) {
+        const mStats = new Map();
+        json.models.forEach(m => mStats.set(m.model_id, m));
+        state.historyModelStats = mStats;
+        evaluatePreFlightSafety();
+      }
+    } catch (e) {}
+  }
+
+  async function checkForAppUpdate() {
+    if (!el.updateNotifierBtn || !el.updateNotifierLabel) return;
+    try {
+      const res = await fetch('/api/check-update');
+      if (!res.ok) return;
+      const info = await res.json();
+      if (info && info.hasUpdate && info.latestVersion) {
+        el.updateNotifierBtn.href = info.releaseUrl || 'https://github.com/Cameldroid/wavespeed-studio/releases';
+        el.updateNotifierLabel.textContent = `Update v${info.latestVersion}`;
+        el.updateNotifierBtn.style.display = 'inline-flex';
+      }
+    } catch (e) {}
   }
 
   async function extractTimelineFrame(targetSlot = 'source') {

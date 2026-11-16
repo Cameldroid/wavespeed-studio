@@ -3,6 +3,7 @@ Coding Project Note: true
 Note Creation Date: "2026-11-16T03:08:00-03:00"
 Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
+  - "2026-11-16T04:08:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -23,3 +24,13 @@ Note Modified Date:
 
 ## Exact Next Action
 - Open a **fresh chat** using the kickoff template in [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) pointed at [features/01-timeline-performance-fix/SPEC.md](features/01-timeline-performance-fix/SPEC.md) to fix the slow Video Timeline / Frame Picker and sluggish startup model fetch without carrying this chat's history.
+
+
+# 2026-11-16T04:08:00-03:00 — v1.0.7 Shipped: Pricing Audit, Fast Timeline, FFmpeg Trim/Stitch & Pipeline Tools
+
+- **Authoritative Release:** `v1.0.7` (pushed on `main` + annotated tag `v1.0.7`), serving live on `http://localhost:3000` (`Launch Studio.cmd`) and `Launch Desktop.cmd`.
+- **Key Capabilities Live in `v1.0.7`:**
+  - Accurate R2V/V2V pricing across `get_duration(min,max,total)`, attached `images` / `reference_images` / `videos` / `reference_videos` / `audios` / `reference_audios`, and remaining balance subtracting both active concurrent runs & batch totals.
+  - Fast Timeline scrubber (`rAF` + `fastSeek`), clean `metadata` filmstrip disposal, gallery lazy video (`preload="none"`), and Stale-While-Revalidate disk cache (`cache/models-cache.json`).
+  - Zero-cost FFmpeg **Timeline Trimmer** (`✂️ Cut & Use Clip`) & **Bulk Clip Stitcher** (`☑️ Select` → `🎞️ Stitch`), `{opt1 | opt2}` × multi-seed **Batch Matrix Runner**, **Auto-Chain Next** pipeline staging, **History Failure Alert + Cost/Keep** stats, and GitHub **Update Notifier**.
+- **Exact Next Action:** For your next feature slice, copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/02-<your-feature>/SPEC.md` and launch a fresh chat using the kickoff prompt in [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md).

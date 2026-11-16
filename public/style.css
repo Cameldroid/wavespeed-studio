@@ -870,6 +870,28 @@ textarea:focus {
   border-radius: var(--radius-sm);
 }
 
+.update-pill-btn {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  color: #6ee7b7 !important;
+  text-decoration: none;
+}
+
+.timeline-trim-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.25);
+}
+
+.trim-range-label {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  margin-right: auto;
+}
+
 .drop-icon {
   font-size: 1.8rem;
   display: block;

@@ -273,7 +273,58 @@ async function runFormulaTests() {
   };
   assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '480p', duration: 0, video_duration: 5 }).finalPrice, 0.5);
   assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '480p', duration: 0, video_duration: 15 }).finalPrice, 1.5);
+  assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '480p', duration: 0, video_duration: 25 }).finalPrice, 1.5); // capped at 15s
   assert.strictEqual(calculateModelCost(wanVidEditModel, { resolution: '720p', duration: 0, video_duration: 5 }).finalPrice, 1);
+
+  // n) R2V & character/object swap asset counting (images + reference_images + reference_videos durations + reference_audios + discounts)
+  const h3R2v = formulasJson['wavespeed-ai/minimax-h3/reference-to-video'];
+  const h3R2vModel = {
+    model_id: 'wavespeed-ai/minimax-h3/reference-to-video',
+    base_price: h3R2v.base_price_micro / 1e6,
+    base_price_micro: h3R2v.base_price_micro,
+    discount_rate: 50,
+    discount_percent: 0.5,
+    formula: h3R2v.formula,
+    has_formula: true
+  };
+  // base=0.30/clip -> (0.10)*(5+8)*0.5 = 0.65 base + 0.04 (2 ref imgs) + 0.02 (1 audio) = 0.71 -> 50% OFF = 0.355
+  const r2vCost = calculateModelCost(h3R2vModel, {
+    duration: 5,
+    resolution: '480p',
+    reference_images: ['img1', 'img2'],
+    reference_videos: ['vid1'],
+    reference_video_durations: [8],
+    reference_audios: ['aud1']
+  });
+  assert.strictEqual(r2vCost.basePrice, 0.71);
+  assert.strictEqual(r2vCost.finalPrice, 0.355);
+
+  const charSwap = formulasJson['wavespeed-ai/openjutsu/character-swap'];
+  const charSwapModel = {
+    model_id: 'wavespeed-ai/openjutsu/character-swap',
+    base_price: charSwap.base_price_micro / 1e6,
+    base_price_micro: charSwap.base_price_micro,
+    discount_rate: 50,
+    discount_percent: 0.5,
+    formula: charSwap.formula,
+    has_formula: true
+  };
+  // 5s 480p base: 0.10 * 5 * 2 * 0.75 = 0.75; 0 imgs -> 0.75*0.5 = 0.375; 2 imgs -> (0.75+0.04)*0.5 = 0.395
+  assert.strictEqual(calculateModelCost(charSwapModel, { resolution: '480p', video_duration: 5, images: [] }).finalPrice, 0.375);
+  assert.strictEqual(calculateModelCost(charSwapModel, { resolution: '480p', video_duration: 5, images: ['img1', 'img2'] }).finalPrice, 0.395);
+
+  const objSwap = formulasJson['wavespeed-ai/openjutsu/object-swap'];
+  const objSwapModel = {
+    model_id: 'wavespeed-ai/openjutsu/object-swap',
+    base_price: objSwap.base_price_micro / 1e6,
+    base_price_micro: objSwap.base_price_micro,
+    discount_rate: 50,
+    discount_percent: 0.5,
+    formula: objSwap.formula,
+    has_formula: true
+  };
+  assert.strictEqual(calculateModelCost(objSwapModel, { resolution: '480p', video_duration: 5, image: '' }).finalPrice, 0.375);
+  assert.strictEqual(calculateModelCost(objSwapModel, { resolution: '480p', video_duration: 5, image: 'img1' }).finalPrice, 0.385);
 
   console.log('[PASS] Edge-case formula & pricing logic assertions passed');
 }
@@ -463,7 +514,27 @@ async function runMockOutputAndServerTests() {
     assert.strictEqual(delJson.metadata_deleted >= 1, true);
     assert.strictEqual(fs.existsSync(savedVid[0].local_path), false);
 
-    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, and resolvePayloadMedia passed');
+    // 6. Test FFmpeg trim/concat validation guards & /api/config version
+    const badTrim = await realFetch(`http://127.0.0.1:${appPort}/api/video/trim?start=5&end=3`, { method: 'POST' });
+    assert.strictEqual(badTrim.status, 400);
+    const badConcat = await realFetch(`http://127.0.0.1:${appPort}/api/video/concat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: ['/outputs/videos/only-one.mp4'] })
+    });
+    assert.strictEqual(badConcat.status, 400);
+    const travConcat = await realFetch(`http://127.0.0.1:${appPort}/api/video/concat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: ['/outputs/../server.js', '/outputs/videos/a.mp4'] })
+    });
+    assert.strictEqual(travConcat.status, 403);
+    const cfgResp = await realFetch(`http://127.0.0.1:${appPort}/api/config`);
+    assert.strictEqual(cfgResp.status, 200);
+    const cfgJson = await cfgResp.json();
+    assert(cfgJson.version, 'Expected app version in /api/config');
+
+    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, video trim/concat guards, and resolvePayloadMedia passed');
   } finally {
     global.fetch = realFetch;
     srvMod.savedTasksMap.delete(mockTaskImg);
@@ -693,6 +764,18 @@ async function runMockDomAppTests() {
       formula: '', has_formula: false, fetched_at: 0, isSpicy: false,
       category: 'video-gen', isTextToVideoOrEdit: true, isPinned: false, pinnedRank: 9999,
       schema: { required: ['face_image', 'video'], properties: { face_image: {}, video: {} } }
+    },
+    {
+      model_id: 'wavespeed-ai/minimax-h3/reference-to-video',
+      name: 'MiniMax H3 Reference-to-Video (50% OFF)',
+      base_price: formulasJson['wavespeed-ai/minimax-h3/reference-to-video'].base_price_micro / 1e6,
+      base_price_micro: formulasJson['wavespeed-ai/minimax-h3/reference-to-video'].base_price_micro,
+      effective_price: (formulasJson['wavespeed-ai/minimax-h3/reference-to-video'].base_price_micro / 1e6) * 0.5,
+      discount_rate: 50, discount_percent: 0.5,
+      formula: formulasJson['wavespeed-ai/minimax-h3/reference-to-video'].formula,
+      has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'ref-to-video', isReferenceToVideo: true, isPinned: true, pinnedRank: 9,
+      schema: { required: ['prompt'], properties: { prompt: {}, duration: { default: 5, enum: [5, 10] }, resolution: { default: '768p', enum: ['480p', '768p', '1080p'] }, reference_images: { maxItems: 10 }, reference_videos: { maxItems: 5 }, reference_audios: { maxItems: 5 } } }
     }
   ];
 
@@ -746,7 +829,7 @@ async function runMockDomAppTests() {
   const sandbox = {
     console,
     setTimeout, clearTimeout, setInterval, clearInterval,
-    window: { innerWidth: 1440, addEventListener() {}, confirm: () => false },
+    window: { innerWidth: 1440, addEventListener() {}, confirm: () => false, requestAnimationFrame: (fn) => setTimeout(fn, 0) },
     document: doc,
     localStorage: mockLocalStorage,
     alert: (msg) => { throw new Error('Unexpected alert: ' + msg); },
@@ -754,6 +837,9 @@ async function runMockDomAppTests() {
     FileReader: function () {},
     URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() {} },
     fetch: async (url, opts = {}) => {
+      if (url === '/api/config') return { ok: true, json: async () => ({ hasApiKey: true, version: '1.0.7' }) };
+      if (url === '/api/check-update') return { ok: true, json: async () => ({ hasUpdate: false, currentVersion: '1.0.7', latestVersion: '1.0.7' }) };
+      if (url.startsWith('/api/history')) return { ok: true, json: async () => ({ stats: {}, models: [], items: [] }) };
       if (url === '/api/balance') return { ok: true, json: async () => ({ data: { balance: 5.8797 } }) };
       if (url.startsWith('/api/models')) return { ok: true, json: async () => ({ data: mockModels }) };
       if (url === '/api/outputs') return { ok: true, json: async () => ({ outputs_dir: './outputs', data: [] }) };
@@ -826,11 +912,16 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('resolutionSelect').value, '1k');
   assert.strictEqual(String(elementsById.get('numImagesSelect').value), '1');
 
-  // 6. Switch back to 'This Tab Only' filter and open Ref -> Video tab -> verify Wan 3.0 & Kling 4.0 expose Ref Video/Audio self-upload containers + R2V ref chips
+  // 6. Switch back to 'This Tab Only' filter and open Ref -> Video tab -> verify Wan 3.0, Kling 4.0 & MiniMax H3 R2V Ref Video/Audio upload UI & per-asset pricing updates
   const tabChip = chipFilterBtns.find(b => b.dataset.filter === 'tab');
   tabChip.click();
   const r2vTab = modeBtns.find(b => b.dataset.category === 'ref-to-video');
   r2vTab.click();
+  const pickComboboxById = (substr) => {
+    const item = elementsById.get('comboboxList').children.find(c => (c.innerHTML || '').includes(substr));
+    assert(item, `Expected combobox item matching ${substr}`);
+    item.click();
+  };
   assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'alibaba/wan-3.0/reference-to-video');
   assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'none');
   assert.strictEqual(elementsById.get('multiImageGroup').style.display, 'flex');
@@ -838,10 +929,26 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('r2vRefChips').style.display, 'contents');
 
-  elementsById.get('comboboxList').children[1].click();
+  pickComboboxById('Kling 4.0');
   assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'kwaivgi/kling-v4.0/reference-to-video');
   assert.strictEqual(elementsById.get('refVideosGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('refAudiosGroup').style.display, 'flex');
+
+  // Switch to MiniMax H3 R2V and verify adding Ref Image + Ref Audio updates exact price pill & remaining balance
+  pickComboboxById('MiniMax H3 Reference-to-Video');
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/minimax-h3/reference-to-video');
+  const baseR2vPriceText = elementsById.get('infoModelPrice').innerHTML;
+  elementsById.get('multiImageUrlInput').value = 'https://example.com/r2v-face1.png';
+  elementsById.get('addMultiImageUrlBtn').click();
+  elementsById.get('refAudioUrlInput').value = 'https://example.com/r2v-voice.mp3';
+  elementsById.get('addRefAudioUrlBtn').click();
+  const updatedR2vPriceText = elementsById.get('infoModelPrice').innerHTML;
+  assert.notStrictEqual(updatedR2vPriceText, baseR2vPriceText, 'Expected R2V image/audio additions to update model price pill');
+  assert(elementsById.get('infoPriceBreakdown').textContent.includes('1 img + 1 audio'), 'Expected counted assets breakdown on R2V');
+  assert(elementsById.get('sidebarBalanceProjection').textContent.includes('→ $5.'), 'Expected updated remaining balance projection');
+  // Remove added R2V image & audio via UI remove buttons so state stays clean
+  elementsById.get('multiImgGrid').children[0].children[2].click();
+  elementsById.get('refAudiosList').children[0].children[1].children[0].click();
 
   // 7. Switch to Tools tab -> verify video-upscaler routes here and shows target_resolution in resolutionSelect
   const toolsTab = modeBtns.find(b => b.dataset.category === 'utility');
@@ -893,7 +1000,25 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload UI, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image swap slot, Video Upscaler target_resolution, bounded onerror fallback)');
+  // 9. Verify Batch / Prompt-Variable Matrix ({sunset | neon} x 2 seeds = 4 concurrent dispatches) & multiplied Spend Guard / Balance projection
+  const t2iTab = modeBtns.find(b => b.dataset.category === 'image-gen');
+  t2iTab.click();
+  elementsById.get('promptInput').value = 'Portrait at {sunset | neon} beach';
+  const batchSelect = elementsById.get('batchSeedsSelect');
+  batchSelect.value = '2';
+  batchSelect.dispatch('change');
+  assert.strictEqual(elementsById.get('batchMatrixHint').style.display, 'block');
+  assert(elementsById.get('batchMatrixHint').textContent.includes('4 concurrent runs'));
+  assert(elementsById.get('affordabilityBanner').innerHTML.includes('-$0.0800'));
+  const preBatchCount = capturedGeneratePayloads.length;
+  elementsById.get('generateBtn').click();
+  await new Promise(r => setTimeout(r, 50));
+  assert.strictEqual(capturedGeneratePayloads.length - preBatchCount, 4, 'Expected 2 brace variants x 2 seed repeats = 4 dispatched requests');
+  const batchPrompts = capturedGeneratePayloads.slice(preBatchCount).map(x => x.payload.prompt);
+  assert(batchPrompts.includes('Portrait at sunset beach') && batchPrompts.includes('Portrait at neon beach'));
+  elementsById.get('cancelTaskBtn').click();
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image swap slot, batch prompt matrix, Video Upscaler target_resolution, bounded onerror fallback)');
 }
 
 async function runHistoryDatabaseTests() {
@@ -945,7 +1070,11 @@ async function runHistoryDatabaseTests() {
     assert.strictEqual(all.stats.total_runs, 2);
     assert.strictEqual(all.stats.completed_runs, 1);
     assert.strictEqual(all.stats.failed_runs, 1);
+    assert.strictEqual(all.stats.favorited_runs, 1);
     assert.strictEqual(all.stats.completed_spend, 0.2);
+    assert.strictEqual(all.stats.cost_per_favorite, 0.2);
+    const h3Stat = all.models.find(m => m.model_id === 'wavespeed-ai/minimax-h3/image-to-video-spicy');
+    assert(h3Stat && Number(h3Stat.completed_count) === 1 && Number(h3Stat.failed_count) === 0);
 
     const searchSunset = hdb.queryHistory({ q: 'sunset' });
     assert.strictEqual(searchSunset.items.length, 1);

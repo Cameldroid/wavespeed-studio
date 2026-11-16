@@ -3,6 +3,7 @@ Coding Project Note: true
 Note Creation Date: "2026-11-16T03:08:00-03:00"
 Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
+  - "2026-11-16T04:08:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Feature Spec: Video Timeline, Frame Picker & Navigation Responsiveness (`v1.0.7`)
@@ -43,3 +44,12 @@ In `v1.0.6`, opening the **Video Timeline & Frame Picker**, generating thumbnail
 - Add `verify_studio_isolated.js` tests for filmstrip cleanup/abort safety and `models-cache.json` SWR behavior.
 - Run Playwright timing benchmark against `http://localhost:<temp-port>` (route-mocked `/api/generate`) measuring `openVideoInTimeline` -> interactive scrub -> `extractTimelineFrame`.
 - Run `npm test`, `npx electron . --smoke-test`, and secret scan before releasing `v1.0.7`.
+
+
+# 2026-11-16T04:08:00-03:00 — Implemented & Shipped in v1.0.7
+
+- **Status:** `Shipped in v1.0.7` (bundled with R2V/V2V pricing fixes, local FFmpeg trim/stitch, batch prompt matrix, quick chains, historical failure/cost-per-keep analytics, and update notifier).
+- **Verified Acceptance:**
+  - `server.js`: Added `<USER_DATA_DIR>/cache/models-cache.json` stale-while-revalidate disk cache.
+  - `public/app.js`: Added `requestAnimationFrame` + seek-in-flight / `fastSeek()` scrubbing, `state.timelineScanToken` abort control, `preload = 'metadata'` + `finally` decoder teardown in `generateTimelineFilmstrip()`, and `preload="none"` on gallery `<video>` thumbnails.
+  - Playwright Chromium check (`http://127.0.0.1:39112`): 8/8 filmstrip frames rendered in `1,625 ms`, `preload="none"` confirmed on gallery videos, `0` console errors, `0` page errors.
