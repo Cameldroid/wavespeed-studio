@@ -221,6 +221,7 @@
     removeLastImageBtn: document.getElementById('removeLastImageBtn'),
     lastImageUrlInput: document.getElementById('lastImageUrlInput'),
     loadLastUrlBtn: document.getElementById('loadLastUrlBtn'),
+    multiImageDropzone: document.getElementById('multiImageDropzone'),
     multiImgGrid: document.getElementById('multiImgGrid'),
     multiImageUrlInput: document.getElementById('multiImageUrlInput'),
     addMultiImageUrlBtn: document.getElementById('addMultiImageUrlBtn'),
@@ -250,6 +251,7 @@
     refVideosInput: document.getElementById('refVideosInput'),
     refAudiosGroup: document.getElementById('refAudiosGroup'),
     refAudiosLabel: document.getElementById('refAudiosLabel'),
+    refAudioDropzone: document.getElementById('refAudioDropzone'),
     refAudioFileInput: document.getElementById('refAudioFileInput'),
     refAudioUrlInput: document.getElementById('refAudioUrlInput'),
     addRefAudioUrlBtn: document.getElementById('addRefAudioUrlBtn'),
@@ -893,14 +895,29 @@
       // Fallback when model formula is not yet fetched
       let base = model.base_price || 0;
       const numMult = ('num_images' in props) ? Math.max(1, Number(params.num_images ?? props.num_images?.default ?? 1)) : 1;
+      const pInputs = Array.isArray(model.price_inputs) ? model.price_inputs : [];
       if (isPerSecond) {
         const dur = Number(params.duration ?? (props.duration?.default || 5));
         const resMult = (!model.has_formula && 'resolution' in props)
           ? getFallbackResolutionMultiplier(model, params.resolution)
           : 1.0;
-        scaledBase = base * dur * resMult;
+        const refVidSecs = (pInputs.includes('reference_videos') || pInputs.includes('videos'))
+          ? (Array.isArray(params.reference_video_durations) ? params.reference_video_durations.reduce((a, b) => a + (Number(b) || 0), 0) : 0)
+          : 0;
+        scaledBase = base * (dur + refVidSecs) * resMult;
+        if (pInputs.includes('reference_images') && Array.isArray(params.reference_images) && params.reference_images.length > 0) {
+          scaledBase += 0.02 * params.reference_images.length;
+        }
+        if (pInputs.includes('reference_audios') && Array.isArray(params.reference_audios) && params.reference_audios.length > 0) {
+          scaledBase += 0.02 * params.reference_audios.length;
+        }
       } else {
-        scaledBase = base * numMult;
+        const refImgsArr = Array.isArray(params.reference_images) && params.reference_images.length > 0
+          ? params.reference_images
+          : (Array.isArray(params.images) ? params.images : []);
+        const extraRefImgs = Math.max(0, refImgsArr.length - 1);
+        const perExtraImgEst = (pInputs.includes('images') || pInputs.includes('reference_images')) ? 0.008 : 0;
+        scaledBase = (base * numMult) + (extraRefImgs * perExtraImgEst * numMult);
       }
     }
 
@@ -1076,13 +1093,14 @@
   function buildPricingParams(model, overrides = {}) {
     const props = model?.schema?.properties || {};
     const reqList = model?.schema?.required || [];
+    const pInputs = Array.isArray(model?.price_inputs) ? model.price_inputs : [];
     const resKey = getResolutionSchemaKey(props) || 'resolution';
     const resProp = props[resKey];
 
     const resVal = overrides.resolution ?? ((resProp && el.resolutionSelect?.value)
       ? el.resolutionSelect.value
       : (resProp?.default || '720p'));
-    const hiddenDurDefault = !('duration' in props) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
+    const hiddenDurDefault = (!('duration' in props) && !pInputs.includes('duration')) || (props.duration?.['x-hidden'] && props.duration?.default === undefined)
       ? 0
       : (props.duration?.default ?? 5);
     const durVal = overrides.duration ?? (('duration' in props && !props.duration['x-hidden'] && el.durationSelect?.value !== undefined && el.durationSelect?.value !== '')
@@ -1115,7 +1133,7 @@
     const hasSingleSlotValue = Boolean(singleImgKey && (hasSingleAttached || reqList.includes(singleImgKey) || model?.isImageToVideo));
     const imgCount = getPlannedInputImageCount(model);
     const dummyImgs = buildDummyImageArray(imgCount);
-    const refImgs = ('reference_images' in props) ? dummyImgs : [];
+    const refImgs = ('reference_images' in props || pInputs.includes('reference_images')) ? dummyImgs : [];
     const maskVal = ('mask_image' in props && (state.hasDrawnMask || reqList.includes('mask_image'))) ? 'mask.png' : '';
     const refVidMeta = getPlannedRefVideoMeta();
     const refVidKey = getRefVideosSchemaKey(props, model);
@@ -1514,9 +1532,14 @@
           }
           model.discount_rate = json.data.discount_rate ?? 100;
           model.discount_percent = Math.max(0, (100 - model.discount_rate) / 100);
-          model.formula = json.data.formula || '';
-          model.price_inputs = json.data.price_inputs || [];
-          model.has_formula = true;
+          if (typeof json.data.formula === 'string' && json.data.formula.trim()) {
+            model.formula = json.data.formula;
+          }
+          model.variable_price = Boolean(json.data.variable_price || model.variable_price);
+          if (Array.isArray(json.data.price_inputs) && json.data.price_inputs.length > 0) {
+            model.price_inputs = json.data.price_inputs;
+          }
+          model.has_formula = Boolean((model.formula && model.formula.trim()) || !model.variable_price);
           model.fetched_at = json.data.fetched_at || now;
           if (state.selectedModel && state.selectedModel.model_id === model.model_id) {
             updateModelInfo(model);
@@ -2878,9 +2901,15 @@
           const errMsg = data.error || 'Unknown reason';
           const isSensitiveBlock = /sensitive|flagged|safety|nsfw|moderation/i.test(errMsg);
           job.stageText = `Status: ${status} — ${errMsg}`;
-          job.errorTip = isSensitiveBlock
-            ? 'Tip: Upstream endpoints (like alibaba/wan-3.0) moderate explicit content even on -spicy tags. Try WaveSpeed open-weights: minimax-h3/image-to-video-spicy ($0.02/s @ 480p), ltx-2.3-spicy, or wan-2.2-spicy.'
-            : '';
+          if (isSensitiveBlock) {
+            const mObj = job.model || {};
+            const isImgMode = Boolean(mObj.isImageEdit || mObj.isImageGen || mObj.category === 'image-edit' || mObj.category === 'image-gen');
+            job.errorTip = isImgMode
+              ? 'Tip: ByteDance (Seedream 5.5) / Google / OpenAI enforce upstream prompt & image safety classifiers. Your API key is NOT banned — try gentler framing, or switch to wavespeed-ai/qwen-image/edit-plus, wavespeed-ai/minimax-h3-image/edit, or wavespeed-ai/z-image-turbo/image-to-image.'
+              : 'Tip: Upstream endpoints (like Alibaba Wan 3.0 / Seedance / Kling) enforce safety filtering. Your API key is NOT flagged — try WaveSpeed open-weights: minimax-h3/image-to-video-spicy ($0.02/s @ 480p), ltx-2.3-spicy, or wan-2.2-spicy.';
+          } else {
+            job.errorTip = '';
+          }
           renderActiveJobs();
           await fetchBalance();
           if (state.selectedModel) updateModelInfo(state.selectedModel);
@@ -4540,6 +4569,13 @@
       card.appendChild(thumbWrap);
       card.appendChild(cardActions);
       card.appendChild(metaDiv);
+      card.draggable = true;
+      card.addEventListener('dragstart', (e) => {
+        if (!e.dataTransfer || !preferredUrl) return;
+        e.dataTransfer.setData('text/uri-list', preferredUrl);
+        e.dataTransfer.setData('text/plain', preferredUrl);
+        e.dataTransfer.effectAllowed = 'copy';
+      });
       card.addEventListener('click', () => {
         if (state.bulkSelectMode) {
           toggleBulkSelectKey(itemKey);
@@ -4920,21 +4956,101 @@
       }
     }
 
-    // Image Upload & Dropzone
-    el.imageDropzone.addEventListener('click', () => el.imageFileInput.click());
-    el.imageDropzone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      el.imageDropzone.classList.add('dragover');
+    // Global Drag-and-Drop safeguard (prevents Electron/browser from navigating away on dropped files)
+    document.addEventListener('dragover', (e) => {
+      if (e.dataTransfer) e.preventDefault();
     });
-    el.imageDropzone.addEventListener('dragleave', () => {
-      el.imageDropzone.classList.remove('dragover');
-    });
-    el.imageDropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.imageDropzone.classList.remove('dragover');
-      if (e.dataTransfer.files.length > 0) {
-        handleImageFile(e.dataTransfer.files[0]);
+    document.addEventListener('drop', (e) => {
+      if (e.dataTransfer?.files?.length > 0 || e.dataTransfer?.types?.includes('text/uri-list')) {
+        e.preventDefault();
       }
+    });
+
+    const extractDroppedMediaUrl = (dt) => {
+      if (!dt) return '';
+      const uriList = (dt.getData('text/uri-list') || '')
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .find(s => s && !s.startsWith('#'));
+      if (uriList) return uriList;
+      const plain = (dt.getData('text/plain') || '').trim();
+      if (/^(https?:\/\/|\/outputs\/|data:|blob:)/i.test(plain) && !/\s/.test(plain)) return plain;
+      const html = dt.getData('text/html') || '';
+      const m = html.match(/<(?:img|video|audio|source)[^>]+src=["']([^"']+)["']/i);
+      return m ? m[1] : '';
+    };
+
+    const attachMediaDropTarget = (targetEl, { hoverEl = null, onFiles = null, onUrl = null } = {}) => {
+      if (!targetEl) return;
+      const highlightEl = hoverEl || targetEl;
+      targetEl.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        highlightEl.classList.add('dragover');
+      });
+      targetEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        highlightEl.classList.add('dragover');
+      });
+      targetEl.addEventListener('dragleave', (e) => {
+        if (!e.relatedTarget || !targetEl.contains?.(e.relatedTarget)) {
+          highlightEl.classList.remove('dragover');
+        }
+      });
+      targetEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        highlightEl.classList.remove('dragover');
+        const dt = e.dataTransfer;
+        if (dt?.files?.length > 0 && onFiles) {
+          onFiles(dt.files);
+          return;
+        }
+        const droppedUrl = extractDroppedMediaUrl(dt);
+        if (droppedUrl && onUrl) {
+          onUrl(droppedUrl);
+        }
+      });
+    };
+
+    const bindGroupDrop = (groupEl, zoneEl, handlers) => {
+      const target = groupEl || zoneEl;
+      attachMediaDropTarget(target, { hoverEl: zoneEl || groupEl, ...handlers });
+      if (groupEl && zoneEl && (typeof groupEl.contains !== 'function' || !groupEl.contains(zoneEl))) {
+        attachMediaDropTarget(zoneEl, { hoverEl: zoneEl, ...handlers });
+      }
+    };
+
+    const setSourceImageUrl = (url) => {
+      const clean = (url || '').trim();
+      if (!clean) return;
+      if (el.imageUrlInput) el.imageUrlInput.value = clean;
+      state.sourceImage = { url: clean, downloadUrl: clean };
+      state.sourceImageDimensions = null;
+      el.imagePreview.onload = () => {
+        if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
+          state.sourceImageDimensions = {
+            width: el.imagePreview.naturalWidth,
+            height: el.imagePreview.naturalHeight
+          };
+          updateInputQualityAdvisory();
+        }
+      };
+      el.imagePreview.src = clean;
+      el.imagePreviewContainer.style.display = 'flex';
+      const dp = document.getElementById('dropzonePrompt');
+      if (dp) dp.style.display = 'none';
+      updateInputQualityAdvisory();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+    };
+
+    // Image Upload & Dropzone (click + whole input group & dropzone drag-and-drop)
+    el.imageDropzone.addEventListener('click', () => el.imageFileInput.click());
+    bindGroupDrop(el.imageInputGroup, el.imageDropzone, {
+      onFiles: (files) => handleImageFile(files[0]),
+      onUrl: setSourceImageUrl
     });
 
     el.imageFileInput.addEventListener('change', (e) => {
@@ -4955,44 +5071,30 @@
     });
 
     // Load Image via URL
-      el.loadUrlBtn.addEventListener('click', () => {
-        const url = el.imageUrlInput.value.trim();
-        if (url) {
-          state.sourceImage = { url, downloadUrl: url };
-          state.sourceImageDimensions = null;
-          el.imagePreview.onload = () => {
-            if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
-              state.sourceImageDimensions = {
-                width: el.imagePreview.naturalWidth,
-                height: el.imagePreview.naturalHeight
-              };
-              updateInputQualityAdvisory();
-            }
-          };
-          el.imagePreview.src = url;
-          el.imagePreviewContainer.style.display = 'flex';
-          document.getElementById('dropzonePrompt').style.display = 'none';
-          if (state.selectedModel) updateModelInfo(state.selectedModel);
-        }
-      });
-      el.imageUrlInput.addEventListener('change', () => {
-        if (state.selectedModel) updateModelInfo(state.selectedModel);
-      });
+    el.loadUrlBtn.addEventListener('click', () => {
+      setSourceImageUrl(el.imageUrlInput.value.trim());
+    });
+    el.imageUrlInput.addEventListener('change', () => {
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+    });
+
+    const setLastImageUrl = (url) => {
+      const clean = (url || '').trim();
+      if (!clean) return;
+      if (el.lastImageUrlInput) el.lastImageUrlInput.value = clean;
+      state.lastImage = { url: clean, downloadUrl: clean };
+      if (el.lastImagePreview) el.lastImagePreview.src = clean;
+      if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
+      if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+    };
 
     // Optional End Frame (Last Image) Dropzone & URL
     if (el.lastImageDropzone && el.lastImageFileInput) {
       el.lastImageDropzone.addEventListener('click', () => el.lastImageFileInput.click());
-      el.lastImageDropzone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        el.lastImageDropzone.classList.add('dragover');
-      });
-      el.lastImageDropzone.addEventListener('dragleave', () => {
-        el.lastImageDropzone.classList.remove('dragover');
-      });
-      el.lastImageDropzone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        el.lastImageDropzone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) handleLastImageFile(e.dataTransfer.files[0]);
+      bindGroupDrop(el.lastImageGroup, el.lastImageDropzone, {
+        onFiles: (files) => handleLastImageFile(files[0]),
+        onUrl: setLastImageUrl
       });
       el.lastImageFileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) handleLastImageFile(e.target.files[0]);
@@ -5010,17 +5112,14 @@
     }
     if (el.loadLastUrlBtn && el.lastImageUrlInput) {
       el.loadLastUrlBtn.addEventListener('click', () => {
-        const url = el.lastImageUrlInput.value.trim();
-        if (url) {
-          state.lastImage = { url, downloadUrl: url };
-          if (el.lastImagePreview) el.lastImagePreview.src = url;
-          if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
-          if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
-        }
+        setLastImageUrl(el.lastImageUrlInput.value.trim());
       });
     }
 
-    // Multi-Reference Additional Images (Files + URL + Drag-and-Drop)
+    // Multi-Reference Additional Images (Files + URL + Dropzone + Drag-and-Drop)
+    if (el.multiImageDropzone && el.multiFileInput) {
+      el.multiImageDropzone.addEventListener('click', () => el.multiFileInput.click());
+    }
     if (el.addMoreImagesBtn && el.multiFileInput) {
       el.addMoreImagesBtn.addEventListener('click', () => el.multiFileInput.click());
       el.multiFileInput.addEventListener('change', (e) => {
@@ -5030,22 +5129,10 @@
         }
       });
     }
-    if (el.multiImageGroup) {
-      el.multiImageGroup.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        el.multiImageGroup.classList.add('dragover');
-      });
-      el.multiImageGroup.addEventListener('dragleave', () => {
-        el.multiImageGroup.classList.remove('dragover');
-      });
-      el.multiImageGroup.addEventListener('drop', (e) => {
-        e.preventDefault();
-        el.multiImageGroup.classList.remove('dragover');
-        if (e.dataTransfer?.files?.length > 0) {
-          addExtraImageFiles(e.dataTransfer.files);
-        }
-      });
-    }
+    bindGroupDrop(el.multiImageGroup, el.multiImageDropzone, {
+      onFiles: (files) => addExtraImageFiles(files),
+      onUrl: (url) => addExtraImageUrl(url)
+    });
     if (el.addMultiImageUrlBtn && el.multiImageUrlInput) {
       el.addMultiImageUrlBtn.addEventListener('click', () => {
         const u = el.multiImageUrlInput.value.trim();
@@ -5071,20 +5158,28 @@
         if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
     };
+    const setSourceVideoUrl = (vUrl) => {
+      const clean = (vUrl || '').trim();
+      if (!clean) return;
+      state.sourceVideo = null;
+      state.sourceVideoDimensions = null;
+      if (el.videoUrlInput) el.videoUrlInput.value = clean;
+      const dpP = el.videoDropzone?.querySelector('p');
+      if (dpP) dpP.textContent = `Loaded URL: ${clean.split('/').pop() || 'Video'}`;
+      if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+      if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'inline-flex';
+      probeVideoUrlMeta(clean, (meta) => {
+        if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
+        if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
+        updateInputQualityAdvisory();
+        if (state.selectedModel) updateModelInfo(state.selectedModel);
+      });
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+    };
     el.videoDropzone.addEventListener('click', () => el.videoFileInput.click());
-    el.videoDropzone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      el.videoDropzone.classList.add('dragover');
-    });
-    el.videoDropzone.addEventListener('dragleave', () => {
-      el.videoDropzone.classList.remove('dragover');
-    });
-    el.videoDropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.videoDropzone.classList.remove('dragover');
-      if (e.dataTransfer?.files?.length > 0) {
-        handleSourceVideoFile(e.dataTransfer.files[0]);
-      }
+    bindGroupDrop(el.videoInputGroup, el.videoDropzone, {
+      onFiles: (files) => handleSourceVideoFile(files[0]),
+      onUrl: setSourceVideoUrl
     });
     el.videoFileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
@@ -5095,14 +5190,7 @@
       el.videoUrlInput.addEventListener('change', () => {
         const vUrl = el.videoUrlInput.value.trim();
         if (vUrl) {
-          if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
-          if (el.clearSourceVideoBtn) el.clearSourceVideoBtn.style.display = 'inline-flex';
-          probeVideoUrlMeta(vUrl, (meta) => {
-            if (meta.duration) state.sourceVideoDuration = Math.ceil(meta.duration);
-            if (meta.width && meta.height) state.sourceVideoDimensions = { width: meta.width, height: meta.height };
-            updateInputQualityAdvisory();
-            if (state.selectedModel) updateModelInfo(state.selectedModel);
-          });
+          setSourceVideoUrl(vUrl);
         } else {
           state.sourceVideo = null;
           state.sourceVideoDuration = null;
@@ -5139,17 +5227,9 @@
     // Reference Videos Self-Upload, Drag-Drop & URL List (R2V)
     if (el.refVideoDropzone && el.refVideoFileInput) {
       el.refVideoDropzone.addEventListener('click', () => el.refVideoFileInput.click());
-      el.refVideoDropzone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        el.refVideoDropzone.classList.add('dragover');
-      });
-      el.refVideoDropzone.addEventListener('dragleave', () => {
-        el.refVideoDropzone.classList.remove('dragover');
-      });
-      el.refVideoDropzone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        el.refVideoDropzone.classList.remove('dragover');
-        if (e.dataTransfer?.files?.length > 0) addRefVideoFiles(e.dataTransfer.files);
+      bindGroupDrop(el.refVideosGroup, el.refVideoDropzone, {
+        onFiles: (files) => addRefVideoFiles(files),
+        onUrl: (url) => addRefVideoUrl(url)
       });
       el.refVideoFileInput.addEventListener('change', (e) => {
         if (e.target.files?.length > 0) {
@@ -5174,7 +5254,10 @@
       });
     }
 
-    // Reference Audios Self-Upload & URL List (R2V / Video Edit)
+    // Reference Audios Self-Upload, Dropzone & Drag-Drop (R2V / Video Edit)
+    if (el.refAudioDropzone && el.refAudioFileInput) {
+      el.refAudioDropzone.addEventListener('click', () => el.refAudioFileInput.click());
+    }
     if (el.uploadRefAudioBtn && el.refAudioFileInput) {
       el.uploadRefAudioBtn.addEventListener('click', () => el.refAudioFileInput.click());
       el.refAudioFileInput.addEventListener('change', (e) => {
@@ -5184,6 +5267,10 @@
         }
       });
     }
+    bindGroupDrop(el.refAudiosGroup, el.refAudioDropzone, {
+      onFiles: (files) => addRefAudioFiles(files),
+      onUrl: (url) => addRefAudioUrl(url)
+    });
     if (el.addRefAudioUrlBtn && el.refAudioUrlInput) {
       el.addRefAudioUrlBtn.addEventListener('click', () => {
         const u = el.refAudioUrlInput.value.trim();
@@ -5194,7 +5281,12 @@
       });
     }
 
-    // Interactive Video Timeline & Frame Extractor
+    // Interactive Video Timeline & Frame Extractor (with direct drag-and-drop)
+    attachMediaDropTarget(el.videoTimelineGroup, {
+      hoverEl: el.videoTimelineGroup,
+      onFiles: (files) => openVideoInTimeline(files[0], files[0].name),
+      onUrl: (url) => openVideoInTimeline(url, 'Dropped Video')
+    });
     if (el.toggleTimelineExtractorBtn && el.timelineExtractorBody) {
       el.toggleTimelineExtractorBtn.addEventListener('click', () => {
         const isOpen = el.timelineExtractorBody.style.display !== 'none';
@@ -6007,6 +6099,7 @@
     const id = (modelId || '').toLowerCase();
     if (!id) return false;
     if (id.includes('alibaba/wan-3')) return true;
+    if (id.includes('bytedance/seedream-v5') || id.includes('bytedance/seedance')) return true;
     if (id.startsWith('google/') || id.startsWith('openai/') || id.startsWith('kwaivgi/') || id.startsWith('vidu/')) return true;
     if (id.startsWith('minimax/') && !id.includes('spicy')) return true;
     return false;

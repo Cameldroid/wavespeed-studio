@@ -309,11 +309,16 @@
             </div>
           </div>
 
-          <!-- Multi-Image List (for Models like MiniMax H3 / Wan 3.0 / Kling / Seedance R2V) -->
+          <!-- Multi-Image List (for Models like MiniMax H3 / Wan 3.0 / Kling / Seedance R2V / Seedream 5.5) -->
           <div class="input-group" id="multiImageGroup" style="display: none;">
             <div class="input-header">
               <label>Reference Images (Up to 10)</label>
-              <span class="subtext">Upload or paste images — referenced as Image 1, Image 2...</span>
+              <span class="subtext">Drag &amp; drop, browse, or paste URLs — referenced as Image 1, Image 2...</span>
+            </div>
+            <div class="upload-dropzone upload-dropzone-compact" id="multiImageDropzone">
+              <span class="drop-icon">🖼️</span>
+              <p>Drag &amp; drop reference image(s) here, or <span class="browse-link">browse</span></p>
+              <small>Supports PNG, JPG, WEBP — drop multiple files or drag from gallery</small>
             </div>
             <div class="multi-img-grid" id="multiImgGrid"></div>
             <div class="url-input-row">
@@ -349,9 +354,14 @@
           <div class="input-group" id="refAudiosGroup" style="display: none;">
             <div class="input-header">
               <label id="refAudiosLabel">Reference Audio(s)</label>
-              <span class="subtext">Optional voice, music, or SFX reference (Audio 1, Audio 2...)</span>
+              <span class="subtext">Drag &amp; drop audio clip(s) or paste URL (Audio 1, Audio 2...)</span>
             </div>
             <input type="file" id="refAudioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple class="file-hidden">
+            <div class="upload-dropzone upload-dropzone-compact" id="refAudioDropzone">
+              <span class="drop-icon">🎵</span>
+              <p>Drag &amp; drop audio file(s) here, or <span class="browse-link">browse from PC</span></p>
+              <small>Supports MP3, WAV, M4A, AAC, OGG — auto-uploads on Run</small>
+            </div>
             <div class="url-input-row">
               <input type="text" id="refAudioUrlInput" placeholder="Paste audio URL or click Upload Audio...">
               <button type="button" class="btn-sm" id="addRefAudioUrlBtn">Add</button>
@@ -369,7 +379,7 @@
               </button>
             </div>
             <div class="timeline-extractor-body" id="timelineExtractorBody" style="display: none;">
-              <p class="timeline-helper-text">Upload any local clip or load the active video, scrub frame-by-frame on the timeline, and send an exact frame into Image → Video, End Frame, or Ref Images.</p>
+              <p class="timeline-helper-text">Drag &amp; drop a video anywhere onto this Timeline card, upload a clip, or load the active video to scrub frame-by-frame ($0.00 local).</p>
               <input type="file" id="timelineVideoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="file-hidden">
               <div class="timeline-source-bar">
                 <button type="button" class="btn-secondary-sm" id="browseTimelineVideoBtn">📁 Upload Video for Timeline</button>

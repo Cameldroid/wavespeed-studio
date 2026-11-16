@@ -4,6 +4,7 @@ Note Creation Date: "2026-11-16T03:08:00-03:00"
 Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
   - "2026-11-16T04:08:00-03:00"
+  - "2026-11-16T12:39:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -34,3 +35,13 @@ Note Modified Date:
   - Fast Timeline scrubber (`rAF` + `fastSeek`), clean `metadata` filmstrip disposal, gallery lazy video (`preload="none"`), and Stale-While-Revalidate disk cache (`cache/models-cache.json`).
   - Zero-cost FFmpeg **Timeline Trimmer** (`✂️ Cut & Use Clip`) & **Bulk Clip Stitcher** (`☑️ Select` → `🎞️ Stitch`), `{opt1 | opt2}` × multi-seed **Batch Matrix Runner**, **Auto-Chain Next** pipeline staging, **History Failure Alert + Cost/Keep** stats, and GitHub **Update Notifier**.
 - **Exact Next Action:** For your next feature slice, copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/02-<your-feature>/SPEC.md` and launch a fresh chat using the kickoff prompt in [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md).
+
+
+# 2026-11-16T12:39:00-03:00 — v1.0.8 Shipped: Variable Reference Pricing Healing & Universal Drag-and-Drop
+
+- **Authoritative Release:** `v1.0.8` (serving live on `http://localhost:3000` via `Launch Studio.cmd` and Desktop via `Launch Desktop.cmd`).
+- **Fixes Applied in `v1.0.8`:**
+  - Startup & live sync self-healing for variable-price models (`bytedance/seedream-v5.5/edit`, `wavespeed-ai/minimax-h3/reference-to-video`, etc.) whose RSC `formula_shape` migration previously wiped `%AppData%\wavespeed-studio\pricing-formulas.json`.
+  - Universal drag-and-drop (Files, URLs, and Gallery cards) across Source Image, End Frame, Multi-Reference Images, Source Video, Reference Videos, Reference Audios, and Video Timeline.
+  - Clear upstream safety filter messaging clarifying `bytedance/seedream-v5.5` content flags are per-request moderation rather than API key bans.
+- **Exact Next Action:** For the next feature slice, copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/02-<your-feature>/SPEC.md` and launch a fresh chat using the kickoff prompt in [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md).

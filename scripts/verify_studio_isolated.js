@@ -626,6 +626,11 @@ async function runMockDomAppTests() {
       },
       click() { elObj.dispatch('click'); },
       focus() {},
+      scrollIntoView() {},
+      load() {},
+      pause() {},
+      play() { return Promise.resolve(); },
+      removeAttribute(k) { delete attrs[k]; },
       contains() { return false; },
       closest() { return null; },
       querySelector(sel) {
@@ -776,6 +781,18 @@ async function runMockDomAppTests() {
       has_formula: true, fetched_at: Date.now(), isSpicy: false,
       category: 'ref-to-video', isReferenceToVideo: true, isPinned: true, pinnedRank: 9,
       schema: { required: ['prompt'], properties: { prompt: {}, duration: { default: 5, enum: [5, 10] }, resolution: { default: '768p', enum: ['480p', '768p', '1080p'] }, reference_images: { maxItems: 10 }, reference_videos: { maxItems: 5 }, reference_audios: { maxItems: 5 } } }
+    },
+    {
+      model_id: 'bytedance/seedream-v5.5/edit',
+      name: 'Seedream 5.5 Edit (5% OFF)',
+      base_price: formulasJson['bytedance/seedream-v5.5/edit'].base_price_micro / 1e6,
+      base_price_micro: formulasJson['bytedance/seedream-v5.5/edit'].base_price_micro,
+      effective_price: (formulasJson['bytedance/seedream-v5.5/edit'].base_price_micro / 1e6) * 0.95,
+      discount_rate: 95, discount_percent: 0.05,
+      formula: formulasJson['bytedance/seedream-v5.5/edit'].formula,
+      has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'image-edit', isImageEdit: true, isPinned: true, pinnedRank: 3,
+      schema: { required: ['prompt', 'images'], properties: { prompt: {}, images: { maxItems: 14 }, size: { default: '2048*2048', enum: ['2048*2048', '3072*3072'] } } }
     }
   ];
 
@@ -950,6 +967,44 @@ async function runMockDomAppTests() {
   elementsById.get('multiImgGrid').children[0].children[2].click();
   elementsById.get('refAudiosList').children[0].children[1].children[0].click();
 
+  // 6b. Switch to Image Edit -> verify Seedream 5.5 Edit scales price with 1 vs 3 reference images ($0.0266 -> $0.0418)
+  const imgEditTab = modeBtns.find(b => b.dataset.category === 'image-edit');
+  imgEditTab.click();
+  pickComboboxById('Seedream 5.5 Edit');
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'bytedance/seedream-v5.5/edit');
+  elementsById.get('multiImageUrlInput').value = 'https://example.com/sd-ref1.png';
+  elementsById.get('addMultiImageUrlBtn').click();
+  const sd1Price = elementsById.get('infoModelPrice').innerHTML;
+  assert(sd1Price.includes('$0.0266'), `Expected Seedream 5.5 Edit 1-img price $0.0266, got ${sd1Price}`);
+  elementsById.get('multiImageUrlInput').value = 'https://example.com/sd-ref2.png';
+  elementsById.get('addMultiImageUrlBtn').click();
+  elementsById.get('multiImageUrlInput').value = 'https://example.com/sd-ref3.png';
+  elementsById.get('addMultiImageUrlBtn').click();
+  const sd3Price = elementsById.get('infoModelPrice').innerHTML;
+  assert(sd3Price.includes('$0.0418'), `Expected Seedream 5.5 Edit 3-img price $0.0418, got ${sd3Price}`);
+  assert(elementsById.get('infoPriceBreakdown').textContent.includes('3 img'), 'Expected 3 img count in Seedream price breakdown');
+
+  // Also test universal Drag-and-Drop URL drop handling across image, multi-image, audio & timeline drop targets
+  const makeDropEvent = (url) => ({
+    preventDefault() {},
+    stopPropagation() {},
+    dataTransfer: {
+      files: [],
+      types: ['text/uri-list', 'text/plain'],
+      getData: (t) => (t === 'text/uri-list' || t === 'text/plain' ? url : '')
+    }
+  });
+  elementsById.get('multiImageDropzone').dispatch('drop', makeDropEvent('https://example.com/dropped-ref4.png'));
+  assert(elementsById.get('infoPriceBreakdown').textContent.includes('4 img'), 'Expected dropped multi-image URL to increment Seedream count to 4 img');
+  while (elementsById.get('multiImgGrid').children.length > 0) {
+    elementsById.get('multiImgGrid').children[0].children[2].click();
+  }
+  elementsById.get('refAudioDropzone').dispatch('drop', makeDropEvent('https://example.com/dropped-voice.mp3'));
+  assert(elementsById.get('refAudiosList').children.length >= 1, 'Expected dropped audio URL to append to refAudiosList');
+  elementsById.get('refAudiosList').children[0].children[1].children[0].click();
+  elementsById.get('videoTimelineGroup').dispatch('drop', makeDropEvent('/outputs/videos/dropped-clip.mp4'));
+  assert.strictEqual(elementsById.get('videoTimelineGroup').style.display, 'block', 'Expected dropped video on timeline to open timeline');
+
   // 7. Switch to Tools tab -> verify video-upscaler routes here and shows target_resolution in resolutionSelect
   const toolsTab = modeBtns.find(b => b.dataset.category === 'utility');
   toolsTab.click();
@@ -1099,8 +1154,46 @@ async function runHistoryDatabaseTests() {
   }
 }
 
+async function runFormulaHealingTest() {
+  const os = require('os');
+  const { execFileSync } = require('child_process');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ws-heal-test-'));
+  try {
+    const wipedCache = {
+      'bytedance/seedream-v5.5/edit': {
+        base_price_micro: 28000,
+        discount_rate: 95,
+        formula: '',
+        price_inputs: ['images', 'resolution'],
+        variable_price: true,
+        fetched_at: Date.now()
+      },
+      'wavespeed-ai/minimax-h3/reference-to-video': {
+        base_price_micro: 300000,
+        discount_rate: 50,
+        formula: '',
+        price_inputs: ['duration', 'reference_audios', 'reference_images', 'reference_videos', 'resolution'],
+        variable_price: true,
+        fetched_at: Date.now()
+      }
+    };
+    fs.writeFileSync(path.join(tmpDir, 'pricing-formulas.json'), JSON.stringify(wipedCache, null, 2), 'utf8');
+    execFileSync(process.execPath, ['-e', `require(${JSON.stringify(path.join(ROOT, 'server.js'))});`], {
+      env: { ...process.env, WAVESPEED_USER_DATA_DIR: tmpDir, WAVESPEED_API_KEY: 'wsk_mock_heal_key' },
+      stdio: 'pipe'
+    });
+    const healed = JSON.parse(fs.readFileSync(path.join(tmpDir, 'pricing-formulas.json'), 'utf8'));
+    assert(healed['bytedance/seedream-v5.5/edit'].formula.includes('$count(images)'), 'Expected healed Seedream 5.5 Edit formula');
+    assert(healed['wavespeed-ai/minimax-h3/reference-to-video'].formula.includes('$count(reference_images)'), 'Expected healed MiniMax H3 R2V formula');
+    console.log('[PASS] Empty user-cache pricing-formulas.json self-healing test passed');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 (async () => {
   await runFormulaTests();
+  await runFormulaHealingTest();
   await runMockDomAppTests();
   await runHistoryDatabaseTests();
   await runMockOutputAndServerTests();

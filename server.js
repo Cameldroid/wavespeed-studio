@@ -157,7 +157,30 @@ function loadPricingFormulas() {
     try {
       if (fs.existsSync(FORMULAS_FILE)) {
         const userCached = JSON.parse(fs.readFileSync(FORMULAS_FILE, 'utf8')) || {};
-        merged = { ...merged, ...userCached };
+        let repairedWiped = false;
+        for (const [k, uEntry] of Object.entries(userCached)) {
+          if (!uEntry || typeof uEntry !== 'object') continue;
+          const bEntry = merged[k] || {};
+          const uFormula = typeof uEntry.formula === 'string' ? uEntry.formula.trim() : '';
+          const bFormula = typeof bEntry.formula === 'string' ? bEntry.formula.trim() : '';
+          if (!uFormula && bFormula) {
+            repairedWiped = true;
+          }
+          merged[k] = {
+            ...bEntry,
+            ...uEntry,
+            formula: uFormula || bFormula || '',
+            price_inputs: (Array.isArray(uEntry.price_inputs) && uEntry.price_inputs.length > 0)
+              ? uEntry.price_inputs
+              : (bEntry.price_inputs || []),
+            variable_price: Boolean(uEntry.variable_price || bEntry.variable_price)
+          };
+        }
+        if (repairedWiped) {
+          try {
+            fs.writeFileSync(FORMULAS_FILE, JSON.stringify(merged, null, 2));
+          } catch (wErr) {}
+        }
       }
     } catch (e) {}
   }
@@ -235,7 +258,7 @@ async function fetchLiveModelFormula(modelId, forceRefresh = false) {
   const parentId = modelId.includes('-spicy') ? modelId.replace(/-spicy\b/g, '') : null;
   const existing = pricingFormulasCache[modelId] || (parentId ? pricingFormulasCache[parentId] : null);
   const now = Date.now();
-  const isFresh = existing && existing.formula !== undefined && existing.fetched_at && (now - existing.fetched_at < 1800000);
+  const isFresh = existing && existing.fetched_at && (now - existing.fetched_at < 1800000) && (Boolean(existing.formula && existing.formula.trim()) || !existing.variable_price);
   if (!forceRefresh && isFresh) {
     return existing;
   }
@@ -255,11 +278,17 @@ async function fetchLiveModelFormula(modelId, forceRefresh = false) {
             const m = parsed.model;
             const existingModel = cachedModels ? cachedModels.find(x => x.model_id === modelId) : null;
             const ownBaseMicro = existingModel?.base_price_micro || pricingFormulasCache[modelId]?.base_price_micro;
+            const prevTarget = pricingFormulasCache[targetId];
+            // WaveSpeed migrated RSC payloads to formula_shape + variable_price; never wipe known formulas with empty strings
+            const liveFormula = (typeof m.formula === 'string' && m.formula.trim()) ? m.formula : '';
+            const preservedFormula = liveFormula || (prevTarget?.formula && prevTarget.formula.trim() ? prevTarget.formula : '') || (existing?.formula && existing.formula.trim() ? existing.formula : '');
             const entry = {
               base_price_micro: m.base_price,
               discount_rate: typeof m.discount_rate === 'number' ? m.discount_rate : 100,
-              formula: m.formula || '',
-              price_inputs: m.price_inputs || [],
+              formula: preservedFormula,
+              variable_price: Boolean(m.variable_price || prevTarget?.variable_price || existing?.variable_price),
+              formula_shape: m.formula_shape || prevTarget?.formula_shape || null,
+              price_inputs: (Array.isArray(m.price_inputs) && m.price_inputs.length > 0) ? m.price_inputs : (prevTarget?.price_inputs || []),
               fetched_at: now
             };
             pricingFormulasCache[targetId] = entry;
@@ -284,8 +313,9 @@ async function fetchLiveModelFormula(modelId, forceRefresh = false) {
               existingModel.discount_rate = returnedEntry.discount_rate;
               existingModel.discount_percent = Math.max(0, (100 - returnedEntry.discount_rate) / 100);
               existingModel.formula = returnedEntry.formula;
+              existingModel.variable_price = Boolean(returnedEntry.variable_price);
               existingModel.price_inputs = returnedEntry.price_inputs;
-              existingModel.has_formula = true;
+              existingModel.has_formula = Boolean(returnedEntry.formula || !returnedEntry.variable_price);
               existingModel.fetched_at = now;
             }
             return returnedEntry;
@@ -562,6 +592,24 @@ function loadDiskModelsCache() {
     if (!fs.existsSync(MODELS_CACHE_FILE)) return null;
     const parsed = JSON.parse(fs.readFileSync(MODELS_CACHE_FILE, 'utf8'));
     if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
+      // Heal any empty formulas in cached disk models from repaired pricingFormulasCache
+      pricingFormulasCache = loadPricingFormulas();
+      parsed.data = parsed.data.map(m => {
+        if (m && (!m.formula || !String(m.formula).trim())) {
+          const parentId = m.model_id?.includes('-spicy') ? m.model_id.replace(/-spicy\b/g, '') : null;
+          const restored = pricingFormulasCache[m.model_id] || (parentId ? pricingFormulasCache[parentId] : null);
+          if (restored && restored.formula && restored.formula.trim()) {
+            return {
+              ...m,
+              formula: restored.formula,
+              price_inputs: (restored.price_inputs && restored.price_inputs.length > 0) ? restored.price_inputs : (m.price_inputs || []),
+              variable_price: Boolean(restored.variable_price || m.variable_price),
+              has_formula: true
+            };
+          }
+        }
+        return m;
+      });
       return parsed;
     }
   } catch (e) {}
@@ -804,7 +852,8 @@ async function getModels(forceRefresh = false) {
       discount_percent: discountPercent,
       formula: formInfo ? formInfo.formula : null,
       price_inputs: formInfo ? (formInfo.price_inputs || []) : [],
-      has_formula: Boolean(formInfo),
+      variable_price: Boolean(formInfo?.variable_price || m.variable_price),
+      has_formula: Boolean(formInfo && (formInfo.formula || !formInfo.variable_price)),
       fetched_at: formInfo?.fetched_at || 0,
       type: m.type,
       category,

@@ -4,6 +4,7 @@ Note Creation Date: "2026-11-16T03:08:00-03:00"
 Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
   - "2026-11-16T04:08:00-03:00"
+  - "2026-11-16T12:39:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Log V2 (Continuation)
@@ -35,3 +36,16 @@ Note Modified Date:
   - `public/index.html`, `public/style.css`, `.gitignore`, `CHANGELOG.md`, `package.json`: Added UI controls for Update badge, Clear Source Video, Local Trim In/Out/Run, Bulk Video Stitch, Batch/Auto-Chain row, ignored `cache/`, bumped `1.0.7`.
 - **Verification (Zero Live API Spend):** Re-running `npm test` (`verify_studio_isolated.js` with R2V/V2V swap formulas, `get_duration` clamp, batch matrix fan-out, Cost/Keep DB & trim/concat guard tests), `npx electron . --smoke-test`, and secret scan after final edit; Playwright Chromium (`127.0.0.1:39112`) already verified update pill, history failure alert, batch 4× prompt expansion, 8/8 filmstrip in `1,625 ms`, live FFmpeg trim + stitch (`mock/test-video`, `local/ffmpeg-trim`, `local/ffmpeg-stitch`), `0` console errors, `0` page errors.
 - **Next Action:** Push `main` + annotated tag `v1.0.7`, update GitHub Release `v1.0.7` notes with concise changelog highlights, and restart `http://localhost:3000` to `v1.0.7`.
+
+
+# 2026-11-16T12:39:00-03:00 — Per-Reference Formula Self-Healing, Universal Drag-and-Drop & Moderation Guidance (`v1.0.8`)
+
+- **Summary:** Fixed flat-rate regression where WaveSpeed RSC `formula_shape` changes wiped cached variable formulas on 5 models (including `bytedance/seedream-v5.5/edit` and `wavespeed-ai/minimax-h3/reference-to-video`), added universal File + URL + Gallery drag-and-drop across all upload groups and Video Timeline, and separated upstream image moderation guidance from video safety tips.
+- **Changes Applied:**
+  - `server.js`: Added self-healing in `loadPricingFormulas()` and `loadDiskModelsCache()` from bundled `pricing-formulas.json`, prevented `fetchLiveModelFormula()` and `getModels()` from overwriting valid cached formulas with empty strings when `variable_price: true` / `formula_shape` is returned.
+  - `public/app.js`: Added `variable_price` / `price_inputs` fallback in `calculateModelCost()` and `buildPricingParams()`, prevented `selectModel()` from overwriting valid formulas with empty `""`, made gallery cards `draggable = true`, added unified `attachMediaDropTarget` + `bindGroupDrop` + `extractDroppedMediaUrl` across all 7 media targets plus a `document` drag/drop safeguard, and split `isLikelyStrictSfwModel()` / `pollConcurrentJob()` image vs. video moderation tips.
+  - `public/index.html`, `public/style.css`: Added `#multiImageDropzone`, `#refAudioDropzone`, updated `#videoTimelineGroup` drop hint, and `.timeline-extractor-card.dragover` highlight styling.
+  - `scripts/verify_studio_isolated.js`: Added Seedream 5.5 Edit multi-image pricing scaling (`$0.0266` -> `$0.0418`), universal drop-target URL dispatch checks, and `runFormulaHealingTest()` (`WAVESPEED_USER_DATA_DIR` startup healing verification).
+  - `package.json`, `CHANGELOG.md`: Bumped version to `1.0.8` and added `v1.0.8` changelog entry.
+- **Verification (Zero Live API Spend):** Re-running `node --check`, `npm test`, `npx electron . --smoke-test`, and secret scan after final edit; Playwright Chromium against isolated server (`http://127.0.0.1:39113`, `WAVESPEED_USER_DATA_DIR` seeded with wiped `seedream-v5.5/edit` cache) verified `0` `pageerror`s, Seedream 5.5 Edit scaling `1 img = $0.0266` -> `3 img = $0.0418`, MiniMax H3 R2V scaling `$0.125` -> `$0.145` on dropped image+audio, single-image drop onto outer `#imageInputGroup`, and timeline drop opening `videoTimelineGroup`.
+- **Next Action:** Push `main` and annotated tag `v1.0.8`, confirm GitHub Release workflow completes cleanly, and restart `http://localhost:3000` (`Launch Studio.cmd`).

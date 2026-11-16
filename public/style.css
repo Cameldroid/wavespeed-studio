@@ -864,10 +864,11 @@ textarea:focus {
   background: rgba(139, 92, 246, 0.05);
 }
 
-.input-group.dragover {
+.input-group.dragover, .timeline-extractor-card.dragover {
   border-color: var(--accent-purple);
-  background: rgba(139, 92, 246, 0.06);
+  background: rgba(139, 92, 246, 0.08);
   border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
 }
 
 .update-pill-btn {

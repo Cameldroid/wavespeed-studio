@@ -2,6 +2,17 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.0.8] - 2026-11-16
+### Fixed
+- **I2I & R2V Per-Reference-Image Formula Healing & Variable Pricing:**
+  - Fixed WaveSpeed RSC `formula_shape` migration overwriting existing cached formulas with empty `""` (which flattened variable-price models such as `bytedance/seedream-v5.5/edit` and `wavespeed-ai/minimax-h3/reference-to-video`).
+  - Added startup self-healing in `server.js` (`loadPricingFormulas` and `loadDiskModelsCache`) to restore wiped formulas from bundled `pricing-formulas.json`, and prevented empty remote responses from overwriting valid formulas in both backend & frontend (`selectModel`).
+  - Added uncached `variable_price` / `price_inputs` fallback scaling in `calculateModelCost()` and `buildPricingParams()` (fixing `duration` & `reference_images` parameter population even before full OpenAPI schema fetch).
+- **Universal Drag-and-Drop Across All Media Targets:**
+  - Restored and unified drag-and-drop (`Files`, `text/uri-list` URLs, and draggable gallery cards) across `#imageInputGroup`/`#imageDropzone`, `#lastImageGroup`/`#lastImageDropzone`, `#multiImageGroup`/`#multiImageDropzone`, `#videoInputGroup`/`#videoDropzone`, `#refVideosGroup`/`#refVideoDropzone`, `#refAudiosGroup`/`#refAudioDropzone`, and `#videoTimelineGroup`, plus a global `document` safeguard against accidental Electron/browser drop navigation.
+- **Image Moderation Help Tips (`Seedream 5.5` & Upstream Safety Filters):**
+  - Expanded `isLikelyStrictSfwModel` and `pollConcurrentJob` error tips to distinguish image-edit moderation blocks (`bytedance/seedream-v5*`) from video blocks, clarify that account API keys are not banned/flagged, and suggest open-weights image/video alternatives (`qwen-image/edit-plus`, `minimax-h3-image/edit`, `minimax-h3/image-to-video-spicy`).
+
 ## [1.0.7] - 2026-11-16
 ### Fixed
 - **R2V / Video-Edit Pricing & Balance Projection Accuracy:**
