@@ -307,6 +307,11 @@ const MIME_TYPES = {
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
   '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
   '.ico': 'image/x-icon'
 };
 
@@ -1635,6 +1640,16 @@ const server = http.createServer(async (req, res) => {
           'Accept-Ranges': 'bytes'
         });
         return streamFile();
+      }
+    }
+
+    if (pathname === '/favicon.ico' || pathname === '/assets/icon.png' || pathname === '/assets/icon.ico') {
+      const assetName = pathname === '/assets/icon.png' ? 'icon.png' : 'icon.ico';
+      const iconPath = path.resolve(APP_RESOURCES_DIR, 'assets', assetName);
+      if (fs.existsSync(iconPath) && fs.statSync(iconPath).isFile()) {
+        const ext = path.extname(iconPath).toLowerCase();
+        res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
+        return fs.createReadStream(iconPath).pipe(res);
       }
     }
 

@@ -12,6 +12,7 @@ Note Modified Date:
   - "2026-11-14T15:36:03-03:00"
   - "2026-11-14T15:59:27-03:00"
   - "2026-11-16T00:57:34-03:00"
+  - "2026-11-16T01:45:03-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -135,3 +136,15 @@ Note Modified Date:
   - `package.json`: Bumped version to `1.0.3`.
 - **Verification (Zero Live API Spend):** `node --check` passed on `server.js`, `public/app.js`, and `electron/main.js`; `npm test` (`ALL_ISOLATED_TESTS_PASSED`).
 - **Next Action:** Run Electron `--smoke-test` + secret scan, commit & push `main` + tag `v1.0.3` for GitHub Actions release, build Windows installer, and update `D:\wvst\WaveSpeed Studio`.
+
+
+# 2026-11-16T01:45:03-03:00 — Unified App Data Storage, Non-Destructive Legacy Merge & Playwright UI Fixes (`v1.0.4`)
+
+- **Summary:** Consolidated personal localhost & desktop usage into the single `D:\Cocoding\wavespeed-studio` repo with external `%AppData%\wavespeed-studio` + `D:\wvst` storage, non-destructively copied/merged 82 legacy generations and 78 outputs from `D:\Cocoding\Aimagen Nsfw`, fixed two live-browser issues caught via Playwright (6-tab topbar clipping at `1536px` & `/favicon.ico` 404 console error), and added `Launch Desktop.cmd` so edits run directly from the repo without rebuilding installers (`v1.0.4`).
+- **Changes Applied:**
+  - `Launch Desktop.cmd` & `scripts/launch_studio.ps1`: Shared `%APPDATA%\wavespeed-studio` external user-data root across localhost (`Launch Studio.cmd`), live repo Electron (`Launch Desktop.cmd`), and installed `.exe`; fixed `Test-StudioHealth` for custom `D:\wvst` output folders.
+  - `scripts/import_legacy_studio.js`: Added zero-secret, non-destructive migration script; merged `82` generations (`61` images, `17` videos, `78` metadata JSONs, `0` collisions) into `C:\Users\psyco\AppData\Roaming\wavespeed-studio\database\studio_history.sqlite` (`84` total runs, `80` outputs; pre-merge `.bak` saved).
+  - `public/style.css`, `public/index.html`, `public/app.js`, `server.js`: Fixed topbar tab overflow (`clippedBtns: []`), added `/favicon.ico` + `/assets/icon.png` + audio MIME types, and synced timeline timecode readout on stepper clicks.
+  - `package.json`: Bumped version to `1.0.4`.
+- **Verification:** Playwright DOM/geometry/console/timeline inspection passed (`0` console errors/warnings, `topbarOverflow: false`, 8/8 filmstrip thumbnails, extracted frame -> `Image 1`); re-running `npm test`, `--smoke-test`, and secret scan before pushing `main` + `v1.0.4`.
+- **Next Action:** Commit, push `main` + tag `v1.0.4` for GitHub Release CI, and confirm user's preference on keeping vs retiring `D:\Cocoding\Aimagen Nsfw`.

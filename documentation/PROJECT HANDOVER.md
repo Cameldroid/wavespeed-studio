@@ -4,6 +4,7 @@ Note Creation Date: "2026-11-14T15:59:27-03:00"
 Note Modified Date:
   - "2026-11-14T15:59:27-03:00"
   - "2026-11-16T00:57:34-03:00"
+  - "2026-11-16T01:45:03-03:00"
 ---
 
 # 2026-11-14T15:59:27-03:00 — Project Handover Scaffold: WaveSpeed Studio
@@ -172,3 +173,12 @@ D:\Cocoding\wavespeed-studio\
   - Added streaming binary `POST /api/upload-raw` (`up to 200 MB`) in `D:\Cocoding\wavespeed-studio\server.js` alongside `POST /api/upload` so video/audio files upload without base64 bloat.
   - Added `$0.00` **Video Timeline & Frame Picker** (8-frame thumbnail strip, scrubber, frame stepper, 1-click extraction to Source Image / End Frame / Ref Images) and **Resolution Mismatch Advisory** with optional `wavespeed-ai/real-esrgan` pre-upscale toggle + `✂️ Tools` routing for `upscale-video` (`target_resolution` support).
 - **Updated Exact Next Action:** Run local verification + release build, update `D:\wvst\WaveSpeed Studio` cleanly to `v1.0.3`, and verify live desktop startup.
+
+
+# 2026-11-16T01:45:03-03:00 — v1.0.4 Single-App Consolidation & Live Playwright Audit
+
+- **Unified Single-App Workflow (`D:\Cocoding\wavespeed-studio`):**
+  - Run `Launch Desktop.cmd` (or `npm run desktop`) to launch Electron directly against repo source while keeping all private state outside the repo in `C:\Users\psyco\AppData\Roaming\wavespeed-studio` + `D:\wvst`.
+  - Run `Launch Studio.cmd` (`scripts/launch_studio.ps1`) for localhost browser mode using that exact same external `WAVESPEED_USER_DATA_DIR`.
+  - Legacy `D:\Cocoding\Aimagen Nsfw` (`82` runs, `78` outputs) has been non-destructively copied/merged via `scripts/import_legacy_studio.js` into `C:\Users\psyco\AppData\Roaming\wavespeed-studio\database\studio_history.sqlite` (`84` total generations, `80` output rows; pre-merge backup saved at `studio_history.pre-merge.sqlite.bak`). `D:\Cocoding\Aimagen Nsfw` originals remain untouched as a backup.
+- **Exact Next Action:** Use `D:\Cocoding\wavespeed-studio` as the single development & launch workspace (`Launch Desktop.cmd` for instant dev testing without rebuilding `.exe`), keep `D:\Cocoding\Aimagen Nsfw` only as a read-only archive or delete later if satisfied, and tag/release via GitHub Actions when distributing updates.

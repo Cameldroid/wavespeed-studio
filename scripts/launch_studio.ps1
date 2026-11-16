@@ -22,9 +22,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $ServerJs = Join-Path $ProjectRoot 'server.js'
-$DbPath = Join-Path $ProjectRoot 'database\studio_history.sqlite'
-$OutputsDir = Join-Path $ProjectRoot 'outputs'
-$LogsDir = Join-Path $ProjectRoot 'logs'
+if (-not $env:WAVESPEED_USER_DATA_DIR) {
+  $env:WAVESPEED_USER_DATA_DIR = if ($env:APPDATA) {
+    Join-Path $env:APPDATA 'wavespeed-studio'
+  } else {
+    $ProjectRoot
+  }
+}
+$UserDataRoot = $env:WAVESPEED_USER_DATA_DIR
+$DbPath = Join-Path $UserDataRoot 'database\studio_history.sqlite'
+$OutputsDir = if ($env:WAVESPEED_OUTPUTS_DIR) { $env:WAVESPEED_OUTPUTS_DIR } else { Join-Path $UserDataRoot 'outputs' }
+$LogsDir = Join-Path $UserDataRoot 'logs'
 $ServerLog = Join-Path $LogsDir 'server.log'
 $StudioUrl = "http://localhost:$Port"
 $HealthUrl = "http://127.0.0.1:$Port/api/outputs"
@@ -54,7 +62,7 @@ function Test-StudioHealth([string]$Url) {
       return [pscustomobject]@{
         Healthy    = $true
         OutputsDir = [string]$resp.outputs_dir
-        MatchesApp = ([string]$resp.outputs_dir -eq $OutputsDir) -or ([string]$resp.outputs_dir -like '*outputs*')
+        MatchesApp = ([string]$resp.outputs_dir).Trim() -ne ''
       }
     }
     return [pscustomobject]@{ Healthy = $false; OutputsDir = ''; MatchesApp = $false }

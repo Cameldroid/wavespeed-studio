@@ -5007,6 +5007,7 @@
       if (absPos === 'start') v.currentTime = 0;
       else if (absPos === 'end') v.currentTime = Math.max(0, v.duration - 0.04);
       else v.currentTime = Math.max(0, Math.min(v.duration, (v.currentTime || 0) + deltaSec));
+      syncTimelineTimecodeUI();
     };
     if (el.tlStepStartBtn) el.tlStepStartBtn.addEventListener('click', () => stepTimeline(0, 'start'));
     if (el.tlStepBack1sBtn) el.tlStepBack1sBtn.addEventListener('click', () => stepTimeline(-1));

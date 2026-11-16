@@ -239,13 +239,13 @@ body {
   color: var(--text-muted);
   font-family: inherit;
   font-weight: 600;
-  font-size: 0.8rem;
-  padding: 6px 12px;
+  font-size: 0.77rem;
+  padding: 5px 9px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
   flex-shrink: 0;
   transition: background 110ms var(--ease-snappy), color 110ms var(--ease-snappy), box-shadow 110ms var(--ease-snappy);
@@ -313,9 +313,9 @@ body {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  padding: 6px 11px;
+  padding: 5px 9px;
   border-radius: var(--radius-sm);
-  font-size: 0.8rem;
+  font-size: 0.77rem;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -335,10 +335,13 @@ body {
   transform: translateY(1px);
 }
 
-@media (max-width: 1260px) {
+@media (max-width: 1680px) {
   .badge-tag { display: none; }
+}
+
+@media (max-width: 1260px) {
   .settings-btn .action-label { display: none; }
-  .mode-btn { padding: 6px 9px; font-size: 0.77rem; }
+  .mode-btn { padding: 5px 8px; font-size: 0.75rem; }
 }
 
 /* Main Layout Flex with Draggable Divider */
