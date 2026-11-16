@@ -236,6 +236,7 @@ function createHistoryDatabase(options = {}) {
           origin_filename: s.origin_filename ? String(s.origin_filename) : '',
           origin_filepath: s.origin_filepath ? String(s.origin_filepath) : '',
           origin_url: s.origin_url ? String(s.origin_url) : '',
+          checksum: s.checksum || s.file_hash || s.hash ? String(s.checksum || s.file_hash || s.hash) : '',
           size_bytes: Number.isFinite(Number(s.size_bytes)) ? Number(s.size_bytes) : null
         });
       }
@@ -245,7 +246,7 @@ function createHistoryDatabase(options = {}) {
         if (typeof u === 'string' && u.trim()) {
           let fname = '';
           try { fname = path.basename(u.split('?')[0]); } catch (e) {}
-          clean.push({ slot, filename: fname, filepath: '', local_url: u.startsWith('/outputs/') ? u : '', remote_url: u.startsWith('http') ? u : '', origin_filename: '', origin_filepath: '', origin_url: '', size_bytes: null });
+          clean.push({ slot, filename: fname, filepath: '', local_url: u.startsWith('/outputs/') ? u : '', remote_url: u.startsWith('http') ? u : '', origin_filename: '', origin_filepath: '', origin_url: '', checksum: '', size_bytes: null });
         }
       };
       addUrl('image', fallbackPayload.image || fallbackPayload.face_image || fallbackPayload.body_image);
@@ -256,7 +257,7 @@ function createHistoryDatabase(options = {}) {
       if (Array.isArray(fallbackPayload.reference_videos)) fallbackPayload.reference_videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
       if (Array.isArray(fallbackPayload.videos)) fallbackPayload.videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
     }
-    const filenames = Array.from(new Set(clean.flatMap(x => [x.filename, x.origin_filename]).filter(Boolean))).join(', ');
+    const filenames = Array.from(new Set(clean.flatMap(x => [x.filename, x.origin_filename, x.checksum]).filter(Boolean))).join(', ');
     const filepaths = Array.from(new Set(clean.flatMap(x => [x.filepath || x.local_url || x.remote_url, x.origin_filepath || x.origin_url]).filter(Boolean))).join(' | ');
     return {
       input_sources_json: JSON.stringify(clean),
@@ -947,6 +948,66 @@ function createHistoryDatabase(options = {}) {
     return { deleted: Number(info?.changes || 0) > 0 };
   }
 
+  function listDistinctSources() {
+    const rows = db.prepare(`
+      SELECT task_id, model_id, prompt, input_sources_json, input_filenames, input_filepaths, COALESCE(completed_at, submitted_at) as created_at
+      FROM generations
+      WHERE (input_sources_json IS NOT NULL AND input_sources_json != '[]' AND input_sources_json != '')
+         OR (input_filenames IS NOT NULL AND input_filenames != '')
+      ORDER BY created_at DESC
+    `).all();
+
+    const sourceMap = new Map();
+    for (const r of rows) {
+      let sources = [];
+      try {
+        const parsed = r.input_sources_json ? JSON.parse(r.input_sources_json) : [];
+        if (Array.isArray(parsed)) sources = parsed;
+      } catch (e) {}
+
+      if (sources.length === 0 && r.input_filenames) {
+        const names = r.input_filenames.split(',').map(s => s.trim()).filter(Boolean);
+        names.forEach((name, i) => {
+          sources.push({ slot: `input_${i + 1}`, filename: name });
+        });
+      }
+
+      for (const s of sources) {
+        const checksum = s.checksum || s.file_hash || s.hash || '';
+        const fname = s.origin_filename || s.filename || '';
+        if (!fname && !checksum) continue;
+        const key = checksum ? `hash:${checksum}` : `name:${fname.toLowerCase()}`;
+        if (!sourceMap.has(key)) {
+          sourceMap.set(key, {
+            key,
+            filename: s.filename || fname,
+            origin_filename: s.origin_filename || '',
+            filepath: s.filepath || s.origin_filepath || '',
+            local_url: s.local_url || '',
+            remote_url: s.remote_url || '',
+            checksum,
+            size_bytes: s.size_bytes || null,
+            run_count: 0,
+            latest_run_at: r.created_at,
+            sample_model: r.model_id
+          });
+        }
+        const item = sourceMap.get(key);
+        item.run_count += 1;
+        if (!item.filepath && (s.filepath || s.origin_filepath)) {
+          item.filepath = s.filepath || s.origin_filepath;
+        }
+        if (!item.local_url && s.local_url) {
+          item.local_url = s.local_url;
+        }
+        if (!item.origin_filename && s.origin_filename) {
+          item.origin_filename = s.origin_filename;
+        }
+      }
+    }
+    return Array.from(sourceMap.values()).sort((a, b) => b.run_count - a.run_count);
+  }
+
   function setOutputsDirs(nextDirs = {}) {
     if (nextDirs.outputsMetaDir) options.outputsMetaDir = nextDirs.outputsMetaDir;
     if (nextDirs.outputsImagesDir) options.outputsImagesDir = nextDirs.outputsImagesDir;
@@ -978,7 +1039,8 @@ function createHistoryDatabase(options = {}) {
     deleteCroppedAsset,
     listFaceStudyPrompts,
     saveFaceStudyPrompt,
-    deleteFaceStudyPrompt
+    deleteFaceStudyPrompt,
+    listDistinctSources
   };
 }
 

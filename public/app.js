@@ -57,6 +57,8 @@
     outputsDir: './outputs',
     history: [],
     galleryFilter: 'all', // 'all' | 'images' | 'videos'
+    gallerySourceFilter: 'all', // 'all' | 'none' | <source_key>
+    galleryGroupBySource: false,
     gallerySize: localStorage.getItem('wavespeed_gallery_size') || 'md',
     compareKeys: [],
     bulkSelectMode: false,
@@ -468,7 +470,14 @@
     cropSaveOnlyBtn: document.getElementById('cropSaveOnlyBtn'),
     savedCropsDirLabel: document.getElementById('savedCropsDirLabel'),
     refreshSavedCropsBtn: document.getElementById('refreshSavedCropsBtn'),
-    savedCroppedFacesGrid: document.getElementById('savedCroppedFacesGrid')
+    savedCroppedFacesGrid: document.getElementById('savedCroppedFacesGrid'),
+    gallerySourceFilterSelect: document.getElementById('gallerySourceFilterSelect'),
+    galleryGroupBySourceBtn: document.getElementById('galleryGroupBySourceBtn'),
+    outputDetailsModal: document.getElementById('outputDetailsModal'),
+    outputDetailsTitle: document.getElementById('outputDetailsTitle'),
+    outputDetailsModelBadge: document.getElementById('outputDetailsModelBadge'),
+    closeOutputDetailsModalBtn: document.getElementById('closeOutputDetailsModalBtn'),
+    outputDetailsBody: document.getElementById('outputDetailsBody')
   };
 
   // Mask Canvas Context
@@ -3293,13 +3302,14 @@
       sources.push({
         slot,
         filename: fname,
-        filepath: fileObj?.path || (u.startsWith('/outputs/') ? u : ''),
+        filepath: fileObj?.path || fileObj?.filepath || originMeta?.filepath || originMeta?.origin_filepath || (u.startsWith('/outputs/') ? u : ''),
         local_url: u.startsWith('/outputs/') ? u : '',
         remote_url: /^https?:\/\//i.test(u) ? u : '',
         origin_filename: originMeta?.origin_filename || '',
         origin_filepath: originMeta?.origin_filepath || '',
         origin_url: originMeta?.origin_url || '',
-        size_bytes: Number.isFinite(fileObj?.size) ? fileObj.size : null
+        checksum: fileObj?.checksum || originMeta?.checksum || '',
+        size_bytes: Number.isFinite(fileObj?.size) ? fileObj.size : (Number.isFinite(originMeta?.size_bytes) ? originMeta.size_bytes : null)
       });
     };
 
@@ -3959,6 +3969,25 @@
     return false;
   }
 
+  async function computeFileSha256(fileOrBlob) {
+    if (!fileOrBlob) return '';
+    try {
+      let buffer;
+      if (typeof fileOrBlob.arrayBuffer === 'function') {
+        buffer = await fileOrBlob.arrayBuffer();
+      } else if (fileOrBlob instanceof ArrayBuffer) {
+        buffer = fileOrBlob;
+      } else {
+        return '';
+      }
+      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      return '';
+    }
+  }
+
   async function requestNativeExplorer(filePath = null, mode = 'default') {
     const res = await fetch('/api/open-folder', {
       method: 'POST',
@@ -3967,6 +3996,162 @@
     });
     return await res.json();
   }
+
+  async function openLocalFolder(targetPath) {
+    if (!targetPath) return;
+    try {
+      const res = await requestNativeExplorer(targetPath, 'default');
+      if (res && (res.ok || res.success)) {
+        showToast('Opened folder in Explorer', 'good');
+      } else {
+        showToast(res?.message || 'Could not open folder on host', 'warn');
+      }
+    } catch (e) {
+      showToast('Failed to open folder', 'warn');
+    }
+  }
+
+  function useImageAsInput(urlOrPath, meta = {}) {
+    const raw = String(urlOrPath || '').trim();
+    if (!raw) return;
+    const cleanUrl = raw.startsWith('file://') ? raw.replace(/^file:\/\//, '') : raw;
+    const activeModel = state.selectedModel;
+    const props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+    const singleKey = getSingleImageSchemaKey(props);
+    const hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+    const multiKey = getMultiImageSchemaKey(props);
+    const hasMulti = Boolean(multiKey);
+
+    const name = meta.origin_filename || meta.filename || meta.name || (cleanUrl.startsWith('data:') ? 'input_image' : decodeURIComponent(cleanUrl.split('?')[0].split('#')[0].split('/').pop() || 'input_image'));
+    const checksum = meta.checksum || meta.file_hash || meta.hash || '';
+    const filepath = meta.filepath || meta.origin_filepath || meta.local_path || (cleanUrl.startsWith('/outputs/') ? cleanUrl : '');
+
+    // Case 1: Model only has multi-image array (like Seedream 5.5 Edit, Qwen Edit Plus, Minimax H3 Edit)
+    if (!hasSingle && hasMulti) {
+      addExtraImageUrl(cleanUrl, { name, checksum, filepath, origin_filename: meta.origin_filename, origin_filepath: meta.origin_filepath, origin_url: meta.origin_url });
+      showToast(`Added to reference images (#${state.extraImages.length})`, 'good');
+      if (el.multiImageGroup) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
+    // Case 2: Model has single image slot and it is currently empty
+    if (hasSingle && (!state.sourceImage || !state.sourceImage.downloadUrl)) {
+      state.sourceImage = {
+        downloadUrl: cleanUrl,
+        previewUrl: cleanUrl,
+        url: cleanUrl,
+        name,
+        checksum,
+        filepath,
+        origin_filename: meta.origin_filename || '',
+        origin_filepath: meta.origin_filepath || '',
+        origin_url: meta.origin_url || ''
+      };
+      if (el.imageUrlInput) el.imageUrlInput.value = cleanUrl;
+      if (el.imagePreview) el.imagePreview.src = cleanUrl;
+      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+      const dp = document.getElementById('dropzonePrompt');
+      if (dp) dp.style.display = 'none';
+      syncMaskBgPreview();
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+      showToast('Loaded as main source image', 'good');
+      if (el.imageInputGroup) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
+    // Case 3: Single slot is filled, but model also accepts multi-image references
+    if (hasMulti) {
+      addExtraImageUrl(cleanUrl, { name, checksum, filepath, origin_filename: meta.origin_filename, origin_filepath: meta.origin_filepath, origin_url: meta.origin_url });
+      showToast(`Added as reference image (#${state.extraImages.length})`, 'good');
+      if (el.multiImageGroup) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
+    // Case 4: Single slot only, overwrite with new image
+    state.sourceImage = {
+      downloadUrl: cleanUrl,
+      previewUrl: cleanUrl,
+      url: cleanUrl,
+      name,
+      checksum,
+      filepath,
+      origin_filename: meta.origin_filename || '',
+      origin_filepath: meta.origin_filepath || '',
+      origin_url: meta.origin_url || ''
+    };
+    if (el.imageUrlInput) el.imageUrlInput.value = cleanUrl;
+    if (el.imagePreview) el.imagePreview.src = cleanUrl;
+    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+    const dp = document.getElementById('dropzonePrompt');
+    if (dp) dp.style.display = 'none';
+    syncMaskBgPreview();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+    showToast('Replaced main source image', 'good');
+    if (el.imageInputGroup) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function extractImagesFromItem(item) {
+    if (!item) return [];
+    const images = [];
+    const seen = new Set();
+
+    const addImg = (candidate) => {
+      if (!candidate) return;
+      const url = String(candidate.url || candidate.downloadUrl || candidate.local_url || candidate.remote_url || candidate.origin_url || candidate.filepath || candidate.origin_filepath || '').trim();
+      if (!url || seen.has(url)) return;
+      seen.add(url);
+      const name = candidate.origin_filename || candidate.filename || candidate.name || (url.startsWith('data:') ? 'image' : decodeURIComponent(url.split('?')[0].split('#')[0].split('/').pop() || 'image'));
+      images.push({
+        url,
+        downloadUrl: url,
+        previewUrl: url,
+        name,
+        filepath: candidate.filepath || candidate.origin_filepath || (url.startsWith('/outputs/') ? url : ''),
+        checksum: candidate.checksum || candidate.file_hash || candidate.hash || '',
+        origin_filename: candidate.origin_filename || '',
+        origin_filepath: candidate.origin_filepath || '',
+        origin_url: candidate.origin_url || '',
+        slot: candidate.slot || ''
+      });
+    };
+
+    let sources = [];
+    if (Array.isArray(item.input_sources) && item.input_sources.length > 0) {
+      sources = item.input_sources;
+    } else if (typeof item.input_sources_json === 'string' && item.input_sources_json.trim()) {
+      try {
+        const parsed = JSON.parse(item.input_sources_json);
+        if (Array.isArray(parsed)) sources = parsed;
+      } catch (e) {}
+    }
+
+    for (const s of sources) {
+      const isVideoOrAudio = (s.slot || '').includes('video') || (s.slot || '').includes('audio');
+      if (!isVideoOrAudio) {
+        addImg(s);
+      }
+    }
+
+    const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
+    if (Array.isArray(params.images)) params.images.forEach(u => addImg({ url: u }));
+    if (Array.isArray(params.reference_images)) params.reference_images.forEach(u => addImg({ url: u }));
+    if (params.image) addImg({ url: params.image, slot: 'image' });
+    if (params.face_image) addImg({ url: params.face_image, slot: 'face_image' });
+    if (params.target_image) addImg({ url: params.target_image, slot: 'target_image' });
+    if (params.last_image) addImg({ url: params.last_image, slot: 'last_image' });
+    if (item.input_image_url) addImg({ url: item.input_image_url, slot: 'input_image' });
+
+    return images;
+  }
+
+  // Window bridges for inline onclick handlers
+  window.wsAppOpenFolder = (targetPath) => openLocalFolder(targetPath);
+  window.wsAppUseInput = (url, meta) => useImageAsInput(url, meta);
+  window.wsAppCopyText = (text) => {
+    copyTextSafe(text).then(ok => {
+      if (ok) showToast('Copied to clipboard', 'good');
+    });
+  };
 
   function renderOutputsModal(items, highlightPath = null) {
     if (!el.outputsFileList || !el.outputsSummaryText) return;
@@ -4219,18 +4404,102 @@
           el.audioCheckbox.checked = Boolean(params[savedAudioKey]);
         }
       }
-      if (state.selectedModel) updateModelInfo(state.selectedModel);
-      showToast(`Loaded recipe from ${item.model_id || 'history'}`, 'good');
     }
 
-    const imgInputUrl = item.input_image_url || params.image || (Array.isArray(params.images) ? params.images[0] : null);
-    if (imgInputUrl) {
-      state.sourceImage = { url: imgInputUrl, downloadUrl: imgInputUrl };
-      if (el.imageUrlInput) el.imageUrlInput.value = imgInputUrl;
-      if (el.imagePreview) el.imagePreview.src = imgInputUrl;
-      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-      const dp = document.getElementById('dropzonePrompt');
-      if (dp) dp.style.display = 'none';
+    // Determine target model schema & input capability
+    const activeModel = state.selectedModel;
+    const props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+    const singleKey = getSingleImageSchemaKey(props);
+    const hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+    const multiKey = getMultiImageSchemaKey(props);
+    const hasMulti = Boolean(multiKey);
+    const lastKey = getLastImageSchemaKey(props);
+    const hasLast = Boolean(lastKey);
+
+    const extractedImages = extractImagesFromItem(item);
+
+    if (extractedImages.length > 0) {
+      if (!hasSingle && hasMulti) {
+        // Pure multi-image model (e.g. Seedream 5.5 Edit, Qwen Edit Plus, Minimax H3 Image Edit)
+        state.sourceImage = null;
+        state.lastImage = null;
+        state.extraImages = [];
+        if (el.imageUrlInput) el.imageUrlInput.value = '';
+        if (el.imagePreview) el.imagePreview.src = '';
+        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'none';
+
+        extractedImages.forEach((imgObj, idx) => {
+          addExtraImageUrl(imgObj.url, {
+            name: imgObj.name || `image_${idx + 1}`,
+            checksum: imgObj.checksum || '',
+            filepath: imgObj.filepath || '',
+            origin_filename: imgObj.origin_filename || '',
+            origin_filepath: imgObj.origin_filepath || '',
+            origin_url: imgObj.origin_url || ''
+          });
+        });
+        renderExtraImagesGrid();
+      } else if (hasSingle) {
+        // Model with primary image slot
+        state.extraImages = [];
+        const primary = extractedImages[0];
+        state.sourceImage = {
+          downloadUrl: primary.url,
+          previewUrl: primary.url,
+          url: primary.url,
+          name: primary.name || '',
+          checksum: primary.checksum || '',
+          filepath: primary.filepath || '',
+          origin_filename: primary.origin_filename || '',
+          origin_filepath: primary.origin_filepath || '',
+          origin_url: primary.origin_url || ''
+        };
+        if (el.imageUrlInput) el.imageUrlInput.value = primary.url;
+        if (el.imagePreview) el.imagePreview.src = primary.url;
+        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+        const dp = document.getElementById('dropzonePrompt');
+        if (dp) dp.style.display = 'none';
+
+        let extraSlice = extractedImages.slice(1);
+        if (hasLast && extraSlice.length > 0) {
+          const secondary = extraSlice.shift();
+          state.lastImage = {
+            downloadUrl: secondary.url,
+            previewUrl: secondary.url,
+            url: secondary.url,
+            name: secondary.name || '',
+            checksum: secondary.checksum || '',
+            filepath: secondary.filepath || ''
+          };
+          if (el.lastImageUrlInput) el.lastImageUrlInput.value = secondary.url;
+          if (el.lastImagePreview) el.lastImagePreview.src = secondary.url;
+          if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
+        }
+
+        if (hasMulti && extraSlice.length > 0) {
+          extraSlice.forEach((imgObj, idx) => {
+            addExtraImageUrl(imgObj.url, {
+              name: imgObj.name || `ref_${idx + 2}`,
+              checksum: imgObj.checksum || '',
+              filepath: imgObj.filepath || '',
+              origin_filename: imgObj.origin_filename || '',
+              origin_filepath: imgObj.origin_filepath || '',
+              origin_url: imgObj.origin_url || ''
+            });
+          });
+        }
+        renderExtraImagesGrid();
+      } else {
+        const primary = extractedImages[0];
+        state.sourceImage = {
+          downloadUrl: primary.url,
+          previewUrl: primary.url,
+          url: primary.url,
+          name: primary.name || '',
+          checksum: primary.checksum || '',
+          filepath: primary.filepath || ''
+        };
+      }
     }
 
     const vidInputUrl = item.input_video_url || params.video;
@@ -4267,7 +4536,24 @@
       renderRefAudiosList();
     }
 
+    syncMaskBgPreview();
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
+
     if (el.historyDbModal) el.historyDbModal.style.display = 'none';
+    if (el.outputDetailsModal) el.outputDetailsModal.style.display = 'none';
+
+    if (onlyInputMedia) {
+      showToast(extractedImages.length > 0 ? `Restored ${extractedImages.length} input image(s)` : 'No input images found for this run', extractedImages.length > 0 ? 'good' : 'warn');
+    } else {
+      showToast(`Loaded recipe from ${item.model_id || 'history'} (${extractedImages.length} image(s))`, 'good');
+    }
+
+    const scrollTarget = (el.multiImageGroup && el.multiImageGroup.style.display !== 'none')
+      ? el.multiImageGroup
+      : (el.imageInputGroup && el.imageInputGroup.style.display !== 'none' ? el.imageInputGroup : el.promptInput);
+    if (scrollTarget) {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   function renderHistoryDbModal(json) {
@@ -4371,17 +4657,31 @@
       }
 
       const srcItems = Array.isArray(item.input_sources) ? item.input_sources : [];
-      const srcSummary = srcItems.length > 0
-        ? srcItems.map(s => {
-            const namePart = s.filename || s.filepath || s.local_url || s.remote_url || '';
-            const origPart = s.origin_filename && s.origin_filename !== s.filename ? ` (from ${s.origin_filename})` : '';
-            return namePart ? `${s.slot}: ${namePart}${origPart}` : '';
-          }).filter(Boolean).join(' • ')
-        : (item.input_filenames || item.input_image_url || '');
-      if (srcSummary) {
+      if (srcItems.length > 0) {
         const sBox = document.createElement('div');
         sBox.className = 'history-db-sources';
-        sBox.textContent = `📎 Sources: ${srcSummary}`;
+        sBox.innerHTML = `
+          <div style="font-weight:600;margin-bottom:3px;">📎 Input Sources (${srcItems.length}):</div>
+          <div class="history-source-item-row">
+            ${srcItems.map(s => {
+              const fname = s.origin_filename || s.filename || 'source';
+              const fpath = s.filepath || s.origin_filepath || '';
+              const cs = s.checksum ? `SHA:${s.checksum.slice(0,6)}` : '';
+              return `
+                <span class="badge-tag" style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;">
+                  ${escapeHtml(fname)} ${cs ? `<span class="source-checksum-badge">${escapeHtml(cs)}</span>` : ''}
+                  ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" style="padding:0 3px;" title="Open folder">📂</button>` : ''}
+                  <button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(s.local_url || s.origin_url || s.remote_url || s.filepath)}', { origin_filename: '${escapeHtml(s.origin_filename||'')}', filename: '${escapeHtml(s.filename||'')}', checksum: '${escapeHtml(s.checksum||'')}', filepath: '${escapeHtml(fpath)}' })" style="padding:0 3px;" title="Load into Studio inputs">➕</button>
+                </span>
+              `;
+            }).join('')}
+          </div>
+        `;
+        main.appendChild(sBox);
+      } else if (item.input_filenames || item.input_image_url) {
+        const sBox = document.createElement('div');
+        sBox.className = 'history-db-sources';
+        sBox.textContent = `📎 Sources: ${item.input_filenames || item.input_image_url}`;
         main.appendChild(sBox);
       }
 
@@ -4429,13 +4729,30 @@
       reuseBtn.addEventListener('click', () => reuseHistoryRun(item, false));
       actions.appendChild(reuseBtn);
 
-      if (item.input_image_url) {
+      const hasInputImages = Boolean(item.input_image_url || (Array.isArray(item.input_sources) && item.input_sources.length > 0) || (item.parameters && (item.parameters.images || item.parameters.reference_images || item.parameters.image || item.parameters.face_image)));
+      if (hasInputImages) {
         const reuseImgBtn = document.createElement('button');
         reuseImgBtn.type = 'button';
         reuseImgBtn.className = 'btn-action-tool';
-        reuseImgBtn.textContent = '🖼️ Reuse Input Image';
+        reuseImgBtn.textContent = '🖼️ Reuse Input Image(s)';
         reuseImgBtn.addEventListener('click', () => reuseHistoryRun(item, true));
         actions.appendChild(reuseImgBtn);
+      }
+
+      const detailsBtn = document.createElement('button');
+      detailsBtn.type = 'button';
+      detailsBtn.className = 'btn-action-tool';
+      detailsBtn.textContent = 'ℹ️ Details';
+      detailsBtn.addEventListener('click', () => openOutputDetailsModal(item));
+      actions.appendChild(detailsBtn);
+
+      if (item.local_path || item.local_url) {
+        const folderBtn = document.createElement('button');
+        folderBtn.type = 'button';
+        folderBtn.className = 'btn-action-tool';
+        folderBtn.textContent = '📂 Folder';
+        folderBtn.addEventListener('click', () => openLocalFolder(item.local_path || item.local_url));
+        actions.appendChild(folderBtn);
       }
 
       if (item.prompt) {
@@ -4816,10 +5133,110 @@
     return String(item.task_id || item.local_path || item.local_url || item.url || item.remote_url || '');
   }
 
+  function getItemSourceIdentity(item) {
+    if (!item) {
+      return { key: 'none', label: '✍️ Text-to-Image', filename: '', checksum: '', filepath: '', local_url: '' };
+    }
+    let sources = [];
+    if (Array.isArray(item.input_sources) && item.input_sources.length > 0) {
+      sources = item.input_sources;
+    } else if (typeof item.input_sources_json === 'string' && item.input_sources_json.trim()) {
+      try {
+        const p = JSON.parse(item.input_sources_json);
+        if (Array.isArray(p)) sources = p;
+      } catch (e) {}
+    }
+
+    if (sources.length === 0) {
+      const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
+      const fallbackUrl = item.input_image_url || params.image || (Array.isArray(params.images) ? params.images[0] : null);
+      if (fallbackUrl) {
+        const fname = String(fallbackUrl).split('?')[0].split('/').pop() || 'input_image';
+        return {
+          key: `name:${fname.toLowerCase()}`,
+          label: `🖼️ ${fname}`,
+          filename: fname,
+          checksum: '',
+          filepath: fallbackUrl.startsWith('/outputs/') ? fallbackUrl : '',
+          local_url: fallbackUrl
+        };
+      }
+      return {
+        key: 'none',
+        label: '✍️ Text-to-Image / No Source',
+        filename: '',
+        checksum: '',
+        filepath: '',
+        local_url: ''
+      };
+    }
+
+    const primary = sources[0];
+    const checksum = primary.checksum || primary.file_hash || primary.hash || '';
+    const fname = primary.origin_filename || primary.filename || '';
+    const key = checksum ? `hash:${checksum}` : (fname ? `name:${fname.toLowerCase()}` : 'none');
+    const label = fname ? `🖼️ ${fname}` : (checksum ? `SHA: ${checksum.slice(0, 8)}...` : 'Unknown Source');
+
+    return {
+      key,
+      label,
+      filename: fname,
+      checksum,
+      filepath: primary.filepath || primary.origin_filepath || '',
+      local_url: primary.local_url || primary.origin_url || ''
+    };
+  }
+
+  function populateGallerySourceFilterOptions() {
+    if (!el.gallerySourceFilterSelect) return;
+    const currentVal = el.gallerySourceFilterSelect.value || state.gallerySourceFilter || 'all';
+    const sourceMap = new Map();
+
+    state.history.forEach(item => {
+      const ident = getItemSourceIdentity(item);
+      if (!sourceMap.has(ident.key)) {
+        sourceMap.set(ident.key, {
+          key: ident.key,
+          label: ident.label,
+          count: 0
+        });
+      }
+      sourceMap.get(ident.key).count += 1;
+    });
+
+    const entries = Array.from(sourceMap.values());
+    const noneEntry = entries.find(e => e.key === 'none');
+    const realSources = entries.filter(e => e.key !== 'none').sort((a, b) => b.count - a.count);
+
+    let html = '<option value="all">👤 All Sources</option>';
+    if (noneEntry) {
+      html += `<option value="none">✍️ Text-to-Image (${noneEntry.count})</option>`;
+    }
+    realSources.forEach(s => {
+      html += `<option value="${escapeHtml(s.key)}">${escapeHtml(s.label)} (${s.count})</option>`;
+    });
+
+    el.gallerySourceFilterSelect.innerHTML = html;
+    if (Array.from(el.gallerySourceFilterSelect.options).some(o => o.value === currentVal)) {
+      el.gallerySourceFilterSelect.value = currentVal;
+    } else {
+      el.gallerySourceFilterSelect.value = 'all';
+      state.gallerySourceFilter = 'all';
+    }
+  }
+
   function getFilteredHistoryItems() {
-    if (state.galleryFilter === 'images') return state.history.filter(i => !i.isVideo);
-    if (state.galleryFilter === 'videos') return state.history.filter(i => Boolean(i.isVideo));
-    return state.history;
+    let items = state.history;
+    if (state.galleryFilter === 'images') items = items.filter(i => !i.isVideo);
+    else if (state.galleryFilter === 'videos') items = items.filter(i => Boolean(i.isVideo));
+
+    if (state.gallerySourceFilter && state.gallerySourceFilter !== 'all') {
+      items = items.filter(i => {
+        const ident = getItemSourceIdentity(i);
+        return ident.key === state.gallerySourceFilter;
+      });
+    }
+    return items;
   }
 
   function updateCompareBadge() {
@@ -5128,12 +5545,13 @@
     syncMaskBgPreview();
   }
 
-  function addExtraImageFiles(fileList) {
+  async function addExtraImageFiles(fileList) {
     if (!fileList || fileList.length === 0) return;
     const files = Array.from(fileList).slice(0, Math.max(0, 30 - state.extraImages.length));
-    files.forEach((file) => {
+    for (const file of files) {
       const id = `ref-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const entry = { id, file, previewUrl: '', downloadUrl: null };
+      const checksum = await computeFileSha256(file);
+      const entry = { id, file, checksum, filepath: file.path || '', name: file.name || '', previewUrl: '', downloadUrl: null };
       state.extraImages.push(entry);
       const reader = new FileReader();
       reader.onload = (ev) => {
@@ -5141,7 +5559,7 @@
         renderExtraImagesGrid();
       };
       reader.readAsDataURL(file);
-    });
+    }
     renderExtraImagesGrid();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
@@ -5160,15 +5578,18 @@
       role: meta.role || 'Face ID',
       origin_filename: meta.origin_filename || '',
       origin_filepath: meta.origin_filepath || '',
-      origin_url: meta.origin_url || ''
+      origin_url: meta.origin_url || '',
+      checksum: meta.checksum || meta.file_hash || meta.hash || '',
+      filepath: meta.filepath || meta.local_path || ''
     });
     renderExtraImagesGrid();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
-  function handleLastImageFile(file) {
+  async function handleLastImageFile(file) {
     if (!file) return;
-    state.lastImage = { file };
+    const checksum = await computeFileSha256(file);
+    state.lastImage = { file, checksum, filepath: file.path || '', name: file.name || '' };
     const reader = new FileReader();
     reader.onload = (e) => {
       if (el.lastImagePreview) el.lastImagePreview.src = e.target.result;
@@ -5178,8 +5599,168 @@
     reader.readAsDataURL(file);
   }
 
+  function createGalleryCardElement(item) {
+    const itemKey = getItemCompareKey(item);
+    const isPinned = state.compareKeys.includes(itemKey);
+    const activeKey = state.activeOutputItem ? getItemCompareKey(state.activeOutputItem) : null;
+    const isViewing = Boolean(activeKey && activeKey === itemKey);
+    const isBulkSelected = state.bulkSelectMode && state.bulkSelectedKeys.includes(itemKey);
+    const card = document.createElement('div');
+    card.className = `gallery-item${isPinned ? ' is-compare-pinned' : ''}${isViewing ? ' is-viewing' : ''}${isBulkSelected ? ' is-bulk-selected' : ''}`;
+    const preferredUrl = item.local_url || item.url || item.remote_url || '';
+
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'gallery-thumb';
+
+    if (state.bulkSelectMode) {
+      const checkBox = document.createElement('div');
+      checkBox.className = 'gallery-bulk-check';
+      checkBox.textContent = isBulkSelected ? '✓' : '';
+      card.appendChild(checkBox);
+    }
+
+    const cardActions = document.createElement('div');
+    cardActions.className = 'gallery-card-actions';
+
+    const infoBtn = document.createElement('button');
+    infoBtn.type = 'button';
+    infoBtn.className = 'gallery-card-btn';
+    infoBtn.title = 'View image details, parameters, sources & history';
+    infoBtn.textContent = 'ℹ️';
+    infoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openOutputDetailsModal(item);
+    });
+
+    const folderBtn = document.createElement('button');
+    folderBtn.type = 'button';
+    folderBtn.className = 'gallery-card-btn';
+    folderBtn.title = 'Open containing folder in Explorer';
+    folderBtn.textContent = '📂';
+    folderBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLocalFolder(item.local_path || item.local_url);
+    });
+
+    const useInputBtn = document.createElement('button');
+    useInputBtn.type = 'button';
+    useInputBtn.className = 'gallery-card-btn';
+    useInputBtn.title = 'Use this image as a source / reference input';
+    useInputBtn.textContent = '➕';
+    useInputBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      useImageAsInput(preferredUrl, item);
+    });
+
+    const reuseCardBtn = document.createElement('button');
+    reuseCardBtn.type = 'button';
+    reuseCardBtn.className = 'gallery-card-btn';
+    reuseCardBtn.title = 'Clone exact model, prompt & settings';
+    reuseCardBtn.textContent = '♻️';
+    reuseCardBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      reuseHistoryRun(item, false);
+    });
+
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = `gallery-card-btn${isPinned ? ' is-active' : ''}`;
+    pinBtn.title = isPinned ? 'Remove from A/B Compare' : 'Pin for Side-by-Side A/B Compare';
+    pinBtn.textContent = '⚖️';
+    pinBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleComparePin(item);
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'gallery-card-btn gallery-card-delete';
+    delBtn.title = 'Delete file from disk and History DB';
+    delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteHistoryOutput(item);
+    });
+
+    cardActions.appendChild(infoBtn);
+    cardActions.appendChild(folderBtn);
+    cardActions.appendChild(useInputBtn);
+    cardActions.appendChild(reuseCardBtn);
+    cardActions.appendChild(pinBtn);
+    cardActions.appendChild(delBtn);
+
+    const mediaEl = document.createElement(item.isVideo ? 'video' : 'img');
+    if (item.isVideo) {
+      mediaEl.muted = true;
+      mediaEl.loop = true;
+      mediaEl.preload = 'none';
+      card.addEventListener('mouseenter', () => {
+        const p = mediaEl.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      });
+      card.addEventListener('mouseleave', () => {
+        mediaEl.pause();
+        mediaEl.currentTime = 0;
+      });
+    } else {
+      mediaEl.alt = 'Output thumbnail';
+      mediaEl.loading = 'lazy';
+    }
+    let triedLocal = Boolean(item.local_url && preferredUrl === item.local_url);
+    let triedRemote = Boolean(item.remote_url && preferredUrl === item.remote_url);
+    mediaEl.src = preferredUrl;
+    mediaEl.onerror = () => {
+      if (item.local_url && !triedLocal) {
+        triedLocal = true;
+        mediaEl.src = item.local_url;
+        return;
+      }
+      if (item.remote_url && !triedRemote) {
+        triedRemote = true;
+        mediaEl.src = item.remote_url;
+        return;
+      }
+      thumbWrap.innerHTML = '<div class="gallery-thumb-fallback">Preview unavailable<br>(CDN expired)</div>';
+    };
+    thumbWrap.appendChild(mediaEl);
+
+    if (item.isVideo) {
+      const badge = document.createElement('span');
+      badge.className = 'gallery-type-badge';
+      badge.textContent = '▶ VIDEO';
+      thumbWrap.appendChild(badge);
+    }
+
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'gallery-meta';
+    metaDiv.innerHTML = `
+      <span class="gallery-model">${escapeHtml(item.model_id || 'model')}</span>
+      <span class="gallery-price">$${item.price || 0}${item.local_path ? ' • 💾 Disk' : ''}</span>
+    `;
+
+    card.appendChild(thumbWrap);
+    card.appendChild(cardActions);
+    card.appendChild(metaDiv);
+    card.draggable = true;
+    card.addEventListener('dragstart', (e) => {
+      if (!e.dataTransfer || !preferredUrl) return;
+      e.dataTransfer.setData('text/uri-list', preferredUrl);
+      e.dataTransfer.setData('text/plain', preferredUrl);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    card.addEventListener('click', () => {
+      if (state.bulkSelectMode) {
+        toggleBulkSelectKey(itemKey);
+        return;
+      }
+      loadOutputIntoViewer(item);
+    });
+    return card;
+  }
+
   function renderHistory() {
     updateCompareBadge();
+    populateGallerySourceFilterOptions();
     const filtered = getFilteredHistoryItems();
     if (state.history.length === 0) {
       el.historyGallery.innerHTML = '<div class="empty-gallery">No previous outputs in this session yet. All new generations are automatically saved to your local outputs folder.</div>';
@@ -5191,132 +5772,223 @@
     }
 
     el.historyGallery.innerHTML = '';
-    const activeKey = state.activeOutputItem ? getItemCompareKey(state.activeOutputItem) : null;
-    filtered.forEach((item) => {
-      const itemKey = getItemCompareKey(item);
-      const isPinned = state.compareKeys.includes(itemKey);
-      const isViewing = Boolean(activeKey && activeKey === itemKey);
-      const isBulkSelected = state.bulkSelectMode && state.bulkSelectedKeys.includes(itemKey);
-      const card = document.createElement('div');
-      card.className = `gallery-item${isPinned ? ' is-compare-pinned' : ''}${isViewing ? ' is-viewing' : ''}${isBulkSelected ? ' is-bulk-selected' : ''}`;
-      const preferredUrl = item.local_url || item.url || item.remote_url || '';
 
-      const thumbWrap = document.createElement('div');
-      thumbWrap.className = 'gallery-thumb';
-
-      if (state.bulkSelectMode) {
-        const checkBox = document.createElement('div');
-        checkBox.className = 'gallery-bulk-check';
-        checkBox.textContent = isBulkSelected ? '✓' : '';
-        card.appendChild(checkBox);
-      }
-
-      const cardActions = document.createElement('div');
-      cardActions.className = 'gallery-card-actions';
-
-      const reuseCardBtn = document.createElement('button');
-      reuseCardBtn.type = 'button';
-      reuseCardBtn.className = 'gallery-card-btn';
-      reuseCardBtn.title = 'Clone exact model, prompt & settings';
-      reuseCardBtn.textContent = '♻️';
-      reuseCardBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        reuseHistoryRun(item, false);
+    if (state.galleryGroupBySource) {
+      const groups = new Map();
+      filtered.forEach(item => {
+        const ident = getItemSourceIdentity(item);
+        if (!groups.has(ident.key)) {
+          groups.set(ident.key, { ident, items: [] });
+        }
+        groups.get(ident.key).items.push(item);
       });
 
-      const pinBtn = document.createElement('button');
-      pinBtn.type = 'button';
-      pinBtn.className = `gallery-card-btn${isPinned ? ' is-active' : ''}`;
-      pinBtn.title = isPinned ? 'Remove from A/B Compare' : 'Pin for Side-by-Side A/B Compare';
-      pinBtn.textContent = '⚖️';
-      pinBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleComparePin(item);
-      });
+      for (const group of groups.values()) {
+        const groupWrap = document.createElement('div');
+        groupWrap.className = 'gallery-source-group';
 
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'gallery-card-btn gallery-card-delete';
-      delBtn.title = 'Delete file from disk and History DB';
-      delBtn.textContent = '🗑️';
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteHistoryOutput(item);
-      });
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'gallery-source-group-header';
 
-      cardActions.appendChild(reuseCardBtn);
-      cardActions.appendChild(pinBtn);
-      cardActions.appendChild(delBtn);
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'gallery-source-group-title';
+        titleDiv.innerHTML = `
+          <strong>${escapeHtml(group.ident.label)}</strong>
+          <span class="badge-tag">${group.items.length} output${group.items.length === 1 ? '' : 's'}</span>
+          ${group.ident.checksum ? `<span class="source-checksum-badge" title="SHA-256 Checksum: ${escapeHtml(group.ident.checksum)}">SHA: ${escapeHtml(group.ident.checksum.slice(0, 8))}...</span>` : ''}
+        `;
 
-      const mediaEl = document.createElement(item.isVideo ? 'video' : 'img');
-      if (item.isVideo) {
-        mediaEl.muted = true;
-        mediaEl.loop = true;
-        mediaEl.preload = 'none';
-        card.addEventListener('mouseenter', () => {
-          const p = mediaEl.play();
-          if (p && typeof p.catch === 'function') p.catch(() => {});
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.alignItems = 'center';
+        actionsDiv.style.gap = '6px';
+
+        if (group.ident.key !== 'none') {
+          const useInputBtn = document.createElement('button');
+          useInputBtn.type = 'button';
+          useInputBtn.className = 'btn-tiny';
+          useInputBtn.textContent = '➕ Use as Input';
+          useInputBtn.title = 'Load this source image into active Studio inputs';
+          useInputBtn.addEventListener('click', () => {
+            useImageAsInput(group.ident.local_url || group.ident.filepath, {
+              origin_filename: group.ident.filename,
+              filename: group.ident.filename,
+              checksum: group.ident.checksum,
+              filepath: group.ident.filepath
+            });
+          });
+          actionsDiv.appendChild(useInputBtn);
+
+          if (group.ident.filepath || group.ident.local_url) {
+            const openFldrBtn = document.createElement('button');
+            openFldrBtn.type = 'button';
+            openFldrBtn.className = 'btn-tiny';
+            openFldrBtn.textContent = '📂 Open Folder';
+            openFldrBtn.title = 'Open containing folder in Windows Explorer';
+            openFldrBtn.addEventListener('click', () => {
+              openLocalFolder(group.ident.filepath || group.ident.local_url);
+            });
+            actionsDiv.appendChild(openFldrBtn);
+          }
+        }
+
+        groupHeader.appendChild(titleDiv);
+        groupHeader.appendChild(actionsDiv);
+        groupWrap.appendChild(groupHeader);
+
+        const gridDiv = document.createElement('div');
+        gridDiv.className = 'gallery-grid';
+        group.items.forEach(item => {
+          gridDiv.appendChild(createGalleryCardElement(item));
         });
-        card.addEventListener('mouseleave', () => {
-          mediaEl.pause();
-          mediaEl.currentTime = 0;
-        });
-      } else {
-        mediaEl.alt = 'Output thumbnail';
-        mediaEl.loading = 'lazy';
+        groupWrap.appendChild(gridDiv);
+
+        el.historyGallery.appendChild(groupWrap);
       }
-      let triedLocal = Boolean(item.local_url && preferredUrl === item.local_url);
-      let triedRemote = Boolean(item.remote_url && preferredUrl === item.remote_url);
-      mediaEl.src = preferredUrl;
-      mediaEl.onerror = () => {
-        if (item.local_url && !triedLocal) {
-          triedLocal = true;
-          mediaEl.src = item.local_url;
-          return;
-        }
-        if (item.remote_url && !triedRemote) {
-          triedRemote = true;
-          mediaEl.src = item.remote_url;
-          return;
-        }
-        thumbWrap.innerHTML = '<div class="gallery-thumb-fallback">Preview unavailable<br>(CDN expired)</div>';
-      };
-      thumbWrap.appendChild(mediaEl);
-
-      if (item.isVideo) {
-        const badge = document.createElement('span');
-        badge.className = 'gallery-type-badge';
-        badge.textContent = '▶ VIDEO';
-        thumbWrap.appendChild(badge);
-      }
-
-      const metaDiv = document.createElement('div');
-      metaDiv.className = 'gallery-meta';
-      metaDiv.innerHTML = `
-        <span class="gallery-model">${escapeHtml(item.model_id || 'model')}</span>
-        <span class="gallery-price">$${item.price || 0}${item.local_path ? ' • 💾 Disk' : ''}</span>
-      `;
-
-      card.appendChild(thumbWrap);
-      card.appendChild(cardActions);
-      card.appendChild(metaDiv);
-      card.draggable = true;
-      card.addEventListener('dragstart', (e) => {
-        if (!e.dataTransfer || !preferredUrl) return;
-        e.dataTransfer.setData('text/uri-list', preferredUrl);
-        e.dataTransfer.setData('text/plain', preferredUrl);
-        e.dataTransfer.effectAllowed = 'copy';
+    } else {
+      filtered.forEach((item) => {
+        el.historyGallery.appendChild(createGalleryCardElement(item));
       });
-      card.addEventListener('click', () => {
-        if (state.bulkSelectMode) {
-          toggleBulkSelectKey(itemKey);
-          return;
-        }
-        loadOutputIntoViewer(item);
-      });
-      el.historyGallery.appendChild(card);
-    });
+    }
+
     updateBulkDeleteUi();
+  }
+
+  function openOutputDetailsModal(item) {
+    if (!el.outputDetailsModal || !el.outputDetailsBody || !item) return;
+    const preferredUrl = item.local_url || item.url || item.remote_url || '';
+    const isVideo = Boolean(item.isVideo || item.is_video);
+    const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
+    const sources = Array.isArray(item.input_sources) ? item.input_sources : [];
+    const localPath = item.local_path || (preferredUrl.startsWith('/outputs/') ? preferredUrl : '');
+
+    if (el.outputDetailsTitle) {
+      el.outputDetailsTitle.textContent = item.task_id ? `Output: ${item.task_id.slice(0, 12)}...` : 'Output Details';
+    }
+    if (el.outputDetailsModelBadge) {
+      el.outputDetailsModelBadge.textContent = item.model_id || 'Unknown Model';
+    }
+
+    let mediaHtml = '';
+    if (isVideo) {
+      mediaHtml = `<video src="${escapeHtml(preferredUrl)}" controls autoplay loop muted playsinline style="max-width:100%;max-height:360px;border-radius:6px;"></video>`;
+    } else {
+      mediaHtml = `<img src="${escapeHtml(preferredUrl)}" alt="Output preview" style="max-width:100%;max-height:360px;border-radius:6px;object-fit:contain;" />`;
+    }
+
+    let sourcesHtml = '';
+    if (sources.length > 0) {
+      sourcesHtml = `
+        <div style="margin-top:10px;">
+          <h4 style="margin:0 0 8px 0;font-size:0.8rem;color:var(--text-main);display:flex;align-items:center;gap:6px;">
+            🖼️ Input Sources & Provenance (${sources.length})
+          </h4>
+          <div class="source-provenance-list">
+            ${sources.map((s, idx) => {
+              const fname = s.origin_filename || s.filename || `source_${idx + 1}`;
+              const origTag = (s.origin_filename && s.origin_filename !== s.filename) ? ` <span class="badge-tag" style="font-size:0.62rem;">origin: ${escapeHtml(s.origin_filename)}</span>` : '';
+              const checksumTag = s.checksum ? `<span class="source-checksum-badge" title="SHA-256 Checksum: ${escapeHtml(s.checksum)}">SHA: ${escapeHtml(s.checksum.slice(0, 10))}...</span>` : '';
+              const fpath = s.filepath || s.origin_filepath || s.local_url || '';
+              const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || '';
+              return `
+                <div class="source-provenance-card">
+                  <div class="source-provenance-header">
+                    <span style="font-weight:600;color:var(--text-main);">
+                      ${escapeHtml(s.slot || `Slot ${idx + 1}`)}: ${escapeHtml(fname)}${origTag}
+                    </span>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      ${checksumTag}
+                      ${loadUrl ? `<button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(loadUrl)}', { origin_filename: '${escapeHtml(s.origin_filename || '')}', filename: '${escapeHtml(s.filename || '')}', checksum: '${escapeHtml(s.checksum || '')}', filepath: '${escapeHtml(fpath)}' })" title="Load into Studio inputs">➕ Use as Source</button>` : ''}
+                      ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" title="Open folder containing this source">📂 Folder</button>` : ''}
+                    </div>
+                  </div>
+                  ${fpath ? `<div class="source-folder-path" title="${escapeHtml(fpath)}">📁 ${escapeHtml(fpath)}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      sourcesHtml = `
+        <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);font-style:italic;">
+          ✍️ Text-to-Image / Prompt Only (No reference or input images used for this generation).
+        </div>
+      `;
+    }
+
+    const aspect = params.aspect_ratio || item.aspect_ratio || '—';
+    const res = params.resolution || params.target_resolution || item.resolution || '—';
+    const dur = params.duration !== undefined ? `${params.duration}s` : '—';
+    const seed = params.seed !== undefined ? params.seed : '—';
+    const estCost = item.estimated_price !== undefined ? `$${Number(item.estimated_price).toFixed(4)}` : (item.cost_micro ? `$${(item.cost_micro / 1000000).toFixed(4)}` : '—');
+    const savedTime = item.saved_at || item.completed_at || item.submitted_at || '—';
+
+    el.outputDetailsBody.innerHTML = `
+      <div class="output-details-grid">
+        <div class="output-details-media">
+          ${mediaHtml}
+        </div>
+        <div class="output-details-meta">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+              <strong style="font-size:0.78rem;color:var(--text-muted);">PROMPT</strong>
+              ${item.prompt ? `<button type="button" class="btn-tiny" onclick="window.wsAppCopyText(${JSON.stringify(item.prompt)})">📋 Copy</button>` : ''}
+            </div>
+            <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:8px 10px;border-radius:6px;font-size:0.78rem;line-height:1.4;max-height:120px;overflow-y:auto;word-break:break-word;">
+              ${escapeHtml(item.prompt || 'No prompt recorded')}
+            </div>
+          </div>
+
+          ${params.negative_prompt ? `
+            <div>
+              <strong style="font-size:0.72rem;color:var(--text-muted);">NEGATIVE PROMPT</strong>
+              <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border-color);padding:6px 8px;border-radius:6px;font-size:0.72rem;color:var(--text-muted);word-break:break-word;">
+                ${escapeHtml(params.negative_prompt)}
+              </div>
+            </div>
+          ` : ''}
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(90px, 1fr));gap:6px;background:rgba(15,23,42,0.4);border:1px solid var(--border-color);padding:8px;border-radius:6px;font-size:0.72rem;">
+            <div><span style="color:var(--text-muted);">Aspect:</span> <strong>${escapeHtml(aspect)}</strong></div>
+            <div><span style="color:var(--text-muted);">Resolution:</span> <strong>${escapeHtml(res)}</strong></div>
+            <div><span style="color:var(--text-muted);">Duration:</span> <strong>${escapeHtml(dur)}</strong></div>
+            <div><span style="color:var(--text-muted);">Seed:</span> <strong>${escapeHtml(String(seed))}</strong></div>
+            <div><span style="color:var(--text-muted);">Cost:</span> <strong style="color:var(--accent-green);">${escapeHtml(estCost)}</strong></div>
+            <div><span style="color:var(--text-muted);">Saved:</span> <span>${escapeHtml(savedTime.slice(0, 19).replace('T', ' '))}</span></div>
+          </div>
+
+          ${localPath ? `
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;">
+              <span style="color:var(--text-muted);white-space:nowrap;">Output Path:</span>
+              <span class="source-folder-path" style="flex:1;" title="${escapeHtml(localPath)}">${escapeHtml(localPath)}</span>
+              <button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(localPath)}')">📂 Open</button>
+              <button type="button" class="btn-tiny" onclick="window.wsAppCopyText('${escapeHtml(localPath)}')">📋 Copy</button>
+            </div>
+          ` : ''}
+
+          ${sourcesHtml}
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);flex-wrap:wrap;">
+        <button type="button" class="btn-secondary-sm" id="detailsReuseSetupBtn">🔁 Reuse Setup (Model + Params)</button>
+        <button type="button" class="btn-secondary-sm" id="detailsReuseInputsBtn">🖼️ Reuse Input Image(s)</button>
+        <button type="button" class="btn-secondary-sm" id="detailsUseAsRefBtn">➕ Use Output as Reference</button>
+        <button type="button" class="btn-secondary-sm" id="detailsCompareBtn">⚖️ Pin Compare</button>
+      </div>
+    `;
+
+    const reuseSetupBtn = document.getElementById('detailsReuseSetupBtn');
+    if (reuseSetupBtn) reuseSetupBtn.addEventListener('click', () => reuseHistoryRun(item, false));
+    const reuseInputsBtn = document.getElementById('detailsReuseInputsBtn');
+    if (reuseInputsBtn) reuseInputsBtn.addEventListener('click', () => reuseHistoryRun(item, true));
+    const useAsRefBtn = document.getElementById('detailsUseAsRefBtn');
+    if (useAsRefBtn) useAsRefBtn.addEventListener('click', () => useImageAsInput(preferredUrl, item));
+    const compareBtn = document.getElementById('detailsCompareBtn');
+    if (compareBtn) compareBtn.addEventListener('click', () => toggleComparePin(item));
+
+    el.outputDetailsModal.style.display = 'flex';
   }
 
   function renderActiveOutputInspector(item) {
@@ -5340,6 +6012,9 @@
       <div class="inspector-top-row">
         <span class="badge-tag">${escapeHtml(item.model_id || 'model')}</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn-tiny" id="inspectorDetailsBtn" title="View parameters, input sources and metadata">ℹ️ Details</button>
+          ${item.local_path || item.local_url ? '<button type="button" class="btn-tiny" id="inspectorOpenFolderBtn" title="Open containing folder in Explorer">📂 Folder</button>' : ''}
+          <button type="button" class="btn-tiny" id="inspectorUseAsInputBtn" title="Load output image into active Studio inputs">➕ Use as Source</button>
           ${item.prompt ? '<button type="button" class="btn-tiny" id="inspectorCopyPromptBtn">📋 Copy Prompt</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorPaintEditBtn">🖌️ Paint-Edit</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorCropBtn">✂️ Crop Face</button>' : ''}
@@ -5351,8 +6026,27 @@
       </div>
       ${item.prompt ? `<div class="inspector-prompt-line">${escapeHtml(item.prompt)}</div>` : ''}
       ${srcText ? `<div class="inspector-sources-line">📎 Inputs: ${escapeHtml(srcText)}</div>` : ''}
+      ${srcArr.length > 0 ? `
+        <div class="history-source-item-row" style="margin-top:2px;">
+          ${srcArr.map(s => {
+            const fname = s.origin_filename || s.filename || 'source';
+            const fpath = s.filepath || s.origin_filepath || '';
+            const cs = s.checksum ? `SHA:${s.checksum.slice(0,6)}` : '';
+            return `
+              <span class="badge-tag" style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;">
+                ${escapeHtml(fname)} ${cs ? `<span class="source-checksum-badge">${escapeHtml(cs)}</span>` : ''}
+                ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" style="padding:0 3px;" title="Open folder">📂</button>` : ''}
+                <button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(s.local_url || s.origin_url || s.remote_url || s.filepath)}', { origin_filename: '${escapeHtml(s.origin_filename||'')}', filename: '${escapeHtml(s.filename||'')}', checksum: '${escapeHtml(s.checksum||'')}', filepath: '${escapeHtml(fpath)}' })" style="padding:0 3px;" title="Load into Studio inputs">➕</button>
+              </span>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
     `;
 
+    const detailsBtn = document.getElementById('inspectorDetailsBtn');
+    const openFldrBtn = document.getElementById('inspectorOpenFolderBtn');
+    const useAsInputBtn = document.getElementById('inspectorUseAsInputBtn');
     const copyBtn = document.getElementById('inspectorCopyPromptBtn');
     const paintBtn = document.getElementById('inspectorPaintEditBtn');
     const cropOutBtn = document.getElementById('inspectorCropBtn');
@@ -5361,6 +6055,16 @@
     const sendPipeBtn = document.getElementById('inspectorSendPipelineBtn');
     const maskToggleBtn = document.getElementById('inspectorToggleMaskCompositeBtn');
     const bestImgUrl = item.local_url || item.remote_url || item.url;
+
+    if (detailsBtn) {
+      detailsBtn.addEventListener('click', () => openOutputDetailsModal(item));
+    }
+    if (openFldrBtn) {
+      openFldrBtn.addEventListener('click', () => openLocalFolder(item.local_path || item.local_url));
+    }
+    if (useAsInputBtn && bestImgUrl) {
+      useAsInputBtn.addEventListener('click', () => useImageAsInput(bestImgUrl, item));
+    }
 
     if (copyBtn) {
       copyBtn.addEventListener('click', async () => {
@@ -6830,6 +7534,34 @@
       el.bulkDeleteSelectedBtn.addEventListener('click', () => executeBulkDelete());
     }
 
+    // Gallery Source Filter & Grouping
+    if (el.gallerySourceFilterSelect) {
+      el.gallerySourceFilterSelect.addEventListener('change', () => {
+        state.gallerySourceFilter = el.gallerySourceFilterSelect.value || 'all';
+        renderHistory();
+      });
+    }
+    if (el.galleryGroupBySourceBtn) {
+      el.galleryGroupBySourceBtn.addEventListener('click', () => {
+        state.galleryGroupBySource = !state.galleryGroupBySource;
+        el.galleryGroupBySourceBtn.classList.toggle('active', state.galleryGroupBySource);
+        el.galleryGroupBySourceBtn.textContent = state.galleryGroupBySource ? '✓ Grouped by Source' : '🗂️ Group by Source';
+        renderHistory();
+      });
+    }
+
+    // Output Details Modal Close Listeners
+    if (el.closeOutputDetailsModalBtn && el.outputDetailsModal) {
+      el.closeOutputDetailsModalBtn.addEventListener('click', () => {
+        el.outputDetailsModal.style.display = 'none';
+      });
+      el.outputDetailsModal.addEventListener('click', (e) => {
+        if (e.target === el.outputDetailsModal) {
+          el.outputDetailsModal.style.display = 'none';
+        }
+      });
+    }
+
     // Previous Prompts Menu Listeners
     if (el.openPromptHistoryBtn && el.promptHistoryMenu) {
       el.openPromptHistoryBtn.addEventListener('click', (e) => {
@@ -8123,8 +8855,10 @@
     showToast('Loaded clip into Tools → Video Upscaler (choose target resolution & Run)', 'good');
   }
 
-  function handleImageFile(file) {
-    state.sourceImage = { file };
+  async function handleImageFile(file) {
+    if (!file) return;
+    const checksum = await computeFileSha256(file);
+    state.sourceImage = { file, checksum, filepath: file.path || '', name: file.name || '' };
     state.sourceImageDimensions = null;
     const reader = new FileReader();
     reader.onload = (e) => {

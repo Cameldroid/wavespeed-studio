@@ -1160,12 +1160,21 @@ function listSavedOutputs() {
         const raw = fs.readFileSync(path.join(OUTPUTS_META_DIR, f), 'utf8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.local_path && fs.existsSync(parsed.local_path)) {
+          if ((!parsed.input_sources || parsed.input_sources.length === 0) && historyDb && parsed.task_id) {
+            try {
+              const row = historyDb.db.prepare('SELECT input_sources_json FROM generations WHERE task_id = ?').get(parsed.task_id);
+              if (row && row.input_sources_json) {
+                const parsedSrc = JSON.parse(row.input_sources_json);
+                if (Array.isArray(parsedSrc) && parsedSrc.length > 0) parsed.input_sources = parsedSrc;
+              }
+            } catch (e) {}
+          }
           items.push(parsed);
         }
       } catch (e) {}
     }
     items.sort((a, b) => (b.saved_at || '').localeCompare(a.saved_at || ''));
-    return items.slice(0, 60);
+    return items.slice(0, 300);
   } catch (e) {
     return [];
   }
@@ -1542,13 +1551,25 @@ const server = http.createServer(async (req, res) => {
       else if (body.target === 'images') targetPath = OUTPUTS_IMAGES_DIR;
       else if (body.target === 'videos') targetPath = OUTPUTS_VIDEOS_DIR;
 
-      const allowedRoots = [OUTPUTS_DIR, USER_DATA_DIR, LOGS_DIR, APP_RESOURCES_DIR];
       let resolvedFile = null;
-      if (body.filePath && typeof body.filePath === 'string') {
-        const candidate = path.resolve(body.filePath);
-        if (allowedRoots.some(r => isPathInside(candidate, r)) && fs.existsSync(candidate)) {
-          resolvedFile = candidate;
-          targetPath = path.dirname(resolvedFile);
+      const rawPath = String(body.filePath || body.local_path || body.local_url || '').trim();
+      if (rawPath) {
+        let candidate = rawPath;
+        if (candidate.startsWith('/outputs/')) {
+          const rel = candidate.replace(/^\/outputs\//, '').replace(/\//g, path.sep);
+          candidate = path.resolve(OUTPUTS_DIR, rel);
+        } else {
+          candidate = path.resolve(candidate);
+        }
+        if (fs.existsSync(candidate)) {
+          const st = fs.statSync(candidate);
+          if (st.isDirectory()) {
+            targetPath = candidate;
+            resolvedFile = null;
+          } else {
+            resolvedFile = candidate;
+            targetPath = path.dirname(candidate);
+          }
         }
       }
 
@@ -1596,6 +1617,7 @@ const server = http.createServer(async (req, res) => {
       });
 
       return sendJson(res, 200, {
+        ok: true,
         success: true,
         opened: openedPath,
         folder: targetPath,
@@ -1795,6 +1817,13 @@ const server = http.createServer(async (req, res) => {
         croppedDir: OUTPUTS_CROPPED_DIR,
         logsDir: LOGS_DIR
       });
+    }
+
+    if (pathname === '/api/sources' && req.method === 'GET') {
+      const items = historyDb && typeof historyDb.listDistinctSources === 'function'
+        ? historyDb.listDistinctSources()
+        : [];
+      return sendJson(res, 200, { code: 200, items });
     }
 
     if (pathname === '/api/crops' && req.method === 'GET') {

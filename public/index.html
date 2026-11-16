@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WaveSpeed Studio — AI Image & Video Studio</title>
   <link rel="icon" type="image/png" href="/assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=1.2.0">
+  <link rel="stylesheet" href="style.css?v=1.3.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -939,6 +939,12 @@
                 <button type="button" class="history-filter-btn active" data-gsize="md">M</button>
                 <button type="button" class="history-filter-btn" data-gsize="lg">L</button>
               </div>
+              <div class="history-source-filter-wrap" style="display:flex;align-items:center;gap:4px;">
+                <select class="history-source-select" id="gallerySourceFilterSelect" title="Filter gallery by input source image">
+                  <option value="all">👤 All Sources</option>
+                </select>
+                <button type="button" class="btn-secondary-sm" id="galleryGroupBySourceBtn" title="Group outputs by original source image">🗂️ Group by Source</button>
+              </div>
               <button type="button" class="btn-secondary-sm" id="toggleBulkSelectBtn" title="Select multiple outputs to bulk delete or stitch clips">☑️ Select</button>
               <button type="button" class="btn-secondary-sm" id="bulkStitchSelectedBtn" style="display: none;" title="Locally stitch 2+ selected videos into one MP4 ($0.00 FFmpeg)">🎞️ Stitch (<span id="bulkVideoCount">0</span>)</button>
               <button type="button" class="btn-secondary-sm btn-danger-outline" id="bulkDeleteSelectedBtn" style="display: none;">🗑️ Delete Selected (<span id="bulkSelectedCount">0</span>)</button>
@@ -1172,6 +1178,20 @@
       </div>
     </div>
 
+    <!-- Output Details & Source Provenance Modal -->
+    <div class="modal-backdrop" id="outputDetailsModal" style="display: none;">
+      <div class="modal-box output-details-modal-box">
+        <div class="modal-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3 id="outputDetailsTitle" style="margin:0;">Output Details & Sources</h3>
+            <span class="badge-tag" id="outputDetailsModelBadge">Model</span>
+          </div>
+          <button type="button" class="close-modal-btn" id="closeOutputDetailsModalBtn">✕</button>
+        </div>
+        <div class="output-details-body" id="outputDetailsBody"></div>
+      </div>
+    </div>
+
     <!-- Side-by-Side A/B Model Compare Modal -->
     <div class="modal-backdrop" id="compareModal" style="display: none;">
       <div class="modal-box compare-modal-box">
@@ -1194,6 +1214,6 @@
   </div>
 
   <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
-  <script src="app.js?v=1.2.0"></script>
+  <script src="app.js?v=1.3.0"></script>
 </body>
 </html>

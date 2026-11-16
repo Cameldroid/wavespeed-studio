@@ -8,6 +8,7 @@ Note Modified Date:
   - "2026-11-16T13:52:00-03:00"
   - "2026-11-16T15:05:00-03:00"
   - "2026-11-16T17:25:30-03:00"
+  - "2026-11-16T19:58:43-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -78,3 +79,15 @@ Note Modified Date:
   - **Dual Provenance (`origin_filename` + cropped `filename`):** Both cropped and original filenames are preserved across Reference Cards, Face Packs, Pipeline runs, Active Output Inspector, History DB (`studio_history.sqlite`), and FTS5 search (`(from <origin_filename>)`).
   - **SQLite Face Study Prompt Library (`📚 Study Prompts`):** Categorized & searchable prompt popover (`Anatomy & Essence`, `Lighting`, `Expressions` — Smile, Soft Pout, Subtle Frown, Cheeky Smirk, Playful Tongue-Out — `Angles & Framing`, plus `+ Save Current` custom prompts) adapting `{{REFS}}` to `<Picture N>` (MiniMax H3) vs `Image N` (Seedream/Qwen/FLUX).
 - **Exact Next Action:** Copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/04-<next-feature>/SPEC.md` per [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) when starting the next feature slice.
+
+
+# 2026-11-16T19:58:43-03:00 — v1.3.0 Shipped: Source Image Reuse Fix, Gallery Folders, Details Modal, SHA-256 Source Grouping & History Merge
+
+- **Authoritative Release:** `v1.3.0` (spec documented in [features/04-source-reuse-and-gallery-folders/SPEC.md](features/04-source-reuse-and-gallery-folders/SPEC.md)), running on `http://localhost:3000` (`Launch Studio.cmd`) and Desktop (`Launch Desktop.cmd`).
+- **Key Capabilities Added in `v1.3.0`:**
+  - **Source Image Reuse Overhaul:** `reuseHistoryRun(item, onlyInputMedia)` is now fully `async`, resets stale inputs, clears and populates `state.extraImages` for pure multi-image models (`seedream-v5.5/edit`, `qwen-image/edit-plus`, `minimax-h3/image-edit`), single-slot models, and swap dual-slots with visual previews, modal closure, and smooth scrolling.
+  - **Gallery Card Quick Action Tools:** Added `ℹ️ Details` (opens `#outputDetailsModal`), `📂 Open Folder` (launches `explorer.exe /select,"<file>"`), and `➕ Use as Source / Reference` (loads any output directly into Studio inputs).
+  - **Output Details & Source Provenance Modal (`#outputDetailsModal`):** Complete generation details, prompt copying, parameters grid, output disk path with `📂 Open` and `📋 Copy`, and full **Input Sources & Provenance** listing origin filenames, folders, SHA-256 checksums, and shortcuts.
+  - **SHA-256 Source Checksum Identity & Group by Source:** Web Crypto SHA-256 hashes generated on upload, drag, and crop decoupling identity from volatile clipboard temp folders (`AppData\Local\Temp\Ditto\...`), backed by `#gallerySourceFilterSelect` and `🗂️ Group by Source` (`#galleryGroupBySourceBtn`) with header shortcuts.
+  - **History Completeness & Predecessor Merge:** Verified all 82 generations from `D:\Cocoding\Aimagen Nsfw\database\studio_history.sqlite` exist in current 220-task database, and merged 79 missing historical generation records into `wavespeed-studio\logs\generations.jsonl`.
+- **Exact Next Action:** Copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/05-<next-feature>/SPEC.md` per [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) when starting the next feature slice.

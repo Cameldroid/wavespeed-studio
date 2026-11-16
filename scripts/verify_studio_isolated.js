@@ -609,7 +609,23 @@ async function runMockOutputAndServerTests() {
     const fpDelJson = await fpDelResp.json();
     assert.strictEqual(fpDelJson.deleted, true);
 
-    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, video trim/concat guards, resolvePayloadMedia, /api/crops*, and /api/face-prompts* passed');
+    // 9. Test GET /api/sources endpoint & POST /api/open-folder
+    const sourcesResp = await realFetch(`http://127.0.0.1:${appPort}/api/sources`);
+    assert.strictEqual(sourcesResp.status, 200);
+    const sourcesJson = await sourcesResp.json();
+    assert.strictEqual(sourcesJson.code, 200);
+    assert(Array.isArray(sourcesJson.items));
+
+    const openFolderResp = await realFetch(`http://127.0.0.1:${appPort}/api/open-folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: savedImg[0].local_path })
+    });
+    assert.strictEqual(openFolderResp.status, 200);
+    const openFolderJson = await openFolderResp.json();
+    assert(openFolderJson.ok || openFolderJson.success, 'Expected ok status on /api/open-folder response');
+
+    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, video trim/concat guards, resolvePayloadMedia, /api/crops*, /api/face-prompts*, /api/sources, and /api/open-folder passed');
   } finally {
     global.fetch = realFetch;
     srvMod.savedTasksMap.delete(mockTaskImg);
@@ -1285,7 +1301,21 @@ async function runMockDomAppTests() {
   elementsById.get('pipelineAddStepBtn').click();
   assert.strictEqual(elementsById.get('pipelineStepsList').children.length, 3, 'Expected + Add Step to append Step 3');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, Study Prompts & Crop Modal, and Pipeline 2+ steps)');
+  // 11. Verify Source Image Reuse, Gallery Source Filtering & Output Details Modal Elements
+  assert(elementsById.get('gallerySourceFilterSelect'), 'Expected #gallerySourceFilterSelect in DOM');
+  assert(elementsById.get('galleryGroupBySourceBtn'), 'Expected #galleryGroupBySourceBtn in DOM');
+  assert(elementsById.get('outputDetailsModal'), 'Expected #outputDetailsModal in DOM');
+  assert(elementsById.get('outputDetailsTitle'), 'Expected #outputDetailsTitle in DOM');
+  assert(elementsById.get('outputDetailsModelBadge'), 'Expected #outputDetailsModelBadge in DOM');
+  assert(elementsById.get('outputDetailsBody'), 'Expected #outputDetailsBody in DOM');
+  assert(elementsById.get('closeOutputDetailsModalBtn'), 'Expected #closeOutputDetailsModalBtn in DOM');
+
+  elementsById.get('galleryGroupBySourceBtn').click();
+  assert(elementsById.get('galleryGroupBySourceBtn').textContent.includes('Grouped by Source'), 'Expected toggle click to activate Grouped by Source');
+  elementsById.get('galleryGroupBySourceBtn').click();
+  assert(elementsById.get('galleryGroupBySourceBtn').textContent.includes('Group by Source'), 'Expected toggle click to restore Group by Source');
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, Study Prompts & Crop Modal, Pipeline 2+ steps, and Gallery source filtering & details modal)');
 }
 
 async function runHistoryDatabaseTests() {
@@ -1426,6 +1456,34 @@ async function runHistoryDatabaseTests() {
     });
     assert(customPrompt && customPrompt.prompt_id);
     assert.strictEqual(hdb.deleteFaceStudyPrompt(customPrompt.prompt_id).deleted, true);
+
+    // Checksum preservation & distinct sources grouping
+    const testChecksum = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    hdb.recordSubmission({
+      task_id: 't-checksum-src-1',
+      model_id: 'bytedance/seedream-v5.5/edit',
+      payload: { prompt: 'checksum grouping test', images: ['https://cdn.example/source-a.png'] },
+      input_sources: [{
+        slot: 'images[0]',
+        filename: 'source_portrait_a.png',
+        filepath: 'C:\\Users\\psyco\\Pictures\\source_portrait_a.png',
+        checksum: testChecksum,
+        size_bytes: 1048576
+      }],
+      estimated_price: 0.0266,
+      submitted_at: '2026-11-16T17:00:00Z'
+    });
+    const byChecksum = hdb.queryHistory({ q: testChecksum.slice(0, 16) });
+    assert.strictEqual(byChecksum.items.length, 1, 'Expected search by source SHA-256 checksum to match in SQLite FTS5');
+    assert.strictEqual(byChecksum.items[0].input_sources[0].checksum, testChecksum);
+
+    const distinct = hdb.listDistinctSources();
+    assert(Array.isArray(distinct) && distinct.length >= 2, 'Expected distinct sources to list recorded inputs');
+    const foundHashedSource = distinct.find(s => s.checksum === testChecksum);
+    assert(foundHashedSource, 'Expected distinct sources to contain hashed source entry');
+    assert.strictEqual(foundHashedSource.key, `hash:${testChecksum}`);
+    assert.strictEqual(foundHashedSource.filename, 'source_portrait_a.png');
+    assert.strictEqual(foundHashedSource.filepath, 'C:\\Users\\psyco\\Pictures\\source_portrait_a.png');
 
     console.log('[PASS] Isolated SQLite + FTS5 History Database tests passed');
   } finally {

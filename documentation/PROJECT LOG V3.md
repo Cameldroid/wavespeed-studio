@@ -5,6 +5,7 @@ Note Modified Date:
   - "2026-11-16T13:52:00-03:00"
   - "2026-11-16T15:05:00-03:00"
   - "2026-11-16T17:25:30-03:00"
+  - "2026-11-16T19:58:43-03:00"
 ---
 
 # 2026-11-16T13:52:00-03:00 — Project Log V3 (Continuation — `v1.0.9`)
@@ -56,3 +57,38 @@ Note Modified Date:
   - Headless Chromium Playwright E2E (`127.0.0.1:39116`, isolated `WAVESPEED_USER_DATA_DIR`, mocked `/api/models*` & `/api/balance`, `/api/generate` blocked): `0` `pageerror`s and `0` `console` errors.
   - Final `npm test`, `npx electron . --smoke-test`, and secret scan running after doc/version edits prior to commit/tag `v1.2.0`.
 - **Next Action:** Push `main` + annotated tag `v1.2.0`, verify GitHub release build, and restart `http://localhost:3000`.
+
+
+# 2026-11-16T19:58:43-03:00 — v1.3.0 Shipped: Source Image Reuse Fix, Gallery Folders, Details Modal, SHA-256 Source Grouping & History Merge
+
+- **Changes Applied in `v1.3.0`:**
+  - `documentation/features/04-source-reuse-and-gallery-folders/SPEC.md`: Authored specification and verification records.
+  - `public/app.js`:
+    - Overhauled `reuseHistoryRun(item, onlyInputMedia = false)`: made fully `async`, resets stale slots, handles pure multi-image array models (`seedream-v5.5/edit`, `qwen-image/edit-plus`, `minimax-h3/image-edit`) by populating `state.extraImages` and clearing single-slot inputs, handles single-slot models by populating `state.sourceImage` + `state.lastImage`, updates previews, closes modals, and smoothly scrolls to inputs.
+    - Added Web Crypto SHA-256 hashing (`computeFileSha256`) across `handleImageFile`, `handleLastImageFile`, and `addExtraImageFiles`, storing `checksum` on all input entries and decoupling image identity from volatile clipboard temp folders (`AppData\Local\Temp\Ditto\...`).
+    - Added `openLocalFolder(targetPath)` calling `POST /api/open-folder` (`explorer.exe /select,"<file>"`).
+    - Added `useImageAsInput(urlOrPath, meta)`: 1-click loading of any gallery output, active inspector output, history item, or source file into Studio inputs (single slot or multi-image reference).
+    - Added Gallery Card Action buttons (`ℹ️`, `📂`, `➕`, `♻️`, `⚖️`, `🗑️`).
+    - Added Gallery Source Filter (`#gallerySourceFilterSelect`) and Group by Source (`#galleryGroupBySourceBtn` / `state.galleryGroupBySource`) rendering distinct sections with headers, counts, SHA badges, `➕ Use as Input`, and `📂 Open Source Folder`.
+    - Implemented Output Details & Source Provenance Modal (`#outputDetailsModal`) displaying full output preview, parameters, local path with `📂 Open` and `📋 Copy`, prompt, and comprehensive **Input Sources & Provenance** breakdown with origin filenames, folders, checksums, and shortcuts.
+    - Updated Active Output Inspector and History DB list to display input source origin folders, SHA-256 badges, `📂`, and `➕` buttons.
+  - `server.js`:
+    - Increased `listSavedOutputs()` slice from 60 to 300, and backfilled `input_sources` from SQLite `generations` when missing in JSON metadata.
+    - Enhanced `POST /api/open-folder` to resolve relative `/outputs/...` or absolute file paths and spawn Windows Explorer to highlight the file or directory.
+    - Added `GET /api/sources` endpoint calling `historyDb.listDistinctSources()`.
+  - `database/history_db.js`:
+    - Updated `normalizeInputSources()` to accept and preserve `checksum` and include it in `input_filenames` for SQLite FTS5 search.
+    - Implemented `listDistinctSources()` scanning historical generations to group unique sources by `hash:<checksum>` or `name:<filename>`, counting run occurrences and tracking filepaths.
+  - `public/index.html` & `public/style.css`:
+    - Added `#gallerySourceFilterSelect`, `#galleryGroupBySourceBtn`, and `#outputDetailsModal`.
+    - Added styles for `.history-source-select`, `.gallery-source-group`, `.gallery-source-group-header`, `.output-details-modal-box`, `.output-details-grid`, `.source-provenance-card`, and `.source-checksum-badge`.
+  - Predecessor App Database & Logs Merge:
+    - Compared `D:\Cocoding\Aimagen Nsfw\database\studio_history.sqlite` with `C:\Users\psyco\AppData\Roaming\wavespeed-studio\database\studio_history.sqlite`, confirming all 82 generations exist in the current 220-run database.
+    - Merged 79 missing historical entries from `Aimagen Nsfw\logs\generations.jsonl` into `wavespeed-studio\logs\generations.jsonl` with backup and deduplication.
+  - `scripts/verify_studio_isolated.js`:
+    - Added SQLite FTS5 checksum search, `listDistinctSources()` tests, `GET /api/sources`, `POST /api/open-folder`, and simulated DOM assertions for gallery source controls and details modal.
+- **Verification (Zero Live API Spend):**
+  - `node --check` passed across `server.js`, `database/history_db.js`, `public/app.js`, and `scripts/verify_studio_isolated.js`.
+  - `npm test` passed with `ALL_ISOLATED_TESTS_PASSED`.
+  - Re-running final `npm test`, `npx electron . --smoke-test`, and secret scan before pushing `v1.3.0`.
+- **Next Action:** Push `main` + annotated tag `v1.3.0`, confirm GitHub Release build passes, and restart `http://localhost:3000`.

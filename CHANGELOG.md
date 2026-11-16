@@ -2,6 +2,28 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.3.0] - 2026-11-16
+### Fixed
+- **Source Image Reuse Restoration Bug:**
+  - Resolved an issue where clicking `🖼️ Reuse Input Image(s)` or `🔁 Reuse Setup` failed to update inputs for pure multi-image array models (`bytedance/seedream-v5.5/edit`, `wavespeed-ai/qwen-image/edit-plus`, `wavespeed-ai/minimax-h3/image-edit`), leaving stale images from prior runs.
+  - `reuseHistoryRun` is now fully `async`, clears stale reference images, detects active model schema capabilities (`hasSingleImage`, `hasMultiImage`, `hasLastImage`), populates `state.extraImages` or primary/secondary slots accordingly, updates previews, closes modals, and smoothly scrolls to inputs.
+
+### Added
+- **Gallery Card Quick Action Tools (`ℹ️`, `📂`, `➕`):**
+  - **`ℹ️ Details`:** Opens the new Output Details & Source Provenance Modal (`#outputDetailsModal`) displaying full generation metadata, parameters, local filepath, prompt copying, and all input source origins.
+  - **`📂 Open Folder`:** Requests Windows Explorer to open the containing folder and highlight the output file (`explorer.exe /select,"<file>"` via `POST /api/open-folder`).
+  - **`➕ Use as Source / Reference`:** 1-click loading of any output image directly into the active Studio inputs (as primary source image or appended into multi-image reference slots).
+- **Source Identity Tracking & Group / Filter by Source Image:**
+  - Computes SHA-256 checksums (`crypto.subtle.digest('SHA-256')`) on all uploaded, dragged, and cropped images, decoupling identity from volatile disk paths (such as Ditto clipboard temp directories `AppData\Local\Temp\Ditto\...`).
+  - Added **`#gallerySourceFilterSelect`** dropdown to filter gallery outputs by original source image, including a dedicated filter for prompt-only/text-to-image runs.
+  - Added **`🗂️ Group by Source` (`#galleryGroupBySourceBtn`)**: Groups the gallery into labeled sections per source image, featuring source thumbnails, count badges, SHA-256 pills, `➕ Use as Input`, and `📂 Open Source Folder` shortcuts.
+- **Output Details & Source Provenance Modal (`#outputDetailsModal`):**
+  - Displays side-by-side output preview, resolution, aspect ratio, duration, seed, cost, timestamp, prompt, and an **Input Sources & Provenance** breakdown detailing each source slot, origin filename, origin folder path, SHA-256 checksum badge, `📂 Folder` button, and `➕ Use as Source` button.
+- **History Completeness & Predecessor Database Merge:**
+  - Audited predecessor app repository (`D:\Cocoding\Aimagen Nsfw`), verified all 82 generations and output files already exist in `C:\Users\psyco\AppData\Roaming\wavespeed-studio\database\studio_history.sqlite`, and merged 79 missing historical records from `Aimagen Nsfw\logs\generations.jsonl` into `wavespeed-studio` logs with automatic backup and deduplication.
+- **Distinct Sources API (`GET /api/sources`):**
+  - Added backend endpoint and SQLite helper `historyDb.listDistinctSources()` scanning all historical runs to return unique sources grouped by SHA-256 checksum or filename with occurrence counts and filepaths.
+
 ## [1.2.0] - 2026-11-16
 ### Added
 - **Local Face Crop Studio (`#faceCropModal`) & Persistent `cropped_imgs` Folder:**

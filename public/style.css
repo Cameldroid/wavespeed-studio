@@ -3970,3 +3970,135 @@ body[data-viewer-stage="gallery"] .viewer-card {
   gap: 3px;
   flex-wrap: wrap;
 }
+
+/* Source Filter & Grouping in Gallery */
+.history-source-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 175px;
+  text-overflow: ellipsis;
+}
+.history-source-select:focus {
+  border-color: var(--accent-purple);
+}
+
+.gallery-source-group {
+  margin-bottom: 20px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 10px;
+}
+.gallery-source-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.gallery-source-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  flex-wrap: wrap;
+}
+
+/* Output Details Modal */
+.output-details-modal-box {
+  width: min(880px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.output-details-body {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.output-details-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+@media (max-width: 680px) {
+  .output-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.output-details-media {
+  background: #05070c;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  max-height: 380px;
+}
+.output-details-media img,
+.output-details-media video {
+  max-width: 100%;
+  max-height: 380px;
+  object-fit: contain;
+}
+.output-details-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.source-provenance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.source-provenance-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.source-provenance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.76rem;
+}
+.source-folder-path {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.source-checksum-badge {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--accent-cyan);
+  padding: 1px 5px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.history-source-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
