@@ -533,8 +533,83 @@ async function runMockOutputAndServerTests() {
     assert.strictEqual(cfgResp.status, 200);
     const cfgJson = await cfgResp.json();
     assert(cfgJson.version, 'Expected app version in /api/config');
+    assert(cfgJson.croppedDir, 'Expected croppedDir in /api/config');
 
-    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, video trim/concat guards, and resolvePayloadMedia passed');
+    // 7. Test Face Crop storage (/api/crops/save, /api/crops, /outputs/cropped_imgs/*, /api/crops/delete + traversal guard)
+    const tinyPngDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    const cropSaveResp = await realFetch(`http://127.0.0.1:${appPort}/api/crops/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl: tinyPngDataUrl,
+        origin_filename: 'origin_portrait_test.jpg',
+        origin_url: '/outputs/images/origin_portrait_test.jpg',
+        crop_mode: 'rect',
+        width: 1,
+        height: 1
+      })
+    });
+    assert.strictEqual(cropSaveResp.status, 200);
+    const cropSaveJson = await cropSaveResp.json();
+    assert(cropSaveJson.data && cropSaveJson.data.crop_id, 'Expected saved crop record in data');
+    assert(cropSaveJson.data.local_url.startsWith('/outputs/cropped_imgs/'), 'Expected crop under /outputs/cropped_imgs/');
+    assert.strictEqual(cropSaveJson.data.origin_filename, 'origin_portrait_test.jpg');
+    createdFiles.push(cropSaveJson.data.local_path);
+
+    const cropsListResp = await realFetch(`http://127.0.0.1:${appPort}/api/crops`);
+    assert.strictEqual(cropsListResp.status, 200);
+    const cropsListJson = await cropsListResp.json();
+    assert(Array.isArray(cropsListJson.items) && cropsListJson.items.some(c => c.crop_id === cropSaveJson.data.crop_id));
+
+    const cropStaticResp = await realFetch(`http://127.0.0.1:${appPort}${cropSaveJson.data.local_url}`);
+    assert.strictEqual(cropStaticResp.status, 200);
+
+    const badCropDel = await realFetch(`http://127.0.0.1:${appPort}/api/crops/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ local_path: path.join(ROOT, 'server.js') })
+    });
+    assert.strictEqual(badCropDel.status, 403, 'Expected 403 when deleting crop outside OUTPUTS_CROPPED_DIR');
+
+    const okCropDel = await realFetch(`http://127.0.0.1:${appPort}/api/crops/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ crop_id: cropSaveJson.data.crop_id, local_path: cropSaveJson.data.local_path })
+    });
+    assert.strictEqual(okCropDel.status, 200);
+    const okCropDelJson = await okCropDel.json();
+    assert.strictEqual(okCropDelJson.deleted, true);
+    assert.strictEqual(fs.existsSync(cropSaveJson.data.local_path), false);
+
+    // 8. Test Face Study Prompt Library endpoints (/api/face-prompts, POST, DELETE)
+    const fpListResp = await realFetch(`http://127.0.0.1:${appPort}/api/face-prompts`);
+    assert.strictEqual(fpListResp.status, 200);
+    const fpListJson = await fpListResp.json();
+    assert(Array.isArray(fpListJson.items) && fpListJson.items.length >= 12, 'Expected >= 12 seeded Face Study prompts');
+
+    const fpCreateResp = await realFetch(`http://127.0.0.1:${appPort}/api/face-prompts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Test Custom Cheeky Smile',
+        category: 'Expressions',
+        template_text: 'Preserve face from {{REFS}} with cheeky wink.'
+      })
+    });
+    assert.strictEqual(fpCreateResp.status, 200);
+    const fpCreateJson = await fpCreateResp.json();
+    assert(fpCreateJson.data && fpCreateJson.data.prompt_id);
+
+    const fpDelResp = await realFetch(`http://127.0.0.1:${appPort}/api/face-prompts/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt_id: fpCreateJson.data.prompt_id })
+    });
+    assert.strictEqual(fpDelResp.status, 200);
+    const fpDelJson = await fpDelResp.json();
+    assert.strictEqual(fpDelJson.deleted, true);
+
+    console.log('[PASS] Isolated mock HTTP test for saveOutputLocally, listSavedOutputs, /outputs/*, /api/outputs/delete, 403 traversal, video trim/concat guards, resolvePayloadMedia, /api/crops*, and /api/face-prompts* passed');
   } finally {
     global.fetch = realFetch;
     srvMod.savedTasksMap.delete(mockTaskImg);
@@ -902,11 +977,29 @@ async function runMockDomAppTests() {
     navigator: { clipboard: { writeText() {} } },
     FileReader: function () {},
     Event: function (type) { this.type = type; },
+    Image: function () { this.onload = null; this.onerror = null; },
     URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() {} },
     fetch: async (url, opts = {}) => {
-      if (url === '/api/config') return { ok: true, json: async () => ({ hasApiKey: true, version: '1.0.7' }) };
-      if (url === '/api/check-update') return { ok: true, json: async () => ({ hasUpdate: false, currentVersion: '1.0.7', latestVersion: '1.0.7' }) };
+      if (url === '/api/config') return { ok: true, json: async () => ({ hasApiKey: true, version: '1.2.0', croppedDir: './outputs/cropped_imgs' }) };
+      if (url === '/api/check-update') return { ok: true, json: async () => ({ hasUpdate: false, currentVersion: '1.2.0', latestVersion: '1.2.0' }) };
       if (url.startsWith('/api/history')) return { ok: true, json: async () => ({ stats: {}, models: [], items: [] }) };
+      if (url === '/api/crops') return { ok: true, json: async () => ({ items: [] }) };
+      if (url === '/api/face-prompts') {
+        return {
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                prompt_id: 'fp-test-cheeky',
+                title: 'Playful Tongue-Out / Teasing Studio Shot',
+                category: 'Expressions',
+                template_text: 'Keep exact facial identity from {{REFS}}; playful tongue-out smirk toward camera.',
+                is_builtin: true
+              }
+            ]
+          })
+        };
+      }
       if (url === '/api/balance') return { ok: true, json: async () => ({ data: { balance: 5.8797 } }) };
       if (url.startsWith('/api/models')) return { ok: true, json: async () => ({ data: mockModels }) };
       if (url === '/api/outputs') return { ok: true, json: async () => ({ outputs_dir: './outputs', data: [] }) };
@@ -1164,6 +1257,24 @@ async function runMockDomAppTests() {
   assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('lastImageGroup').style.display, 'flex');
 
+  // Switch to Seedream 5.5 Edit on Faces & Swaps -> verify Study Prompts dropdown injects Image 1 + Saved Crops button opens #faceCropModal
+  facesTab.click();
+  elementsById.get('modelAutocompleteInput').value = 'seedream-v5.5';
+  elementsById.get('modelAutocompleteInput').dispatch('input');
+  elementsById.get('comboboxList').children[0].click();
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'bytedance/seedream-v5.5/edit');
+  elementsById.get('openFacePromptsBtn').click();
+  await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(elementsById.get('faceStudyPromptsMenu').style.display, 'flex', 'Expected #openFacePromptsBtn to open #faceStudyPromptsMenu');
+  const firstPromptCard = elementsById.get('faceStudyPromptList').children[0];
+  assert(firstPromptCard && firstPromptCard.children[0].innerHTML.includes('Playful Tongue-Out'), 'Expected seeded Face Study prompt in list');
+  firstPromptCard.children[1].children[1].children[0].click(); // ✓ Use
+  assert(elementsById.get('promptInput').value.includes('Image 1'), 'Expected Seedream 5.5 Study Prompt to substitute {{REFS}} -> Image 1');
+
+  elementsById.get('openSavedCropsBtn').click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(elementsById.get('faceCropModal').style.display, 'flex', 'Expected #openSavedCropsBtn to open #faceCropModal');
+
   // Switch to Pipeline tab -> verify 2 default steps, Add Step -> 3 steps, and total cost calculation
   const pipelineTab = modeBtns.find(b => b.dataset.category === 'pipeline');
   pipelineTab.click();
@@ -1174,7 +1285,7 @@ async function runMockDomAppTests() {
   elementsById.get('pipelineAddStepBtn').click();
   assert.strictEqual(elementsById.get('pipelineStepsList').children.length, 3, 'Expected + Add Step to append Step 3');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, and Pipeline 2+ steps)');
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, Study Prompts & Crop Modal, and Pipeline 2+ steps)');
 }
 
 async function runHistoryDatabaseTests() {
@@ -1182,8 +1293,9 @@ async function runHistoryDatabaseTests() {
   const { createHistoryDatabase } = require(path.join(ROOT, 'database', 'history_db.js'));
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ws-hist-db-'));
   const dbFile = path.join(tmpDir, 'test_history.sqlite');
+  let hdb = null;
   try {
-    const hdb = createHistoryDatabase({ dbPath: dbFile });
+    hdb = createHistoryDatabase({ dbPath: dbFile });
     hdb.recordSubmission({
       task_id: 't-ok-1',
       model_id: 'wavespeed-ai/minimax-h3/image-to-video-spicy',
@@ -1261,10 +1373,66 @@ async function runHistoryDatabaseTests() {
     assert.strictEqual(delRes.deleted, true);
     assert.strictEqual(hdb.queryHistory({ q: 'sunset' }).items.length, 0);
 
-    hdb.db.close();
+    // Provenance tracking: both cropped filename AND origin_filename searchable in FTS5
+    hdb.recordSubmission({
+      task_id: 't-crop-prov-1',
+      model_id: 'bytedance/seedream-v5.5/edit',
+      payload: { prompt: 'preserve identity studio crop test', images: ['https://cdn.example/crop1.png'] },
+      input_sources: [{
+        slot: 'images[0]',
+        filename: 'crop_rect_face_01.png',
+        origin_filename: 'beach_raw_original_8899.jpg',
+        origin_url: '/outputs/images/beach_raw_original_8899.jpg',
+        remote_url: 'https://cdn.example/crop1.png'
+      }],
+      estimated_price: 0.0266,
+      submitted_at: '2026-11-16T16:00:00Z'
+    });
+    const byCrop = hdb.queryHistory({ q: 'crop_rect_face_01' });
+    assert.strictEqual(byCrop.items.length, 1, 'Expected cropped filename to be searchable in SQLite FTS5');
+    const byOrigin = hdb.queryHistory({ q: 'beach_raw_original_8899' });
+    assert.strictEqual(byOrigin.items.length, 1, 'Expected origin_filename to be searchable in SQLite FTS5');
+    assert.strictEqual(byOrigin.items[0].input_sources[0].origin_filename, 'beach_raw_original_8899.jpg');
+
+    // Cropped assets CRUD
+    const savedCrop = hdb.recordCroppedAsset({
+      crop_id: 'crop-test-1',
+      filename: 'crop_rect_face_01.png',
+      local_path: path.join(tmpDir, 'crop_rect_face_01.png'),
+      local_url: '/outputs/cropped_imgs/crop_rect_face_01.png',
+      origin_filename: 'beach_raw_original_8899.jpg',
+      origin_url: '/outputs/images/beach_raw_original_8899.jpg',
+      crop_mode: 'lasso',
+      width: 512,
+      height: 512,
+      size_bytes: 2048
+    });
+    assert.strictEqual(savedCrop.crop_id, 'crop-test-1');
+    const cropRows = hdb.listCroppedAssets(50);
+    assert.strictEqual(cropRows.length, 1);
+    assert.strictEqual(cropRows[0].crop_mode, 'lasso');
+    assert.strictEqual(cropRows[0].origin_filename, 'beach_raw_original_8899.jpg');
+    assert.strictEqual(hdb.deleteCroppedAsset('crop-test-1').deleted, true);
+
+    // Seeded & custom Face Study Prompts CRUD
+    const seededPrompts = hdb.listFaceStudyPrompts();
+    assert(seededPrompts.length >= 12, 'Expected >= 12 seeded built-in Face Study prompts');
+    const tonguePrompt = seededPrompts.find(p => /tongue/i.test(p.title + ' ' + p.template_text));
+    assert(tonguePrompt, 'Expected Playful Tongue-Out Face Study prompt to be seeded');
+    const customPrompt = hdb.saveFaceStudyPrompt({
+      title: 'Dramatic Neon Rim Study',
+      category: 'Lighting',
+      template_text: 'Preserve face identity from {{REFS}} under magenta-cyan rim lighting.'
+    });
+    assert(customPrompt && customPrompt.prompt_id);
+    assert.strictEqual(hdb.deleteFaceStudyPrompt(customPrompt.prompt_id).deleted, true);
+
     console.log('[PASS] Isolated SQLite + FTS5 History Database tests passed');
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (hdb && hdb.db && typeof hdb.db.close === 'function') {
+      try { hdb.db.close(); } catch (e) {}
+    }
+    try { fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch (e) {}
   }
 }
 

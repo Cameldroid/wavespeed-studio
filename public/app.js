@@ -68,6 +68,23 @@
     designDensity: localStorage.getItem('wavespeed_studio_density') || 'compact',
     viewerStage: localStorage.getItem('wavespeed_viewer_stage') || 'tall',
     customPromptChips: [],
+    facePromptsCache: null,
+    facePromptCategory: 'all',
+    croppedAssets: [],
+    croppedDir: 'cropped_imgs',
+    cropper: {
+      mode: 'rect', // 'rect' | 'lasso'
+      squareLock: true,
+      lassoBg: 'gray',
+      imgEl: null,
+      rect: null, // { x, y, w, h } in natural image pixels
+      lassoPoints: [], // [{ x, y }] in natural image pixels
+      isDragging: false,
+      startPt: null,
+      targetKind: 'source', // 'source' | 'ref' | 'inspector' | 'preset'
+      targetRefId: null,
+      originMeta: null
+    },
     pipeline: {
       runMode: 'checkpoint', // 'checkpoint' | 'auto'
       expandedStepIndex: 0,
@@ -422,7 +439,36 @@
     pipelineRunBtn: document.getElementById('pipelineRunBtn'),
     pipelineRunBtnLabel: document.getElementById('pipelineRunBtnLabel'),
     pipelineRunBtnPrice: document.getElementById('pipelineRunBtnPrice'),
-    pipelineStopBtn: document.getElementById('pipelineStopBtn')
+    pipelineStopBtn: document.getElementById('pipelineStopBtn'),
+    openFacePromptsBtn: document.getElementById('openFacePromptsBtn'),
+    faceStudyPromptsMenu: document.getElementById('faceStudyPromptsMenu'),
+    faceStudyPromptSearchInput: document.getElementById('faceStudyPromptSearchInput'),
+    saveCurrentFacePromptBtn: document.getElementById('saveCurrentFacePromptBtn'),
+    closeFacePromptsBtn: document.getElementById('closeFacePromptsBtn'),
+    faceStudyPromptCatPills: document.getElementById('faceStudyPromptCatPills'),
+    faceStudyPromptList: document.getElementById('faceStudyPromptList'),
+    cropSourceImageBtn: document.getElementById('cropSourceImageBtn'),
+    openSavedCropsBtn: document.getElementById('openSavedCropsBtn'),
+    faceCropModal: document.getElementById('faceCropModal'),
+    closeFaceCropModalBtn: document.getElementById('closeFaceCropModalBtn'),
+    faceCropOriginInfo: document.getElementById('faceCropOriginInfo'),
+    faceCropModeSwitch: document.getElementById('faceCropModeSwitch'),
+    cropSquareLockRow: document.getElementById('cropSquareLockRow'),
+    cropSquareLockCheckbox: document.getElementById('cropSquareLockCheckbox'),
+    cropLassoBgSelect: document.getElementById('cropLassoBgSelect'),
+    faceCropResetBtn: document.getElementById('faceCropResetBtn'),
+    faceCropCanvas: document.getElementById('faceCropCanvas'),
+    faceCropEmptyMsg: document.getElementById('faceCropEmptyMsg'),
+    faceCropPreviewCanvas: document.getElementById('faceCropPreviewCanvas'),
+    faceCropSizeReadout: document.getElementById('faceCropSizeReadout'),
+    cropAddRefBtn: document.getElementById('cropAddRefBtn'),
+    cropReplaceRefBtn: document.getElementById('cropReplaceRefBtn'),
+    cropSaveFacePackBtn: document.getElementById('cropSaveFacePackBtn'),
+    cropSetSourceBtn: document.getElementById('cropSetSourceBtn'),
+    cropSaveOnlyBtn: document.getElementById('cropSaveOnlyBtn'),
+    savedCropsDirLabel: document.getElementById('savedCropsDirLabel'),
+    refreshSavedCropsBtn: document.getElementById('refreshSavedCropsBtn'),
+    savedCroppedFacesGrid: document.getElementById('savedCroppedFacesGrid')
   };
 
   // Mask Canvas Context
@@ -439,6 +485,7 @@
     loadFacePacks();
     renderFacePacksSelect();
     initPipelineBuilder();
+    initFaceCropAndPromptTools();
     loadLocalHistory();
     setupCanvas();
     setupResizer();
@@ -628,6 +675,10 @@
         const cfg = await cfgRes.json().catch(() => null);
         if (cfg && cfg.outputsDir) {
           applyOutputsDirUi(cfg.outputsDir);
+        }
+        if (cfg && cfg.croppedDir) {
+          state.croppedDir = cfg.croppedDir;
+          if (el.savedCropsDirLabel) el.savedCropsDirLabel.textContent = cfg.croppedDir;
         }
         if (cfg && cfg.hasApiKey === false) {
           state.balance = null;
@@ -3232,7 +3283,7 @@
 
   function buildInputSourcesMetadata(ctx) {
     const sources = [];
-    const addEntry = (slot, fileObj, urlVal, fallbackName = '') => {
+    const addEntry = (slot, fileObj, urlVal, fallbackName = '', originMeta = null) => {
       if (!fileObj && !urlVal) return;
       const u = String(urlVal || '');
       let fname = fileObj?.name || fallbackName || '';
@@ -3245,18 +3296,21 @@
         filepath: fileObj?.path || (u.startsWith('/outputs/') ? u : ''),
         local_url: u.startsWith('/outputs/') ? u : '',
         remote_url: /^https?:\/\//i.test(u) ? u : '',
+        origin_filename: originMeta?.origin_filename || '',
+        origin_filepath: originMeta?.origin_filepath || '',
+        origin_url: originMeta?.origin_url || '',
         size_bytes: Number.isFinite(fileObj?.size) ? fileObj.size : null
       });
     };
 
     if (ctx.hasSingleImageSlot) {
-      addEntry(ctx.singleImageKey || 'image', ctx.imageFileSnapshot, ctx.sourceImageObjSnapshot?.downloadUrl || ctx.imageUrlSnapshot);
+      addEntry(ctx.singleImageKey || 'image', ctx.imageFileSnapshot, ctx.sourceImageObjSnapshot?.downloadUrl || ctx.imageUrlSnapshot, ctx.sourceImageObjSnapshot?.name || '', ctx.sourceImageObjSnapshot);
     }
     if (ctx.hasLastImageInput) {
-      addEntry(ctx.secondaryImgKey || 'last_image', ctx.lastImageFileSnapshot, ctx.lastImageObjSnapshot?.downloadUrl || ctx.lastImageUrlSnapshot);
+      addEntry(ctx.secondaryImgKey || 'last_image', ctx.lastImageFileSnapshot, ctx.lastImageObjSnapshot?.downloadUrl || ctx.lastImageUrlSnapshot, ctx.lastImageObjSnapshot?.name || '', ctx.lastImageObjSnapshot);
     }
     (ctx.extraImagesSnapshot || []).forEach((ex, idx) => {
-      addEntry(`ref_image_${idx + 1}`, ex.file, ex.downloadUrl || (ex.previewUrl && !ex.previewUrl.startsWith('data:') ? ex.previewUrl : ''));
+      addEntry(`ref_image_${idx + 1}`, ex.file, ex.downloadUrl || (ex.previewUrl && !ex.previewUrl.startsWith('data:') ? ex.previewUrl : ''), ex.name || '', ex);
     });
     if (ctx.hasVideoInput) {
       addEntry('video', ctx.videoFileSnapshot, ctx.sourceVideoObjSnapshot?.downloadUrl || ctx.videoUrlSnapshot);
@@ -4318,7 +4372,11 @@
 
       const srcItems = Array.isArray(item.input_sources) ? item.input_sources : [];
       const srcSummary = srcItems.length > 0
-        ? srcItems.map(s => `${s.slot}: ${s.filename || s.filepath || s.local_url || s.remote_url || ''}`).filter(Boolean).join(' • ')
+        ? srcItems.map(s => {
+            const namePart = s.filename || s.filepath || s.local_url || s.remote_url || '';
+            const origPart = s.origin_filename && s.origin_filename !== s.filename ? ` (from ${s.origin_filename})` : '';
+            return namePart ? `${s.slot}: ${namePart}${origPart}` : '';
+          }).filter(Boolean).join(' • ')
         : (item.input_filenames || item.input_image_url || '');
       if (srcSummary) {
         const sBox = document.createElement('div');
@@ -5035,10 +5093,36 @@
         if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
 
+      const cropBtn = document.createElement('button');
+      cropBtn.type = 'button';
+      cropBtn.className = 'multi-img-crop-btn';
+      cropBtn.title = 'Crop face / region from this image (saves to cropped_imgs)';
+      cropBtn.textContent = '✂️';
+      cropBtn.addEventListener('click', () => {
+        openFaceCropModal({
+          src: entry.previewUrl || entry.downloadUrl || '',
+          targetKind: 'ref',
+          targetRefId: entry.id,
+          originMeta: {
+            origin_filename: entry.origin_filename || entry.file?.name || entry.name || `Ref ${idx + 1}`,
+            origin_filepath: entry.origin_filepath || entry.file?.path || '',
+            origin_url: entry.origin_url || entry.downloadUrl || ''
+          }
+        });
+      });
+
       box.appendChild(img);
       box.appendChild(slotBadge);
       box.appendChild(rm);
+      box.appendChild(cropBtn);
       box.appendChild(roleSel);
+      if (entry.origin_filename) {
+        const origTag = document.createElement('div');
+        origTag.className = 'multi-img-origin-tag';
+        origTag.title = `Cropped from ${entry.origin_filename}`;
+        origTag.textContent = `from ${entry.origin_filename}`;
+        box.appendChild(origTag);
+      }
       el.multiImgGrid.appendChild(box);
     });
     syncMaskBgPreview();
@@ -5062,11 +5146,22 @@
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
-  function addExtraImageUrl(url) {
+  function addExtraImageUrl(url, meta = {}) {
     const clean = String(url || '').trim();
     if (!clean) return;
     const id = `ref-url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    state.extraImages.push({ id, file: null, previewUrl: clean, downloadUrl: clean });
+    const inferredName = clean.startsWith('data:') ? '' : decodeURIComponent(clean.split('?')[0].split('#')[0].split('/').pop() || '');
+    state.extraImages.push({
+      id,
+      file: null,
+      previewUrl: clean,
+      downloadUrl: clean,
+      name: meta.name || inferredName || '',
+      role: meta.role || 'Face ID',
+      origin_filename: meta.origin_filename || '',
+      origin_filepath: meta.origin_filepath || '',
+      origin_url: meta.origin_url || ''
+    });
     renderExtraImagesGrid();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
@@ -5234,7 +5329,11 @@
     el.activeOutputInspector.style.display = 'flex';
     const srcArr = Array.isArray(item.input_sources) ? item.input_sources : [];
     const srcText = srcArr.length > 0
-      ? srcArr.map(s => `${s.slot}: ${s.filename || s.local_url || s.remote_url || ''}`).filter(Boolean).join(' • ')
+      ? srcArr.map(s => {
+          const namePart = s.filename || s.local_url || s.remote_url || '';
+          const origPart = s.origin_filename && s.origin_filename !== s.filename ? ` (from ${s.origin_filename})` : '';
+          return namePart ? `${s.slot}: ${namePart}${origPart}` : '';
+        }).filter(Boolean).join(' • ')
       : (item.input_filenames || (item.input_image_url ? String(item.input_image_url).split('/').pop() : ''));
     const hasComposite = Boolean(state.activeCompositeMaskedUrl && state.activeCompositeRawUrl);
     el.activeOutputInspector.innerHTML = `
@@ -5243,6 +5342,7 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           ${item.prompt ? '<button type="button" class="btn-tiny" id="inspectorCopyPromptBtn">📋 Copy Prompt</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorPaintEditBtn">🖌️ Paint-Edit</button>' : ''}
+          ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorCropBtn">✂️ Crop Face</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorFaceSwapBtn">🎭 Face Swap Onto</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorAddRefBtn">+ Ref Study</button>' : ''}
           ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorSendPipelineBtn">⛓️ → Pipeline</button>' : ''}
@@ -5255,6 +5355,7 @@
 
     const copyBtn = document.getElementById('inspectorCopyPromptBtn');
     const paintBtn = document.getElementById('inspectorPaintEditBtn');
+    const cropOutBtn = document.getElementById('inspectorCropBtn');
     const swapBtn = document.getElementById('inspectorFaceSwapBtn');
     const addRefBtn = document.getElementById('inspectorAddRefBtn');
     const sendPipeBtn = document.getElementById('inspectorSendPipelineBtn');
@@ -5273,6 +5374,19 @@
         await selectModel('wavespeed-ai/flux-fill-dev', true).catch(() => {});
         syncMaskBgPreview();
         showToast('Loaded into Flux Fill Dev — paint over the region you want edited.', 'good', 3200);
+      });
+    }
+    if (cropOutBtn && bestImgUrl) {
+      cropOutBtn.addEventListener('click', () => {
+        openFaceCropModal({
+          src: bestImgUrl,
+          targetKind: 'inspector',
+          originMeta: {
+            origin_filename: bestImgUrl.split('/').pop() || 'viewer_output.png',
+            origin_filepath: item.local_path || '',
+            origin_url: item.remote_url || bestImgUrl
+          }
+        });
       });
     }
     if (swapBtn && bestImgUrl) {
@@ -6914,16 +7028,17 @@
         const collected = [];
         if (state.sourceImage && (state.sourceImage.downloadUrl || state.sourceImage.url)) {
           collected.push({
-            name: state.sourceImage.file?.name || 'Primary Ref',
-            url: state.sourceImage.downloadUrl || state.sourceImage.url
+            name: state.sourceImage.file?.name || state.sourceImage.name || 'Primary Ref',
+            url: state.sourceImage.downloadUrl || state.sourceImage.url,
+            origin_filename: state.sourceImage.origin_filename || ''
           });
         }
         (state.extraImages || []).forEach((ex, i) => {
           const u = ex.downloadUrl || (ex.previewUrl && !ex.previewUrl.startsWith('data:') ? ex.previewUrl : '');
           if (u) {
-            collected.push({ name: ex.file?.name || `Ref ${i + 1}`, url: u });
+            collected.push({ name: ex.file?.name || ex.name || `Ref ${i + 1}`, url: u, role: ex.role || 'Face ID', origin_filename: ex.origin_filename || '' });
           } else if (ex.previewUrl) {
-            collected.push({ name: ex.file?.name || `Ref ${i + 1}`, url: ex.previewUrl });
+            collected.push({ name: ex.file?.name || ex.name || `Ref ${i + 1}`, url: ex.previewUrl, role: ex.role || 'Face ID', origin_filename: ex.origin_filename || '' });
           }
         });
         if (collected.length === 0) {
@@ -6948,7 +7063,7 @@
         if (!pack || !Array.isArray(pack.images)) return;
         state.extraImages = [];
         pack.images.forEach((im) => {
-          if (im.url) addExtraImageUrl(im.url);
+          if (im.url) addExtraImageUrl(im.url, { name: im.name || '', role: im.role || 'Face ID', origin_filename: im.origin_filename || '' });
         });
         showToast(`Loaded Face Pack "${pack.name}" (${pack.images.length} photos)`, 'good');
       });
@@ -9060,7 +9175,12 @@
           pipeline_id: pipelineRunId,
           pipeline_step: stepIndex + 1,
           payload,
-          input_sources: allImgs.map((u, i) => ({ slot: `pipeline_step${stepIndex + 1}_ref_${i + 1}`, remote_url: u, filename: u.split('/').pop() || 'ref' })),
+          input_sources: allImgs.map((u, i) => ({
+            slot: `pipeline_step${stepIndex + 1}_ref_${i + 1}`,
+            remote_url: u,
+            filename: u.split('/').pop() || 'ref',
+            origin_filename: (i === 0 && step.sourceMode === 'preset' && state.pipeline.preset?.origin_filename) ? state.pipeline.preset.origin_filename : ''
+          })),
           estimated_price: stepCost
         })
       });
@@ -9392,6 +9512,687 @@
           }
         };
         r.readAsText(f);
+      });
+    }
+  }
+
+  // =========================================================================
+  // Face Study Prompt Library & Local Face Crop Studio (cropped_imgs + Origin)
+  // =========================================================================
+  function formatFaceStudyRefsSpanForCurrentModel() {
+    const mid = String(state.selectedModel?.model_id || '').toLowerCase();
+    const isMinimaxBracket = mid.startsWith('wavespeed-ai/minimax-h3/image-edit') || mid.startsWith('wavespeed-ai/minimax-h3-image/edit');
+    const hasSingleBefore = Boolean(el.imageInputGroup && el.imageInputGroup.style.display !== 'none');
+    const totalRefs = Math.max(1, (hasSingleBefore ? 1 : 0) + (state.extraImages?.length || 0));
+    const makeTag = (n) => (isMinimaxBracket ? `<Picture ${n}>` : `Image ${n}`);
+    const roleNotes = [];
+    if (hasSingleBefore && (state.sourceImage || el.imageUrlInput?.value?.trim())) {
+      roleNotes.push(`${makeTag(1)} (Primary Face ID)`);
+    }
+    (state.extraImages || []).forEach((ex, i) => {
+      const slotNum = hasSingleBefore ? i + 2 : i + 1;
+      roleNotes.push(`${makeTag(slotNum)} (${ex.role || 'Face ID'})`);
+    });
+    if (roleNotes.length > 0) return roleNotes.join(', ');
+    return Array.from({ length: Math.min(Math.max(2, totalRefs), 10) }, (_, i) => makeTag(i + 1)).join(', ');
+  }
+
+  async function loadAndRenderFaceStudyPrompts(forceRefresh = false) {
+    if (!el.faceStudyPromptList) return;
+    if (!state.facePromptsCache || forceRefresh) {
+      el.faceStudyPromptList.innerHTML = '<div class="combobox-empty">Loading Face Study prompts...</div>';
+      try {
+        const res = await fetch('/api/face-prompts');
+        const json = await res.json();
+        state.facePromptsCache = Array.isArray(json.items) ? json.items : [];
+      } catch (e) {
+        state.facePromptsCache = [];
+      }
+    }
+    const q = (el.faceStudyPromptSearchInput?.value || '').trim().toLowerCase();
+    const cat = state.facePromptCategory || 'all';
+    const filtered = (state.facePromptsCache || []).filter(item => {
+      if (cat !== 'all' && item.category !== cat) return false;
+      if (q && !`${item.title} ${item.category} ${item.template_text}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    el.faceStudyPromptList.innerHTML = '';
+    if (filtered.length === 0) {
+      el.faceStudyPromptList.innerHTML = '<div class="combobox-empty">No matching Face Study prompts found.</div>';
+      return;
+    }
+
+    const refsSpan = formatFaceStudyRefsSpanForCurrentModel();
+    filtered.forEach(item => {
+      const renderedText = String(item.template_text || '').replace(/\{\{REFS\}\}/g, refsSpan);
+      const card = document.createElement('div');
+      card.className = 'prompt-history-item';
+
+      const textDiv = document.createElement('div');
+      textDiv.className = 'prompt-history-text';
+      textDiv.innerHTML = `<strong>${escapeHtml(item.title)}</strong> <span class="badge-tag" style="margin-left:4px;">${escapeHtml(item.category)}</span><div style="margin-top:3px;color:var(--text-muted);">${escapeHtml(renderedText)}</div>`;
+
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'prompt-history-meta';
+      const actDiv = document.createElement('div');
+      actDiv.className = 'prompt-history-actions';
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'btn-tiny';
+      useBtn.textContent = '✓ Use';
+      useBtn.addEventListener('click', () => {
+        if (el.promptInput) {
+          el.promptInput.value = renderedText;
+          el.promptInput.dispatchEvent(new Event('input'));
+          el.promptInput.focus();
+        }
+        if (el.faceStudyPromptsMenu) el.faceStudyPromptsMenu.style.display = 'none';
+      });
+
+      const appBtn = document.createElement('button');
+      appBtn.type = 'button';
+      appBtn.className = 'btn-tiny';
+      appBtn.textContent = '+ Append';
+      appBtn.addEventListener('click', () => {
+        appendPromptSnippet(renderedText);
+        if (el.faceStudyPromptsMenu) el.faceStudyPromptsMenu.style.display = 'none';
+      });
+
+      actDiv.appendChild(useBtn);
+      actDiv.appendChild(appBtn);
+
+      if (!item.is_builtin) {
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn-tiny';
+        delBtn.textContent = '🗑️';
+        delBtn.title = 'Delete custom Face Study prompt';
+        delBtn.addEventListener('click', async () => {
+          await fetch('/api/face-prompts/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt_id: item.prompt_id })
+          }).catch(() => {});
+          loadAndRenderFaceStudyPrompts(true);
+        });
+        actDiv.appendChild(delBtn);
+      }
+
+      metaDiv.appendChild(document.createElement('span'));
+      metaDiv.appendChild(actDiv);
+      card.appendChild(textDiv);
+      card.appendChild(metaDiv);
+      el.faceStudyPromptList.appendChild(card);
+    });
+  }
+
+  function getCropCanvasPoint(e) {
+    const canvas = el.faceCropCanvas;
+    const img = state.cropper.imgEl;
+    if (!canvas || !img) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
+    const x = Math.max(0, Math.min(canvas.width, (e.clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(canvas.height, (e.clientY - rect.top) * scaleY));
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+
+  function drawFaceCropCanvas() {
+    const canvas = el.faceCropCanvas;
+    const img = state.cropper.imgEl;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    if (state.cropper.mode === 'rect' && state.cropper.rect && state.cropper.rect.w > 2 && state.cropper.rect.h > 2) {
+      const r = state.cropper.rect;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.rect(r.x, r.y, r.w, r.h);
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = Math.max(2, Math.round(canvas.width / 250));
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.restore();
+    } else if (state.cropper.mode === 'lasso' && state.cropper.lassoPoints.length > 1) {
+      const pts = state.cropper.lassoPoints;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#a855f7';
+      ctx.lineWidth = Math.max(2, Math.round(canvas.width / 240));
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+    renderFaceCropPreview();
+  }
+
+  function extractCropResult() {
+    const img = state.cropper.imgEl;
+    if (!img) return null;
+    let sx = 0;
+    let sy = 0;
+    let sw = img.naturalWidth || img.width;
+    let sh = img.naturalHeight || img.height;
+
+    if (state.cropper.mode === 'rect' && state.cropper.rect && state.cropper.rect.w > 4 && state.cropper.rect.h > 4) {
+      sx = Math.max(0, Math.round(state.cropper.rect.x));
+      sy = Math.max(0, Math.round(state.cropper.rect.y));
+      sw = Math.max(4, Math.min((img.naturalWidth || img.width) - sx, Math.round(state.cropper.rect.w)));
+      sh = Math.max(4, Math.min((img.naturalHeight || img.height) - sy, Math.round(state.cropper.rect.h)));
+    } else if (state.cropper.mode === 'lasso' && state.cropper.lassoPoints.length >= 3) {
+      const xs = state.cropper.lassoPoints.map(p => p.x);
+      const ys = state.cropper.lassoPoints.map(p => p.y);
+      const minX = Math.max(0, Math.floor(Math.min(...xs)));
+      const minY = Math.max(0, Math.floor(Math.min(...ys)));
+      const maxX = Math.min(img.naturalWidth || img.width, Math.ceil(Math.max(...xs)));
+      const maxY = Math.min(img.naturalHeight || img.height, Math.ceil(Math.max(...ys)));
+      sx = minX;
+      sy = minY;
+      sw = Math.max(4, maxX - minX);
+      sh = Math.max(4, maxY - minY);
+    }
+
+    const out = document.createElement('canvas');
+    out.width = sw;
+    out.height = sh;
+    const oCtx = out.getContext('2d');
+    if (state.cropper.mode === 'lasso' && state.cropper.lassoPoints.length >= 3) {
+      if (state.cropper.lassoBg === 'gray') {
+        oCtx.fillStyle = '#808080';
+        oCtx.fillRect(0, 0, sw, sh);
+      }
+      oCtx.save();
+      oCtx.beginPath();
+      state.cropper.lassoPoints.forEach((p, i) => {
+        if (i === 0) oCtx.moveTo(p.x - sx, p.y - sy);
+        else oCtx.lineTo(p.x - sx, p.y - sy);
+      });
+      oCtx.closePath();
+      oCtx.clip();
+      oCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      oCtx.restore();
+    } else {
+      oCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    }
+
+    return {
+      dataUrl: out.toDataURL('image/png'),
+      width: sw,
+      height: sh,
+      cropMode: state.cropper.mode
+    };
+  }
+
+  function renderFaceCropPreview() {
+    const pCanvas = el.faceCropPreviewCanvas;
+    if (!pCanvas) return;
+    const pCtx = pCanvas.getContext('2d');
+    pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+    if (!state.cropper.imgEl) {
+      if (el.faceCropSizeReadout) el.faceCropSizeReadout.textContent = 'No image loaded';
+      return;
+    }
+    const res = extractCropResult();
+    if (!res) return;
+    if (el.faceCropSizeReadout) {
+      el.faceCropSizeReadout.textContent = `${res.width}×${res.height}px (${res.cropMode === 'lasso' ? 'Free-Form' : 'Rect'})`;
+    }
+    const tmp = new Image();
+    tmp.onload = () => {
+      const scale = Math.min(pCanvas.width / Math.max(1, tmp.width), pCanvas.height / Math.max(1, tmp.height));
+      const dw = Math.round(tmp.width * scale);
+      const dh = Math.round(tmp.height * scale);
+      pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+      pCtx.drawImage(tmp, Math.round((pCanvas.width - dw) / 2), Math.round((pCanvas.height - dh) / 2), dw, dh);
+    };
+    tmp.src = res.dataUrl;
+  }
+
+  async function loadSavedCroppedFaces() {
+    if (!el.savedCroppedFacesGrid) return;
+    try {
+      const res = await fetch('/api/crops');
+      const json = await res.json();
+      if (json.croppedDir && el.savedCropsDirLabel) {
+        state.croppedDir = json.croppedDir;
+        el.savedCropsDirLabel.textContent = json.croppedDir;
+      }
+      state.croppedAssets = Array.isArray(json.items) ? json.items : [];
+    } catch (e) {
+      state.croppedAssets = [];
+    }
+    el.savedCroppedFacesGrid.innerHTML = '';
+    if (state.croppedAssets.length === 0) {
+      el.savedCroppedFacesGrid.innerHTML = '<div class="combobox-empty">No cropped faces saved yet. Crop any face above to save into cropped_imgs.</div>';
+      return;
+    }
+    state.croppedAssets.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'saved-crop-card';
+      const origNote = item.origin_filename ? `from ${item.origin_filename}` : `${item.width || '?'}×${item.height || '?'}`;
+      card.innerHTML = `
+        <img src="${escapeHtml(item.local_url)}" alt="${escapeHtml(item.filename)}">
+        <div class="saved-crop-meta" title="${escapeHtml(item.filename)} (${escapeHtml(origNote)})">${escapeHtml(origNote)}</div>
+        <div class="saved-crop-actions"></div>
+      `;
+      const acts = card.querySelector('.saved-crop-actions');
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'btn-tiny';
+      addBtn.textContent = '+ Ref';
+      addBtn.title = 'Add cropped face to Reference Images';
+      addBtn.addEventListener('click', () => {
+        addExtraImageUrl(item.local_url, {
+          name: item.filename,
+          origin_filename: item.origin_filename,
+          origin_filepath: item.origin_filepath,
+          origin_url: item.origin_url
+        });
+        showToast(`Added ${item.filename} to Reference Images`, 'good');
+      });
+
+      const srcBtn = document.createElement('button');
+      srcBtn.type = 'button';
+      srcBtn.className = 'btn-tiny';
+      srcBtn.textContent = '🎯 Src';
+      srcBtn.title = 'Set as Source Image';
+      srcBtn.addEventListener('click', () => {
+        applyCroppedAsSourceImage(item);
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn-tiny';
+      delBtn.textContent = '🗑️';
+      delBtn.title = 'Delete cropped image from disk & DB';
+      delBtn.addEventListener('click', async () => {
+        await fetch('/api/crops/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop_id: item.crop_id, local_path: item.local_path })
+        }).catch(() => {});
+        loadSavedCroppedFaces();
+      });
+
+      acts.appendChild(addBtn);
+      acts.appendChild(srcBtn);
+      acts.appendChild(delBtn);
+      el.savedCroppedFacesGrid.appendChild(card);
+    });
+  }
+
+  function applyCroppedAsSourceImage(saved) {
+    state.sourceImage = {
+      url: saved.local_url,
+      downloadUrl: saved.local_url,
+      name: saved.filename,
+      origin_filename: saved.origin_filename || '',
+      origin_filepath: saved.origin_filepath || '',
+      origin_url: saved.origin_url || ''
+    };
+    if (el.imageUrlInput) el.imageUrlInput.value = saved.local_url;
+    if (el.imagePreview) el.imagePreview.src = saved.local_url;
+    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+    const dp = document.getElementById('dropzonePrompt');
+    if (dp) dp.style.display = 'none';
+    syncMaskBgPreview();
+    showToast(`Set ${saved.filename} as Source Image (origin: ${saved.origin_filename || 'crop'})`, 'good');
+  }
+
+  async function saveCurrentCropToServer() {
+    if (!state.cropper.imgEl) {
+      showToast('Load an image first before saving a crop.', 'warn');
+      return null;
+    }
+    const res = extractCropResult();
+    if (!res) return null;
+    const orig = state.cropper.originMeta || {};
+    const resp = await fetch('/api/crops/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl: res.dataUrl,
+        filename: orig.origin_filename || 'face',
+        origin_filename: orig.origin_filename || '',
+        origin_filepath: orig.origin_filepath || '',
+        origin_url: orig.origin_url || '',
+        crop_mode: res.cropMode,
+        width: res.width,
+        height: res.height
+      })
+    });
+    const json = await resp.json();
+    if (!resp.ok || json.error || !json.data) {
+      throw new Error(json.error || 'Failed to save cropped face');
+    }
+    loadSavedCroppedFaces();
+    return json.data;
+  }
+
+  function openFaceCropModal(opts = {}) {
+    if (!el.faceCropModal) return;
+    el.faceCropModal.style.display = 'flex';
+    state.cropper.targetKind = opts.targetKind || 'source';
+    state.cropper.targetRefId = opts.targetRefId || null;
+    state.cropper.originMeta = opts.originMeta || {};
+    state.cropper.rect = null;
+    state.cropper.lassoPoints = [];
+    if (el.cropReplaceRefBtn) {
+      el.cropReplaceRefBtn.style.display = (state.cropper.targetKind === 'ref' && state.cropper.targetRefId) ? 'inline-flex' : 'none';
+    }
+    if (el.faceCropOriginInfo) {
+      const oName = state.cropper.originMeta.origin_filename || 'Selected photo';
+      el.faceCropOriginInfo.textContent = `Original: ${oName} → saves to ${state.croppedDir || 'cropped_imgs'}`;
+    }
+    loadSavedCroppedFaces();
+
+    if (!opts.src) {
+      state.cropper.imgEl = null;
+      if (el.faceCropCanvas) el.faceCropCanvas.style.display = 'none';
+      if (el.faceCropEmptyMsg) el.faceCropEmptyMsg.style.display = 'block';
+      renderFaceCropPreview();
+      return;
+    }
+
+    if (el.faceCropCanvas) el.faceCropCanvas.style.display = 'block';
+    if (el.faceCropEmptyMsg) el.faceCropEmptyMsg.style.display = 'none';
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => {
+      state.cropper.imgEl = im;
+      if (el.faceCropCanvas) {
+        el.faceCropCanvas.width = im.naturalWidth || im.width || 512;
+        el.faceCropCanvas.height = im.naturalHeight || im.height || 512;
+      }
+      drawFaceCropCanvas();
+    };
+    im.onerror = () => {
+      state.cropper.imgEl = null;
+      if (el.faceCropCanvas) el.faceCropCanvas.style.display = 'none';
+      if (el.faceCropEmptyMsg) {
+        el.faceCropEmptyMsg.style.display = 'block';
+        el.faceCropEmptyMsg.textContent = 'Could not load remote image onto canvas (CORS blocked). Download or use a local /outputs/ file to crop.';
+      }
+    };
+    im.src = opts.src;
+  }
+
+  function initFaceCropAndPromptTools() {
+    // 1. Face Study Prompt Library Popover
+    if (el.openFacePromptsBtn && el.faceStudyPromptsMenu) {
+      el.openFacePromptsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isClosed = !el.faceStudyPromptsMenu.style.display || el.faceStudyPromptsMenu.style.display === 'none';
+        el.faceStudyPromptsMenu.style.display = isClosed ? 'flex' : 'none';
+        if (isClosed) loadAndRenderFaceStudyPrompts();
+      });
+    }
+    if (el.closeFacePromptsBtn && el.faceStudyPromptsMenu) {
+      el.closeFacePromptsBtn.addEventListener('click', () => {
+        el.faceStudyPromptsMenu.style.display = 'none';
+      });
+    }
+    if (el.faceStudyPromptSearchInput) {
+      el.faceStudyPromptSearchInput.addEventListener('input', () => loadAndRenderFaceStudyPrompts());
+    }
+    if (el.faceStudyPromptCatPills) {
+      el.faceStudyPromptCatPills.addEventListener('click', (e) => {
+        const btn = e.target.closest('.history-filter-btn');
+        if (!btn) return;
+        state.facePromptCategory = btn.dataset.fspCat || 'all';
+        el.faceStudyPromptCatPills.querySelectorAll('.history-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+        loadAndRenderFaceStudyPrompts();
+      });
+    }
+    if (el.saveCurrentFacePromptBtn) {
+      el.saveCurrentFacePromptBtn.addEventListener('click', async () => {
+        const raw = (el.promptInput?.value || '').trim();
+        if (!raw) {
+          showToast('Write or edit a prompt first before saving it to Face Study Prompts.', 'warn');
+          return;
+        }
+        const title = (typeof window.prompt === 'function' ? window.prompt('Name this Face Study prompt:', raw.slice(0, 36)) : raw.slice(0, 36)) || '';
+        if (!title.trim()) return;
+        const cat = (typeof window.prompt === 'function' ? window.prompt('Category (Anatomy & Essence / Lighting / Expressions / Angles & Framing / Custom):', 'Custom') : 'Custom') || 'Custom';
+        try {
+          const resp = await fetch('/api/face-prompts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title.trim(), category: cat.trim() || 'Custom', template_text: raw })
+          });
+          if (!resp.ok) throw new Error('Save failed');
+          showToast(`Saved Face Study prompt "${title.trim()}" to SQLite`, 'good');
+          loadAndRenderFaceStudyPrompts(true);
+        } catch (err) {
+          showToast(`Could not save prompt: ${err.message}`, 'error');
+        }
+      });
+    }
+
+    // 2. Face Crop Modal Triggers & Canvas Interactions
+    if (el.cropSourceImageBtn) {
+      el.cropSourceImageBtn.addEventListener('click', () => {
+        const src = (el.imagePreviewContainer && el.imagePreviewContainer.style.display !== 'none' && el.imagePreview?.src)
+          ? el.imagePreview.src
+          : (state.sourceImage?.downloadUrl || state.sourceImage?.url || el.imageUrlInput?.value?.trim() || '');
+        if (!src) {
+          showToast('Load a Source Image first, or click "✂️ Crop / Saved Crops" to browse saved crops.', 'warn');
+          return;
+        }
+        openFaceCropModal({
+          src,
+          targetKind: 'source',
+          originMeta: {
+            origin_filename: state.sourceImage?.origin_filename || state.sourceImage?.file?.name || src.split('/').pop() || 'source.png',
+            origin_filepath: state.sourceImage?.origin_filepath || state.sourceImage?.file?.path || '',
+            origin_url: state.sourceImage?.origin_url || state.sourceImage?.downloadUrl || src
+          }
+        });
+      });
+    }
+    if (el.openSavedCropsBtn) {
+      el.openSavedCropsBtn.addEventListener('click', () => {
+        const fallbackSrc = state.sourceImage?.downloadUrl || state.sourceImage?.url || state.extraImages?.[0]?.previewUrl || state.extraImages?.[0]?.downloadUrl || '';
+        const fallbackName = state.sourceImage?.file?.name || state.extraImages?.[0]?.file?.name || fallbackSrc.split('/').pop() || '';
+        openFaceCropModal({
+          src: fallbackSrc,
+          targetKind: 'ref',
+          originMeta: { origin_filename: fallbackName, origin_url: fallbackSrc }
+        });
+      });
+    }
+    if (el.closeFaceCropModalBtn && el.faceCropModal) {
+      el.closeFaceCropModalBtn.addEventListener('click', () => { el.faceCropModal.style.display = 'none'; });
+      el.faceCropModal.addEventListener('click', (e) => { if (e.target === el.faceCropModal) el.faceCropModal.style.display = 'none'; });
+    }
+    if (el.refreshSavedCropsBtn) {
+      el.refreshSavedCropsBtn.addEventListener('click', () => loadSavedCroppedFaces());
+    }
+    if (el.faceCropModeSwitch) {
+      el.faceCropModeSwitch.addEventListener('click', (e) => {
+        const btn = e.target.closest('.seg-btn');
+        if (!btn) return;
+        state.cropper.mode = btn.dataset.cropmode || 'rect';
+        el.faceCropModeSwitch.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (el.cropSquareLockRow) el.cropSquareLockRow.style.display = state.cropper.mode === 'rect' ? 'inline-flex' : 'none';
+        if (el.cropLassoBgSelect) el.cropLassoBgSelect.style.display = state.cropper.mode === 'lasso' ? 'inline-block' : 'none';
+        state.cropper.rect = null;
+        state.cropper.lassoPoints = [];
+        drawFaceCropCanvas();
+      });
+    }
+    if (el.cropSquareLockCheckbox) {
+      el.cropSquareLockCheckbox.addEventListener('change', () => {
+        state.cropper.squareLock = Boolean(el.cropSquareLockCheckbox.checked);
+      });
+    }
+    if (el.cropLassoBgSelect) {
+      el.cropLassoBgSelect.addEventListener('change', () => {
+        state.cropper.lassoBg = el.cropLassoBgSelect.value || 'gray';
+        renderFaceCropPreview();
+      });
+    }
+    if (el.faceCropResetBtn) {
+      el.faceCropResetBtn.addEventListener('click', () => {
+        state.cropper.rect = null;
+        state.cropper.lassoPoints = [];
+        drawFaceCropCanvas();
+      });
+    }
+    if (el.faceCropCanvas) {
+      el.faceCropCanvas.addEventListener('mousedown', (e) => {
+        if (!state.cropper.imgEl) return;
+        const pt = getCropCanvasPoint(e);
+        state.cropper.isDragging = true;
+        state.cropper.startPt = pt;
+        if (state.cropper.mode === 'lasso') {
+          state.cropper.lassoPoints = [pt];
+        } else {
+          state.cropper.rect = { x: pt.x, y: pt.y, w: 0, h: 0 };
+        }
+        drawFaceCropCanvas();
+      });
+      el.faceCropCanvas.addEventListener('mousemove', (e) => {
+        if (!state.cropper.isDragging || !state.cropper.imgEl) return;
+        const pt = getCropCanvasPoint(e);
+        if (state.cropper.mode === 'lasso') {
+          const last = state.cropper.lassoPoints[state.cropper.lassoPoints.length - 1];
+          if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) >= 4) {
+            state.cropper.lassoPoints.push(pt);
+            drawFaceCropCanvas();
+          }
+        } else {
+          const s = state.cropper.startPt;
+          let dx = pt.x - s.x;
+          let dy = pt.y - s.y;
+          if (state.cropper.squareLock) {
+            const side = Math.max(Math.abs(dx), Math.abs(dy));
+            dx = dx < 0 ? -side : side;
+            dy = dy < 0 ? -side : side;
+          }
+          const x = dx < 0 ? Math.max(0, s.x + dx) : s.x;
+          const y = dy < 0 ? Math.max(0, s.y + dy) : s.y;
+          const w = Math.min(el.faceCropCanvas.width - x, Math.abs(dx));
+          const h = Math.min(el.faceCropCanvas.height - y, Math.abs(dy));
+          state.cropper.rect = { x, y, w, h };
+          drawFaceCropCanvas();
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        if (state.cropper.isDragging) {
+          state.cropper.isDragging = false;
+          drawFaceCropCanvas();
+        }
+      });
+    }
+
+    // Save & Apply Actions
+    if (el.cropAddRefBtn) {
+      el.cropAddRefBtn.addEventListener('click', async () => {
+        try {
+          const saved = await saveCurrentCropToServer();
+          if (!saved) return;
+          addExtraImageUrl(saved.local_url, {
+            name: saved.filename,
+            role: 'Face ID',
+            origin_filename: saved.origin_filename,
+            origin_filepath: saved.origin_filepath,
+            origin_url: saved.origin_url
+          });
+          if (el.faceCropModal) el.faceCropModal.style.display = 'none';
+          showToast(`Saved ${saved.filename} to cropped_imgs & added to Reference Images`, 'good');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    }
+    if (el.cropReplaceRefBtn) {
+      el.cropReplaceRefBtn.addEventListener('click', async () => {
+        try {
+          const saved = await saveCurrentCropToServer();
+          if (!saved) return;
+          const target = (state.extraImages || []).find(x => x.id === state.cropper.targetRefId);
+          if (target) {
+            target.file = null;
+            target.previewUrl = saved.local_url;
+            target.downloadUrl = saved.local_url;
+            target.name = saved.filename;
+            target.origin_filename = saved.origin_filename || '';
+            target.origin_filepath = saved.origin_filepath || '';
+            target.origin_url = saved.origin_url || '';
+            renderExtraImagesGrid();
+            if (state.selectedModel) updateModelInfo(state.selectedModel);
+          } else {
+            addExtraImageUrl(saved.local_url, { name: saved.filename, origin_filename: saved.origin_filename });
+          }
+          if (el.faceCropModal) el.faceCropModal.style.display = 'none';
+          showToast(`Replaced ref with ${saved.filename} (origin: ${saved.origin_filename || 'saved'})`, 'good');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    }
+    if (el.cropSaveFacePackBtn) {
+      el.cropSaveFacePackBtn.addEventListener('click', async () => {
+        try {
+          const saved = await saveCurrentCropToServer();
+          if (!saved) return;
+          const defName = saved.origin_filename ? `Cropped ${saved.origin_filename}` : `Cropped Pack ${state.facePacks.length + 1}`;
+          const name = (typeof window.prompt === 'function' ? window.prompt('Save cropped face to a new Face Pack named:', defName) : defName) || '';
+          if (!name.trim()) return;
+          state.facePacks.push({
+            name: name.trim(),
+            images: [{
+              name: saved.filename,
+              url: saved.local_url,
+              origin_filename: saved.origin_filename
+            }]
+          });
+          saveFacePacks();
+          renderFacePacksSelect();
+          showToast(`Saved ${saved.filename} to Face Pack "${name.trim()}"`, 'good');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    }
+    if (el.cropSetSourceBtn) {
+      el.cropSetSourceBtn.addEventListener('click', async () => {
+        try {
+          const saved = await saveCurrentCropToServer();
+          if (!saved) return;
+          applyCroppedAsSourceImage(saved);
+          if (el.faceCropModal) el.faceCropModal.style.display = 'none';
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    }
+    if (el.cropSaveOnlyBtn) {
+      el.cropSaveOnlyBtn.addEventListener('click', async () => {
+        try {
+          const saved = await saveCurrentCropToServer();
+          if (saved) showToast(`Saved ${saved.filename} to ${state.croppedDir}`, 'good');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
       });
     }
   }

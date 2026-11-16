@@ -4,6 +4,7 @@ Note Creation Date: "2026-11-16T13:52:00-03:00"
 Note Modified Date:
   - "2026-11-16T13:52:00-03:00"
   - "2026-11-16T15:05:00-03:00"
+  - "2026-11-16T17:25:30-03:00"
 ---
 
 # 2026-11-16T13:52:00-03:00 — Project Log V3 (Continuation — `v1.0.9`)
@@ -39,3 +40,19 @@ Note Modified Date:
   - Headless Chromium Playwright E2E (`http://127.0.0.1:39115`, isolated temp data dir, route-mocked `/api/models`, `/api/balance`, `/api/model-pricing`, `/api/upload`, `/api/generate`, `/api/task/*`, `https://cdn.mock.invalid/**`): `0` page errors and `0` console errors; verified `🎭 Faces & Swaps`, Mixing Guide popover, 3D angle pills, `$0.00` Canvas Face Sheet, `⛓️ Pipeline` 2-step default + `+ Add Step`, Checkpoint pause & Step 1 → Step 2 URL handoff, and Auto-Run All with automatic `face_image` preset binding.
   - Re-running final `npm test`, `npx electron . --smoke-test`, and secret scan before committing/tagging `v1.1.0`.
 - **Next Action:** Push `main` + annotated tag `v1.1.0`, confirm GitHub Actions release completes, and restart `http://localhost:3000`.
+
+
+# 2026-11-16T17:25:30-03:00 — v1.2.0 Shipped: Face Crop Studio (`cropped_imgs`), Origin Provenance & Face Study Prompt Library
+
+- **Changes Applied in `v1.2.0`:**
+  - `documentation/features/03-face-crop-and-study-prompts/SPEC.md`: Authored specification and acceptance criteria per `FEATURE PIPELINE.md`.
+  - `database/history_db.js`: Added `cropped_assets` and `face_study_prompts` SQLite tables (pre-seeded with 12 Face Study prompts across `Anatomy & Essence`, `Lighting`, `Expressions` — including Warm Smile, Soft Pout, Subtle Frown, Cheeky Smirk, Playful Tongue-Out — and `Angles & Framing`), and updated `normalizeInputSources()` so both cropped and original filenames (`origin_filename`) are indexed in `generations.input_filenames` and FTS5.
+  - `server.js`: Added `OUTPUTS_CROPPED_DIR = path.join(OUTPUTS_DIR, 'cropped_imgs')`, `croppedDir` on `/api/config`, `GET /api/crops`, `POST /api/crops/save`, `POST /api/crops/delete` (with `403` `isPathInside` traversal guard), `GET /api/face-prompts`, `POST /api/face-prompts`, and `POST /api/face-prompts/delete`.
+  - `public/index.html`, `public/style.css`, `public/app.js` (`?v=1.2.0`): Implemented `#faceCropModal` (Rectangle `1:1`/Free + Free-Form Lasso with `Neutral Gray` or `Transparent PNG` outside, non-destructive `➕ Add Crop to Refs`, `🔄 Replace This Ref`, `👤 Save to Face Pack`, `🎯 Set as Source Image`, and `#savedCroppedFacesGrid`), URL filename extraction in `addExtraImageUrl()`, `(from <origin_filename>)` provenance tags across Reference thumbnails / Active Inspector / History DB, and the searchable `📚 Study Prompts` popover (`#faceStudyPromptsMenu`) with `{{REFS}}` -> `<Picture N>` / `Image N` substitution.
+  - `scripts/verify_studio_isolated.js`: Added isolated HTTP tests (`/api/crops*`, `/api/face-prompts*`, 403 traversal), SQLite `cropped_assets` / `face_study_prompts` / `origin_filename` FTS5 search tests, and simulated DOM integration assertions.
+- **Verification (Zero Live API Spend):**
+  - `node --check` passed on `server.js`, `database/history_db.js`, `public/app.js`, and `scripts/verify_studio_isolated.js`.
+  - `npm test` (`ALL_ISOLATED_TESTS_PASSED`) passed all suites.
+  - Headless Chromium Playwright E2E (`127.0.0.1:39116`, isolated `WAVESPEED_USER_DATA_DIR`, mocked `/api/models*` & `/api/balance`, `/api/generate` blocked): `0` `pageerror`s and `0` `console` errors.
+  - Final `npm test`, `npx electron . --smoke-test`, and secret scan running after doc/version edits prior to commit/tag `v1.2.0`.
+- **Next Action:** Push `main` + annotated tag `v1.2.0`, verify GitHub release build, and restart `http://localhost:3000`.

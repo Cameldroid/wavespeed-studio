@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WaveSpeed Studio — AI Image & Video Studio</title>
   <link rel="icon" type="image/png" href="/assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <link rel="stylesheet" href="style.css?v=1.2.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -209,9 +209,30 @@
             <div class="input-header">
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                 <label for="promptInput">Prompt <span class="required">*</span></label>
-                <button type="button" class="btn-tiny" id="openPromptHistoryBtn" title="Browse &amp; reuse previous prompts from your database">🕒 Previous Prompts</button>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <button type="button" class="btn-tiny" id="openFacePromptsBtn" title="Browse &amp; save specialized Face Study prompts (Anatomy, Lighting, Expressions, Angles)">📚 Study Prompts</button>
+                  <button type="button" class="btn-tiny" id="openPromptHistoryBtn" title="Browse &amp; reuse previous prompts from your database">🕒 Previous Prompts</button>
+                </div>
               </div>
               <span class="subtext">Describe what you want to create or edit</span>
+            </div>
+            <div class="prompt-history-popover" id="faceStudyPromptsMenu" style="display: none;">
+              <div class="prompt-history-head">
+                <input type="text" id="faceStudyPromptSearchInput" placeholder="Search face study prompts (smile, pout, lighting, anatomy)...">
+                <button type="button" class="btn-tiny" id="saveCurrentFacePromptBtn" title="Save current prompt into Face Study Prompt database">+ Save Current</button>
+                <button type="button" class="btn-tiny" id="closeFacePromptsBtn" title="Close">✕</button>
+              </div>
+              <div class="history-filter-pills" id="faceStudyPromptCatPills" style="padding: 4px 8px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;">
+                <button type="button" class="history-filter-btn active" data-fsp-cat="all">All</button>
+                <button type="button" class="history-filter-btn" data-fsp-cat="Anatomy & Essence">Anatomy</button>
+                <button type="button" class="history-filter-btn" data-fsp-cat="Lighting">Lighting</button>
+                <button type="button" class="history-filter-btn" data-fsp-cat="Expressions">Expressions</button>
+                <button type="button" class="history-filter-btn" data-fsp-cat="Angles & Framing">Angles</button>
+                <button type="button" class="history-filter-btn" data-fsp-cat="Custom">Custom</button>
+              </div>
+              <div class="prompt-history-list" id="faceStudyPromptList">
+                <div class="combobox-empty">Loading Face Study prompt library...</div>
+              </div>
             </div>
             <div class="prompt-history-popover" id="promptHistoryMenu" style="display: none;">
               <div class="prompt-history-head">
@@ -255,7 +276,10 @@
           <!-- Image Upload / Edit Target -->
           <div class="input-group" id="imageInputGroup">
             <div class="input-header">
-              <label>Source Image <span id="imgRequiredBadge" class="required">*</span></label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label>Source Image <span id="imgRequiredBadge" class="required">*</span></label>
+                <button type="button" class="btn-tiny" id="cropSourceImageBtn" title="Crop face/region locally &amp; save to cropped_imgs folder ($0.00)">✂️ Crop Face</button>
+              </div>
               <span class="subtext">Upload, drag & drop, or paste image URL</span>
             </div>
 
@@ -361,6 +385,7 @@
             </div>
             <div class="face-study-bar" id="faceStudyBar">
               <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill model-aware multi-photo Face Study prompt (&lt;Picture N&gt; for MiniMax H3, Image N for Seedream/Qwen)">🧬 Face Study Prompt</button>
+              <button type="button" class="btn-tiny" id="openSavedCropsBtn" title="Open Face Crop Studio &amp; browse saved crops in cropped_imgs">✂️ Crop / Saved Crops</button>
               <button type="button" class="btn-tiny" id="buildFaceSheetBtn" title="Locally stitch attached photos into one 2x2 / 3x2 reference sheet ($0.00 Canvas — saves 46% on Seedream 5.5)">🧩 $0.00 Face Sheet</button>
               <button type="button" class="btn-tiny" id="preUploadFacePackBtn" title="Cache local files onto WaveSpeed CDN once ($0.00) before saving Face Pack">☁️ Cache URLs ($0)</button>
               <button type="button" class="btn-tiny" id="saveFacePackBtn" title="Save current uploaded reference photos as a reusable Face Pack (1-click load, $0 re-upload)">👤 Save Face Pack</button>
@@ -1087,6 +1112,66 @@
       </div>
     </div>
 
+    <!-- Face Crop Studio & Saved Cropped Faces Modal -->
+    <div class="modal-backdrop" id="faceCropModal" style="display: none;">
+      <div class="modal-box face-crop-modal-box">
+        <div class="modal-header">
+          <div>
+            <h3>✂️ Face Crop Studio ($0.00 Local)</h3>
+            <small id="faceCropOriginInfo" style="color: var(--text-sub); font-family: var(--font-mono);">Saves cropped faces to cropped_imgs with original provenance</small>
+          </div>
+          <button type="button" class="close-modal-btn" id="closeFaceCropModalBtn">✕</button>
+        </div>
+        <div class="modal-body face-crop-modal-body">
+          <div class="face-crop-toolbar">
+            <div class="segmented-control" id="faceCropModeSwitch">
+              <button type="button" class="seg-btn active" data-cropmode="rect" title="Drag a crisp rectangle around face or head+shoulders">▭ Rectangle</button>
+              <button type="button" class="seg-btn" data-cropmode="lasso" title="Trace a free-form polygon around the face/person">〰️ Free-Form Lasso</button>
+            </div>
+            <label class="checkbox-label" id="cropSquareLockRow" style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.74rem; cursor: pointer;">
+              <input type="checkbox" id="cropSquareLockCheckbox" checked>
+              <span>1:1 Face Square</span>
+            </label>
+            <select id="cropLassoBgSelect" style="display: none; font-size: 0.74rem; padding: 3px 6px;" title="Background outside Free-Form Lasso selection">
+              <option value="gray">Outside: Neutral Gray</option>
+              <option value="transparent">Outside: Transparent PNG (Seedream 5.5)</option>
+            </select>
+            <button type="button" class="btn-secondary-sm" id="faceCropResetBtn">Reset Selection</button>
+          </div>
+
+          <div class="face-crop-stage-wrap">
+            <div class="face-crop-canvas-area" id="faceCropCanvasArea">
+              <canvas id="faceCropCanvas"></canvas>
+              <div class="face-crop-empty" id="faceCropEmptyMsg" style="display: none;">Load or pick an image below (or open from Source / Reference thumbnail) to start cropping.</div>
+            </div>
+
+            <div class="face-crop-actions-col">
+              <div class="face-crop-preview-box">
+                <div class="subtext" style="margin-bottom: 4px;">Live Crop Preview</div>
+                <canvas id="faceCropPreviewCanvas" width="160" height="160"></canvas>
+                <div class="subtext" id="faceCropSizeReadout" style="margin-top: 4px; font-family: var(--font-mono);">Drag on image to select</div>
+              </div>
+              <button type="button" class="btn-sm" id="cropAddRefBtn">➕ Add Crop to Refs</button>
+              <button type="button" class="btn-secondary-sm" id="cropReplaceRefBtn" style="display: none;">🔄 Replace This Ref</button>
+              <button type="button" class="btn-secondary-sm" id="cropSaveFacePackBtn">👤 Add to Face Pack</button>
+              <button type="button" class="btn-secondary-sm" id="cropSetSourceBtn">🎯 Set as Source Image</button>
+              <button type="button" class="btn-secondary-sm" id="cropSaveOnlyBtn">💾 Save to cropped_imgs Only</button>
+            </div>
+          </div>
+
+          <div class="saved-crops-section">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+              <strong style="font-size: 0.8rem;">📁 Saved Cropped Faces (<span id="savedCropsDirLabel">cropped_imgs</span>)</strong>
+              <button type="button" class="btn-tiny" id="refreshSavedCropsBtn">🔄 Refresh</button>
+            </div>
+            <div class="saved-crops-grid" id="savedCroppedFacesGrid">
+              <div class="combobox-empty">No cropped faces saved yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Side-by-Side A/B Model Compare Modal -->
     <div class="modal-backdrop" id="compareModal" style="display: none;">
       <div class="modal-box compare-modal-box">
@@ -1109,6 +1194,6 @@
   </div>
 
   <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
-  <script src="app.js?v=1.1.0"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>

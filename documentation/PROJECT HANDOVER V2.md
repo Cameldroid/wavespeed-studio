@@ -7,6 +7,7 @@ Note Modified Date:
   - "2026-11-16T12:39:00-03:00"
   - "2026-11-16T13:52:00-03:00"
   - "2026-11-16T15:05:00-03:00"
+  - "2026-11-16T17:25:30-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -67,3 +68,13 @@ Note Modified Date:
   - **`⛓️ Pipeline` Tab:** 2 default collapsible steps + `+ Add Step` (up to 6 steps), per-step model selectors showing live `$price` + safety/capability tags, independent prompt boxes & source wiring (`Subject / Face Preset`, `← Step N-1`, `← Step 1`, `Custom`, `Extra Refs`), automatic `face_image`/`source_image` lock wiring for swaps, **Checkpoint (Pause & Approve / Re-run)** vs **Auto-Run All**, compact horizontal Stage Progression strip sharing the single viewer, built-in recipes, `.json` export/import, and SQLite `pipeline_id` / `pipeline_step` tracking.
   - **`🎭 Faces & Swaps` Tab:** Curated hub for `minimax-h3/image-edit` (`<Picture N>`), `seedream-v5.5/edit`, `qwen-image/edit-multiple-angles` (with live **3D Camera Angle Controls**), `flux-pulid`, `infinite-you` (`source_image` + `target_image`), and Face/Head/Body/Video Swaps, complete with hover+click **Model Mixing & Workflow Guide**, per-ref Role Tags, **`🧩 $0.00 Face Sheet`** Canvas stitcher, and **`☁️ Cache URLs ($0)`** pre-upload.
 - **Exact Next Action:** Scaffold `documentation/features/03-<next-feature>/SPEC.md` per [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) when starting the next feature slice.
+
+
+# 2026-11-16T17:25:30-03:00 — v1.2.0 Shipped: Face Crop Studio (`cropped_imgs`), Origin Provenance & Face Study Prompt Library
+
+- **Authoritative Release:** `v1.2.0` (spec documented in [features/03-face-crop-and-study-prompts/SPEC.md](features/03-face-crop-and-study-prompts/SPEC.md)), running on `http://localhost:3000` (`Launch Studio.cmd`) and Desktop (`Launch Desktop.cmd`).
+- **Key Capabilities Added in `v1.2.0`:**
+  - **Local Face Crop Studio (`#faceCropModal`):** Supports Rectangle (`1:1 Face Square` or `Free`) and Free-Form Lasso (`Neutral Gray` or `Transparent PNG`), saving crops directly to `<outputsDir>/cropped_imgs/` (locally `D:\wvst\cropped_imgs\`) and SQLite `cropped_assets` with explicit non-destructive actions (`+ Add Crop to Refs`, `🔄 Replace This Ref`, `👤 Save to Face Pack`, `🎯 Set as Source Image`).
+  - **Dual Provenance (`origin_filename` + cropped `filename`):** Both cropped and original filenames are preserved across Reference Cards, Face Packs, Pipeline runs, Active Output Inspector, History DB (`studio_history.sqlite`), and FTS5 search (`(from <origin_filename>)`).
+  - **SQLite Face Study Prompt Library (`📚 Study Prompts`):** Categorized & searchable prompt popover (`Anatomy & Essence`, `Lighting`, `Expressions` — Smile, Soft Pout, Subtle Frown, Cheeky Smirk, Playful Tongue-Out — `Angles & Framing`, plus `+ Save Current` custom prompts) adapting `{{REFS}}` to `<Picture N>` (MiniMax H3) vs `Image N` (Seedream/Qwen/FLUX).
+- **Exact Next Action:** Copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/04-<next-feature>/SPEC.md` per [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) when starting the next feature slice.

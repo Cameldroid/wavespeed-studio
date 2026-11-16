@@ -80,7 +80,124 @@ function createHistoryDatabase(options = {}) {
       error_message,
       notes
     );
+
+    CREATE TABLE IF NOT EXISTS cropped_assets (
+      crop_id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      local_url TEXT NOT NULL,
+      local_path TEXT NOT NULL,
+      origin_filename TEXT DEFAULT '',
+      origin_filepath TEXT DEFAULT '',
+      origin_url TEXT DEFAULT '',
+      crop_mode TEXT DEFAULT 'rect',
+      width INTEGER,
+      height INTEGER,
+      size_bytes INTEGER,
+      notes TEXT DEFAULT '',
+      created_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cropped_assets_created ON cropped_assets(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS face_study_prompts (
+      prompt_id TEXT PRIMARY KEY,
+      category TEXT NOT NULL DEFAULT 'custom',
+      title TEXT NOT NULL,
+      template_text TEXT NOT NULL,
+      is_builtin INTEGER DEFAULT 0,
+      is_favorite INTEGER DEFAULT 0,
+      created_at TEXT
+    );
   `);
+
+  // Seed curated Face Study Prompt Library (idempotent; preserves user edits/deletions)
+  try {
+    const promptCountRow = db.prepare('SELECT COUNT(*) AS cnt FROM face_study_prompts').get();
+    if (Number(promptCountRow?.cnt || 0) === 0) {
+      const seedPrompts = [
+        {
+          prompt_id: 'builtin-anat-landmarks',
+          category: 'Anatomy & Essence',
+          title: 'Maximum Facial Anatomy & Landmark Lock',
+          template_text: 'Study {{REFS}} carefully to preserve exact facial anatomy: bone structure, cheekbone contour, jawline, eye shape and iris color, eyebrow arch, nose bridge and tip, lip fullness, skin pores and natural complexion. Generate a razor-sharp photorealistic portrait of this exact same person:'
+        },
+        {
+          prompt_id: 'builtin-anat-turnaround',
+          category: 'Anatomy & Essence',
+          title: 'Multi-Angle Turnaround Reference Sheet',
+          template_text: 'Using {{REFS}} as exact facial identity reference, generate a clean 4-view portrait turnaround sheet (front facing, 3/4 left, 3/4 right, side profile) of the exact same person with uniform soft studio lighting on a neutral light-gray background, preserving every facial proportion and hairline detail.'
+        },
+        {
+          prompt_id: 'builtin-light-daylight',
+          category: 'Lighting',
+          title: 'Soft Natural Window Daylight Study',
+          template_text: 'Using {{REFS}} for exact facial identity and skin tone, photorealistic close-up portrait lit by soft diffused window daylight, natural catchlights in the eyes, realistic skin texture with zero airbrushing, shallow depth of field:'
+        },
+        {
+          prompt_id: 'builtin-light-golden',
+          category: 'Lighting',
+          title: 'Warm Golden Hour Rim Light Study',
+          template_text: 'Using {{REFS}} for exact facial identity, warm golden hour sunlight hitting the side of the face with gentle rim glow on the hair, natural skin warmth and subtle freckles/pores preserved, candid 85mm portrait:'
+        },
+        {
+          prompt_id: 'builtin-light-studio',
+          category: 'Lighting',
+          title: 'High-Contrast Moody Studio Key Light',
+          template_text: 'Using {{REFS}} for exact facial features and bone structure, dramatic Rembrandt studio key lighting highlighting cheekbones and jawline against a dark neutral backdrop, crisp editorial portrait:'
+        },
+        {
+          prompt_id: 'builtin-expr-smile',
+          category: 'Expressions',
+          title: 'Warm Genuine Smile',
+          template_text: 'Keeping exact facial identity, bone structure, and eyes from {{REFS}}, portrait of the same person with a warm, natural genuine smile, relaxed crinkle around the eyes, realistic teeth and cheek creases, natural lighting:'
+        },
+        {
+          prompt_id: 'builtin-expr-pout',
+          category: 'Expressions',
+          title: 'Soft Pout / Alluring Lips',
+          template_text: 'Keeping exact facial identity and proportions from {{REFS}}, close-up portrait with a soft subtle pout, slightly parted lips, relaxed heavy-lidded gaze directly into the camera, natural skin detail:'
+        },
+        {
+          prompt_id: 'builtin-expr-frown',
+          category: 'Expressions',
+          title: 'Subtle Frown / Intense Moody',
+          template_text: 'Keeping exact facial features and bone structure from {{REFS}}, close-up portrait with a slight moody frown, furrowed brow, intense focused gaze, realistic shadows and skin texture:'
+        },
+        {
+          prompt_id: 'builtin-expr-cheeky',
+          category: 'Expressions',
+          title: 'Cheeky Playful Smirk',
+          template_text: 'Keeping exact facial identity from {{REFS}}, candid close-up with a cheeky lopsided smirk, raised eyebrow, mischievous sparkling eyes looking slightly off-axis then back at camera:'
+        },
+        {
+          prompt_id: 'builtin-expr-tongue',
+          category: 'Expressions',
+          title: 'Playful Tongue-Out (Teasing / Suggestive)',
+          template_text: 'Keeping exact facial identity, eyes, and jawline from {{REFS}}, close-up portrait with a playful teasing expression, lips parted and tip of tongue slightly sticking out in a flirtatious cheeky manner, warm intimate lighting:'
+        },
+        {
+          prompt_id: 'builtin-angle-over-shoulder',
+          category: 'Angles & Framing',
+          title: 'Over-the-Shoulder 3/4 Glance',
+          template_text: 'Keeping exact facial identity from {{REFS}}, over-the-shoulder three-quarter portrait looking back toward the camera with subtle chin tilt, crisp focus on eyes and jawline:'
+        },
+        {
+          prompt_id: 'builtin-angle-low',
+          category: 'Angles & Framing',
+          title: 'Low-Angle Chin-Up Portrait',
+          template_text: 'Keeping exact facial identity and jawline structure from {{REFS}}, slightly low-angle close-up portrait looking gently down at the lens, confident poised expression, natural realistic lighting:'
+        }
+      ];
+      const insPrompt = db.prepare(`
+        INSERT OR IGNORE INTO face_study_prompts (prompt_id, category, title, template_text, is_builtin, is_favorite, created_at)
+        VALUES (?, ?, ?, ?, 1, 0, ?)
+      `);
+      const seedTs = new Date().toISOString();
+      seedPrompts.forEach(p => insPrompt.run(p.prompt_id, p.category, p.title, p.template_text, seedTs));
+    }
+  } catch (seedErr) {
+    console.warn('Face study prompt seed warning:', seedErr.message);
+  }
 
   // Safe schema migration for existing SQLite databases (preserves all prior rows)
   try {
@@ -116,6 +233,9 @@ function createHistoryDatabase(options = {}) {
           filepath: s.filepath ? String(s.filepath) : '',
           local_url: s.local_url ? String(s.local_url) : '',
           remote_url: s.remote_url ? String(s.remote_url) : '',
+          origin_filename: s.origin_filename ? String(s.origin_filename) : '',
+          origin_filepath: s.origin_filepath ? String(s.origin_filepath) : '',
+          origin_url: s.origin_url ? String(s.origin_url) : '',
           size_bytes: Number.isFinite(Number(s.size_bytes)) ? Number(s.size_bytes) : null
         });
       }
@@ -125,7 +245,7 @@ function createHistoryDatabase(options = {}) {
         if (typeof u === 'string' && u.trim()) {
           let fname = '';
           try { fname = path.basename(u.split('?')[0]); } catch (e) {}
-          clean.push({ slot, filename: fname, filepath: '', local_url: u.startsWith('/outputs/') ? u : '', remote_url: u.startsWith('http') ? u : '', size_bytes: null });
+          clean.push({ slot, filename: fname, filepath: '', local_url: u.startsWith('/outputs/') ? u : '', remote_url: u.startsWith('http') ? u : '', origin_filename: '', origin_filepath: '', origin_url: '', size_bytes: null });
         }
       };
       addUrl('image', fallbackPayload.image || fallbackPayload.face_image || fallbackPayload.body_image);
@@ -136,8 +256,8 @@ function createHistoryDatabase(options = {}) {
       if (Array.isArray(fallbackPayload.reference_videos)) fallbackPayload.reference_videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
       if (Array.isArray(fallbackPayload.videos)) fallbackPayload.videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
     }
-    const filenames = Array.from(new Set(clean.map(x => x.filename).filter(Boolean))).join(', ');
-    const filepaths = Array.from(new Set(clean.map(x => x.filepath || x.local_url || x.remote_url).filter(Boolean))).join(' | ');
+    const filenames = Array.from(new Set(clean.flatMap(x => [x.filename, x.origin_filename]).filter(Boolean))).join(', ');
+    const filepaths = Array.from(new Set(clean.flatMap(x => [x.filepath || x.local_url || x.remote_url, x.origin_filepath || x.origin_url]).filter(Boolean))).join(' | ');
     return {
       input_sources_json: JSON.stringify(clean),
       input_filenames: filenames,
@@ -737,6 +857,96 @@ function createHistoryDatabase(options = {}) {
     return { deleted: changes > 0, changes, task_ids: resolvedTaskIds };
   }
 
+  function recordCroppedAsset(entry = {}) {
+    const cropId = String(entry.crop_id || `crop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`).trim();
+    const nowIso = entry.created_at || new Date().toISOString();
+    db.prepare(`
+      INSERT INTO cropped_assets (
+        crop_id, filename, local_url, local_path,
+        origin_filename, origin_filepath, origin_url,
+        crop_mode, width, height, size_bytes, notes, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(crop_id) DO UPDATE SET
+        filename = excluded.filename,
+        local_url = excluded.local_url,
+        local_path = excluded.local_path,
+        origin_filename = excluded.origin_filename,
+        origin_filepath = excluded.origin_filepath,
+        origin_url = excluded.origin_url,
+        notes = excluded.notes
+    `).run(
+      cropId,
+      String(entry.filename || ''),
+      String(entry.local_url || ''),
+      String(entry.local_path || ''),
+      String(entry.origin_filename || ''),
+      String(entry.origin_filepath || ''),
+      String(entry.origin_url || ''),
+      String(entry.crop_mode || 'rect'),
+      Number.isFinite(Number(entry.width)) ? Number(entry.width) : null,
+      Number.isFinite(Number(entry.height)) ? Number(entry.height) : null,
+      Number.isFinite(Number(entry.size_bytes)) ? Number(entry.size_bytes) : null,
+      String(entry.notes || ''),
+      nowIso
+    );
+    return db.prepare('SELECT * FROM cropped_assets WHERE crop_id = ?').get(cropId);
+  }
+
+  function listCroppedAssets(limit = 100) {
+    const safeLimit = Math.min(500, Math.max(1, parseInt(limit || '100', 10) || 100));
+    const rows = db.prepare('SELECT * FROM cropped_assets ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+    return rows.map(r => ({
+      ...r,
+      file_exists: Boolean(r.local_path && fs.existsSync(r.local_path))
+    }));
+  }
+
+  function deleteCroppedAsset(cropId) {
+    const id = String(cropId || '').trim();
+    if (!id) return { deleted: false };
+    const existing = db.prepare('SELECT * FROM cropped_assets WHERE crop_id = ?').get(id);
+    if (!existing) return { deleted: false };
+    const info = db.prepare('DELETE FROM cropped_assets WHERE crop_id = ?').run(id);
+    return { deleted: Number(info?.changes || 0) > 0, row: existing };
+  }
+
+  function listFaceStudyPrompts() {
+    const rows = db.prepare('SELECT * FROM face_study_prompts ORDER BY is_favorite DESC, is_builtin ASC, created_at DESC').all();
+    return rows.map(r => ({
+      ...r,
+      is_builtin: Boolean(r.is_builtin),
+      is_favorite: Boolean(r.is_favorite)
+    }));
+  }
+
+  function saveFaceStudyPrompt(entry = {}) {
+    const promptId = String(entry.prompt_id || `fsp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`).trim();
+    const category = String(entry.category || 'Custom').trim() || 'Custom';
+    const title = String(entry.title || 'Custom Face Study Prompt').trim();
+    const templateText = String(entry.template_text || '').trim();
+    if (!templateText) throw new Error('template_text is required');
+    const isFav = entry.is_favorite ? 1 : 0;
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO face_study_prompts (prompt_id, category, title, template_text, is_builtin, is_favorite, created_at)
+      VALUES (?, ?, ?, ?, 0, ?, ?)
+      ON CONFLICT(prompt_id) DO UPDATE SET
+        category = excluded.category,
+        title = excluded.title,
+        template_text = excluded.template_text,
+        is_favorite = excluded.is_favorite
+    `).run(promptId, category, title, templateText, isFav, nowIso);
+    const saved = db.prepare('SELECT * FROM face_study_prompts WHERE prompt_id = ?').get(promptId);
+    return saved ? { ...saved, is_builtin: Boolean(saved.is_builtin), is_favorite: Boolean(saved.is_favorite) } : null;
+  }
+
+  function deleteFaceStudyPrompt(promptId) {
+    const id = String(promptId || '').trim();
+    if (!id) return { deleted: false };
+    const info = db.prepare('DELETE FROM face_study_prompts WHERE prompt_id = ?').run(id);
+    return { deleted: Number(info?.changes || 0) > 0 };
+  }
+
   function setOutputsDirs(nextDirs = {}) {
     if (nextDirs.outputsMetaDir) options.outputsMetaDir = nextDirs.outputsMetaDir;
     if (nextDirs.outputsImagesDir) options.outputsImagesDir = nextDirs.outputsImagesDir;
@@ -762,7 +972,13 @@ function createHistoryDatabase(options = {}) {
     deleteRun,
     queryHistory,
     exportCsv,
-    syncFromExistingFiles
+    syncFromExistingFiles,
+    recordCroppedAsset,
+    listCroppedAssets,
+    deleteCroppedAsset,
+    listFaceStudyPrompts,
+    saveFaceStudyPrompt,
+    deleteFaceStudyPrompt
   };
 }
 

@@ -2,6 +2,18 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.2.0] - 2026-11-16
+### Added
+- **Local Face Crop Studio (`#faceCropModal`) & Persistent `cropped_imgs` Folder:**
+  - Interactive Canvas cropper supporting both **Rectangle** (`1:1 Face Square` lock or `Free`) and **Free-Form Lasso** (`Neutral Gray` or `Transparent PNG` background outside the selection) from Source Image, Reference Image thumbnails (`✂️`), Active Output Inspector (`✂️ Crop Face`), and saved crops.
+  - Automatically saves crops to `<outputsDir>/cropped_imgs/` (e.g., `D:\wvst\cropped_imgs\`) and indexes them in SQLite (`cropped_assets` table via `POST /api/crops/save`, `GET /api/crops`, `POST /api/crops/delete` with `403` traversal protection, plus `croppedDir` exposed on `/api/config`).
+  - Explicit non-destructive ref actions after cropping: **`➕ Add Crop to Refs`**, **`🔄 Replace This Ref`**, **`👤 Save to Face Pack`**, **`🎯 Set as Source Image`**, or **`💾 Save to cropped_imgs Only`**.
+- **Dual Crop + Original Provenance Tracking:**
+  - Propagates `origin_filename`, `origin_filepath`, and `origin_url` from Source/Reference images, `addExtraImageUrl` URL filenames, Face Packs, and Pipeline inputs into `input_sources_json`, `input_filenames`, and SQLite FTS5 search, displaying `(from <origin_filename>)` in Reference thumbnails, Active Output Inspector, and History DB.
+- **SQLite-Backed Face Study Prompt Library (`📚 Study Prompts`):**
+  - Searchable popover (`#faceStudyPromptsMenu`) inside Prompt & Faces Studio (`GET/POST /api/face-prompts`, `POST /api/face-prompts/delete`) pre-seeded with 12 built-in prompts across **`Anatomy & Essence`**, **`Lighting`**, **`Expressions`** (Warm Genuine Smile, Soft Pout, Subtle Frown, Cheeky Playful Smirk, Playful Tongue-Out / Teasing Studio Shot), and **`Angles & Framing`**, plus **`+ Save Current`** custom prompt persistence.
+  - Dynamically substitutes `{{REFS}}` with model-specific syntax (`<Picture 1>` for MiniMax H3 vs `Image 1 (Role)` for Seedream/Qwen/FLUX).
+
 ## [1.1.0] - 2026-11-16
 ### Added
 - **Multi-Stage `⛓️ Pipeline` Tab (2+ Collapsible Steps, Checkpoints & Auto-Run All):**

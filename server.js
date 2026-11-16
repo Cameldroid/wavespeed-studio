@@ -63,6 +63,7 @@ let OUTPUTS_DIR = initialConfig.outputsDir
 let OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
 let OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
 let OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
+let OUTPUTS_CROPPED_DIR = path.join(OUTPUTS_DIR, 'cropped_imgs');
 const LOGS_DIR = path.join(USER_DATA_DIR, 'logs');
 const DATABASE_DIR = path.join(USER_DATA_DIR, 'database');
 const CACHE_DIR = path.join(USER_DATA_DIR, 'cache');
@@ -78,6 +79,7 @@ function ensureRuntimeDirs() {
     OUTPUTS_IMAGES_DIR,
     OUTPUTS_VIDEOS_DIR,
     OUTPUTS_META_DIR,
+    OUTPUTS_CROPPED_DIR,
     LOGS_DIR,
     DATABASE_DIR,
     CACHE_DIR
@@ -110,6 +112,7 @@ function applyOutputsDir(nextDir) {
   OUTPUTS_IMAGES_DIR = path.join(OUTPUTS_DIR, 'images');
   OUTPUTS_VIDEOS_DIR = path.join(OUTPUTS_DIR, 'videos');
   OUTPUTS_META_DIR = path.join(OUTPUTS_DIR, 'metadata');
+  OUTPUTS_CROPPED_DIR = path.join(OUTPUTS_DIR, 'cropped_imgs');
   ensureRuntimeDirs();
   if (historyDb && typeof historyDb.setOutputsDirs === 'function') {
     historyDb.setOutputsDirs({
@@ -1789,8 +1792,121 @@ const server = http.createServer(async (req, res) => {
         version: appVersion,
         projectRoot: PROJECT_ROOT,
         outputsDir: OUTPUTS_DIR,
+        croppedDir: OUTPUTS_CROPPED_DIR,
         logsDir: LOGS_DIR
       });
+    }
+
+    if (pathname === '/api/crops' && req.method === 'GET') {
+      const limit = parsedUrl.searchParams.get('limit') || '100';
+      const items = historyDb && typeof historyDb.listCroppedAssets === 'function'
+        ? historyDb.listCroppedAssets(limit)
+        : [];
+      return sendJson(res, 200, { code: 200, croppedDir: OUTPUTS_CROPPED_DIR, items });
+    }
+
+    if (pathname === '/api/crops/save' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const dataUrl = String(body?.dataUrl || '').trim();
+      const m = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl);
+      if (!m) {
+        return sendJson(res, 400, { error: 'Valid base64 image dataUrl (png/jpeg/webp) is required' });
+      }
+      const ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+      const buffer = Buffer.from(m[2], 'base64');
+      if (!buffer || buffer.length === 0) {
+        return sendJson(res, 400, { error: 'Cropped image payload is empty' });
+      }
+      ensureRuntimeDirs();
+      const tsPrefix = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const origName = String(body?.origin_filename || body?.filename || 'face').trim();
+      const baseSlug = path.basename(origName, path.extname(origName)).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40) || 'face';
+      const uniq = Math.random().toString(36).slice(2, 6);
+      const filename = `${tsPrefix}_${baseSlug}_crop_${uniq}.${ext}`;
+      const localPath = path.join(OUTPUTS_CROPPED_DIR, filename);
+      const localUrl = `/outputs/cropped_imgs/${filename}`;
+      fs.writeFileSync(localPath, buffer);
+
+      const cropRecord = {
+        crop_id: `crop-${Date.now()}-${uniq}`,
+        filename,
+        local_url: localUrl,
+        local_path: localPath,
+        origin_filename: String(body?.origin_filename || ''),
+        origin_filepath: String(body?.origin_filepath || ''),
+        origin_url: String(body?.origin_url || ''),
+        crop_mode: String(body?.crop_mode || 'rect'),
+        width: Number.isFinite(Number(body?.width)) ? Number(body.width) : null,
+        height: Number.isFinite(Number(body?.height)) ? Number(body.height) : null,
+        size_bytes: buffer.length,
+        notes: String(body?.notes || '')
+      };
+      let savedDb = cropRecord;
+      if (historyDb && typeof historyDb.recordCroppedAsset === 'function') {
+        savedDb = historyDb.recordCroppedAsset(cropRecord) || cropRecord;
+      }
+      logServerEvent('INFO', `Saved cropped face image to ${localPath}`, {
+        crop_id: savedDb.crop_id,
+        origin_filename: cropRecord.origin_filename,
+        size_bytes: buffer.length
+      });
+      return sendJson(res, 200, { code: 200, data: { ...savedDb, file_exists: true } });
+    }
+
+    if (pathname === '/api/crops/delete' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const cropId = String(body?.crop_id || '').trim();
+      const reqLocalPath = String(body?.local_path || '').trim();
+      const resolvedRoot = path.resolve(OUTPUTS_CROPPED_DIR);
+      if (reqLocalPath) {
+        const candidate = path.resolve(reqLocalPath);
+        if (!isPathInside(candidate, resolvedRoot)) {
+          return sendJson(res, 403, { error: 'Forbidden: path outside cropped_imgs directory' });
+        }
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          fs.unlinkSync(candidate);
+        }
+      }
+      let dbRes = { deleted: false };
+      if (cropId && historyDb && typeof historyDb.deleteCroppedAsset === 'function') {
+        dbRes = historyDb.deleteCroppedAsset(cropId);
+        if (dbRes?.row?.local_path) {
+          const cand = path.resolve(dbRes.row.local_path);
+          if (isPathInside(cand, resolvedRoot) && fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+            try { fs.unlinkSync(cand); } catch (e) {}
+          }
+        }
+      }
+      return sendJson(res, 200, { code: 200, deleted: Boolean(dbRes.deleted || reqLocalPath) });
+    }
+
+    if (pathname === '/api/face-prompts' && req.method === 'GET') {
+      const items = historyDb && typeof historyDb.listFaceStudyPrompts === 'function'
+        ? historyDb.listFaceStudyPrompts()
+        : [];
+      return sendJson(res, 200, { code: 200, items });
+    }
+
+    if (pathname === '/api/face-prompts' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      if (!historyDb || typeof historyDb.saveFaceStudyPrompt !== 'function') {
+        return sendJson(res, 500, { error: 'Database unavailable' });
+      }
+      try {
+        const saved = historyDb.saveFaceStudyPrompt(body || {});
+        return sendJson(res, 200, { code: 200, data: saved });
+      } catch (e) {
+        return sendJson(res, 400, { error: e.message });
+      }
+    }
+
+    if (pathname === '/api/face-prompts/delete' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const id = String(body?.prompt_id || '').trim();
+      const resDel = historyDb && typeof historyDb.deleteFaceStudyPrompt === 'function'
+        ? historyDb.deleteFaceStudyPrompt(id)
+        : { deleted: false };
+      return sendJson(res, 200, { code: 200, ...resDel });
     }
 
     if (pathname === '/api/check-update' && req.method === 'GET') {

@@ -3809,3 +3809,164 @@ body[data-viewer-stage="gallery"] .viewer-card {
   padding-top: 6px;
   border-top: 1px solid var(--border-color);
 }
+
+/* Thumbnail Crop Button on Multi-Image Refs */
+.multi-img-crop-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(15, 23, 42, 0.84);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.multi-img-crop-btn:hover {
+  background: var(--accent-purple);
+  color: #fff;
+}
+
+.multi-img-origin-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: #67e8f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* Face Crop Studio Modal */
+.face-crop-modal-box {
+  width: min(920px, 95vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.face-crop-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.face-crop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.face-crop-stage-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .face-crop-stage-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+.face-crop-canvas-area {
+  background: rgba(5, 8, 15, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-height: 300px;
+  max-height: 440px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+#faceCropCanvas {
+  max-width: 100%;
+  max-height: 410px;
+  cursor: crosshair;
+  display: block;
+}
+
+.face-crop-empty {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 20px;
+}
+
+.face-crop-actions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.face-crop-preview-box {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  text-align: center;
+}
+
+#faceCropPreviewCanvas {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 14px 14px;
+  border: 1px solid var(--border-color);
+}
+
+.saved-crops-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+
+.saved-crops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 8px;
+  max-height: 185px;
+  overflow-y: auto;
+}
+
+.saved-crop-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.saved-crop-card img {
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.saved-crop-meta {
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-crop-actions {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
