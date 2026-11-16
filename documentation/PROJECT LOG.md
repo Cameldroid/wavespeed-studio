@@ -15,6 +15,7 @@ Note Modified Date:
   - "2026-11-16T01:45:03-03:00"
   - "2026-11-16T01:59:25-03:00"
   - "2026-11-16T02:20:00-03:00"
+  - "2026-11-16T03:08:00-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — Initial Standalone Repository Creation
@@ -174,3 +175,9 @@ Note Modified Date:
   - `package.json`: Bumped version to `1.0.6`.
 - **Verification (Zero Live API Spend):** Re-ran `npm test` (`ALL_ISOLATED_TESTS_PASSED`), Chromium Playwright route-mocked E2E check against temporary port `39111` (`0` page errors, `0` clipped tabs, exact `wan-3.0/video-edit` payload captured cleanly), Electron `--smoke-test` (`SMOKE=0`), and live secret scan (`ZERO_LIVE_SECRET_HITS`).
 - **Next Action:** Push `main` + tag `v1.0.6` for GitHub Releases CI and restart local port `3000` daemon so `http://localhost:3000` serves `v1.0.6`.
+
+
+# 2026-11-16T03:08:00-03:00 — Log Rollover to V2
+
+- `PROJECT LOG.md` exceeded 8,000 characters (`21,912` bytes through `v1.0.6`).
+- All subsequent project log entries continue chronologically in [PROJECT LOG V2.md](PROJECT%20LOG%20V2.md).

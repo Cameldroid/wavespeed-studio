@@ -7,6 +7,7 @@ Note Modified Date:
   - "2026-11-16T01:45:03-03:00"
   - "2026-11-16T01:59:25-03:00"
   - "2026-11-16T02:20:00-03:00"
+  - "2026-11-16T03:08:00-03:00"
 ---
 
 # 2026-11-14T15:59:27-03:00 — Project Handover Scaffold: WaveSpeed Studio
@@ -196,3 +197,9 @@ D:\Cocoding\wavespeed-studio\
 
 - **Summary:** Built-in style/motion preset chips are removed across all menus (preserving `+ Image 1` / `+ Video 1` / `+ Audio 1` on reference workflows and `+ Save Preset`). `alibaba/wan-3.0/video-edit` and `/reference-to-video` display step-by-step usage banners, 15s Wan 3.0 trim notes, drag-and-drop Reference Image uploads on `#multiImageGroup`, and Economy `480p` defaults, verified via zero-spend DOM + Playwright Chromium emulation.
 - **Exact Next Action:** Access `http://localhost:3000` (restarted to `v1.0.6`) or run `Launch Desktop.cmd` to test with real credits when ready, and download `v1.0.6` from GitHub Releases once CI completes.
+
+
+# 2026-11-16T03:08:00-03:00 — Handover Rollover to V2
+
+- `PROJECT HANDOVER.md` exceeded 8,000 characters (`18,944` bytes through `v1.0.6`).
+- Current authoritative handover continues in [PROJECT HANDOVER V2.md](PROJECT%20HANDOVER%20V2.md).

@@ -3,6 +3,7 @@ Coding Project Note: true
 Note Creation Date: "2026-11-14T07:41:58-03:00"
 Note Modified Date:
   - "2026-11-14T07:41:58-03:00"
+  - "2026-11-16T03:08:00-03:00"
 ---
 
 # 2026-11-14T07:41:58-03:00 — START HERE: WaveSpeed Studio
@@ -23,3 +24,13 @@ Run `npm test` to execute formula evaluation, UI simulation, SQLite CRUD, and mo
 
 ## API Key Handling
 Never hardcode API keys in tracked files. Provide `WAVESPEED_API_KEY` via `.env` / environment variable, or enter it in the **🔑 Key** modal (saved locally to gitignored `.studio-config.json`).
+
+
+# 2026-11-16T03:08:00-03:00 — Updated Navigation & Single-Feature Pipeline Index
+
+For any fresh chat working on **WaveSpeed Studio** (`v1.0.6+`), read in this order before touching code:
+1. [PROJECT HANDOVER V2.md](PROJECT%20HANDOVER%20V2.md) — Current shipped version, storage layout, verification rules, and immediate priorities.
+2. [ARCHITECTURE.md](ARCHITECTURE.md) — Complete technical walkthrough of server, UI tabs/schemas, timeline extractor, SQLite ledger, Electron wrapper, pricing engine, and CI build/release.
+3. [PROJECT LOG V2.md](PROJECT%20LOG%20V2.md) — Append-only chronological history from `v1.0.6` onward (older `v1.0.0`–`v1.0.6` history lives in [PROJECT LOG.md](PROJECT%20LOG.md)).
+4. [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) — Standard 1-feature-per-chat workflow, per-feature folder rules (`documentation/features/<NN-slug>/`), and copy-paste kickoff prompt.
+5. [features/01-timeline-performance-fix/SPEC.md](features/01-timeline-performance-fix/SPEC.md) — Next queued feature/fix spec ready for an isolated chat.
