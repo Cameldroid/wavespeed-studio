@@ -1,6 +1,6 @@
 {
   "name": "wavespeed-studio",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "author": "Cameldroid",
   "description": "Local-first Web Studio for WaveSpeed AI image generation, image editing, and video workflows with live RSC pricing formulas, SQLite history, and local asset auto-saving.",
   "main": "electron/main.js",

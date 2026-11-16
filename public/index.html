@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WaveSpeed Studio — AI Image & Video Studio</title>
   <link rel="icon" type="image/png" href="/assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=20261116a">
+  <link rel="stylesheet" href="style.css?v=1.0.9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -84,6 +84,7 @@
               <div class="segmented-control" id="viewerHeightSwitch">
                 <button type="button" class="seg-btn active" data-stage-choice="tall">Cinema</button>
                 <button type="button" class="seg-btn" data-stage-choice="split">Balanced</button>
+                <button type="button" class="seg-btn" data-stage-choice="gallery">Gallery</button>
               </div>
             </div>
           </div>
@@ -191,10 +192,26 @@
           </div>
 
           <!-- Text Prompt -->
-          <div class="input-group" id="promptGroup">
+          <div class="input-group" id="promptGroup" style="position: relative;">
             <div class="input-header">
-              <label for="promptInput">Prompt <span class="required">*</span></label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label for="promptInput">Prompt <span class="required">*</span></label>
+                <button type="button" class="btn-tiny" id="openPromptHistoryBtn" title="Browse &amp; reuse previous prompts from your database">🕒 Previous Prompts</button>
+              </div>
               <span class="subtext">Describe what you want to create or edit</span>
+            </div>
+            <div class="prompt-history-popover" id="promptHistoryMenu" style="display: none;">
+              <div class="prompt-history-head">
+                <input type="text" id="promptHistorySearchInput" placeholder="Search previous prompts or model...">
+                <div class="history-filter-pills" id="promptHistoryFilterPills">
+                  <button type="button" class="history-filter-btn active" data-ph-filter="all">All</button>
+                  <button type="button" class="history-filter-btn" data-ph-filter="fav">⭐ Favs</button>
+                </div>
+                <button type="button" class="btn-tiny" id="closePromptHistoryBtn" title="Close">✕</button>
+              </div>
+              <div class="prompt-history-list" id="promptHistoryList">
+                <div class="combobox-empty">Loading saved prompts...</div>
+              </div>
             </div>
             <textarea id="promptInput" rows="4" placeholder="Enter detailed prompt..."></textarea>
             <div class="prompt-chips">
@@ -273,20 +290,31 @@
             </div>
           </div>
 
-          <!-- Inpainting Mask Canvas Editor -->
+          <!-- Inpainting / Paint Region Mask Canvas Editor -->
           <div class="input-group" id="maskCanvasGroup" style="display: none;">
             <div class="input-header">
-              <label>Inpainting Mask Editor</label>
-              <span class="subtext">Brush over the area to modify (white = edit)</span>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <label>🖌️ Paint Region / Mask to Edit</label>
+                <button type="button" class="btn-tiny" id="switchInpaintModelBtn" title="Switch to Flux Fill Dev for native precision mask inpainting">⚡ Use Flux Fill Inpaint</button>
+              </div>
+              <span class="subtext" id="maskCanvasSubtext">Paint over only the region you want edited (white highlight = edit zone)</span>
             </div>
             <div class="canvas-wrapper">
               <div class="canvas-container" id="canvasContainer">
+                <img id="maskBgImage" class="mask-bg-image" alt="Paint guide" style="display: none;">
                 <canvas id="maskCanvas"></canvas>
               </div>
               <div class="canvas-toolbar">
-                <label>Brush Size: <input type="range" id="brushSize" min="5" max="80" value="30"></label>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <button type="button" class="btn-tiny active" id="maskBrushModeBtn" title="Toggle between Paint and Erase">🖌️ Paint</button>
+                  <label>Size: <input type="range" id="brushSize" min="6" max="80" value="28"></label>
+                </div>
                 <button type="button" class="btn-sm" id="clearMaskBtn">Clear Mask</button>
               </div>
+              <label class="checkbox-label" id="maskLockRow" style="display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="maskLockUnpaintedCheckbox" checked>
+                <span>🔒 Lock unpainted pixels on non-mask models (feathered local composite)</span>
+              </label>
             </div>
           </div>
 
@@ -312,8 +340,19 @@
           <!-- Multi-Image List (for Models like MiniMax H3 / Wan 3.0 / Kling / Seedance R2V / Seedream 5.5) -->
           <div class="input-group" id="multiImageGroup" style="display: none;">
             <div class="input-header">
-              <label>Reference Images (Up to 10)</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
+                <label>Reference Images (Up to 10)</label>
+                <span class="ref-cost-badge" id="multiImageCostBadge"></span>
+              </div>
               <span class="subtext">Drag &amp; drop, browse, or paste URLs — referenced as Image 1, Image 2...</span>
+            </div>
+            <div class="face-study-bar" id="faceStudyBar">
+              <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill multi-angle Face Study identity prompt using attached photos">🧬 Face Study Prompt</button>
+              <button type="button" class="btn-tiny" id="saveFacePackBtn" title="Save current uploaded reference photos as a reusable Face Pack (1-click load, $0 re-upload)">👤 Save Face Pack</button>
+              <select id="facePackSelect" class="face-pack-select" title="Load a saved multi-photo Face / Character Pack">
+                <option value="">👤 Saved Face Packs...</option>
+              </select>
+              <button type="button" class="btn-tiny" id="deleteFacePackBtn" title="Delete selected Face Pack" style="display: none;">🗑️</button>
             </div>
             <div class="upload-dropzone upload-dropzone-compact" id="multiImageDropzone">
               <span class="drop-icon">🖼️</span>
@@ -631,7 +670,7 @@
         </div>
 
         <!-- Main Display Viewer -->
-        <div class="viewer-card">
+        <div class="viewer-card is-empty" id="viewerCard">
           <div class="viewer-toolbar">
             <div class="viewer-title-group">
               <span class="viewer-title">Active Output</span>
@@ -683,6 +722,7 @@
             </div>
           </div>
           <div class="local-save-banner" id="localSaveBanner" style="display: none;"></div>
+          <div class="active-output-inspector" id="activeOutputInspector" style="display: none;"></div>
 
           <div class="viewer-body" id="viewerBody">
             <div class="viewer-placeholder" id="viewerPlaceholder">
@@ -736,6 +776,7 @@
               <button type="button" class="btn-secondary-sm" id="bulkStitchSelectedBtn" style="display: none;" title="Locally stitch 2+ selected videos into one MP4 ($0.00 FFmpeg)">🎞️ Stitch (<span id="bulkVideoCount">0</span>)</button>
               <button type="button" class="btn-secondary-sm btn-danger-outline" id="bulkDeleteSelectedBtn" style="display: none;">🗑️ Delete Selected (<span id="bulkSelectedCount">0</span>)</button>
               <button type="button" class="btn-secondary-sm" id="openCompareBtn" title="Compare 2–4 pinned or recent outputs side by side">⚖️ Compare <span id="compareCountBadge"></span></button>
+              <button type="button" class="btn-secondary-sm" id="toggleExpandGalleryBtn" title="Expand gallery across the full right pane (clicking any item re-opens the viewer)">🖼️ Expand Gallery</button>
               <button type="button" class="btn-secondary-sm" id="openHistoryDbSectionBtn">🗄️ Full Database</button>
               <button type="button" class="btn-secondary-sm" id="openOutputsHistoryBtn">📂 Open Outputs Folder</button>
               <button type="button" class="btn-secondary-sm" id="clearHistoryBtn">Clear View</button>
@@ -926,6 +967,6 @@
   </div>
 
   <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
-  <script src="app.js?v=20261113h"></script>
+  <script src="app.js?v=1.0.9"></script>
 </body>
 </html>

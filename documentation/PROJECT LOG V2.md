@@ -5,6 +5,7 @@ Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
   - "2026-11-16T04:08:00-03:00"
   - "2026-11-16T12:39:00-03:00"
+  - "2026-11-16T13:52:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Log V2 (Continuation)
@@ -49,3 +50,8 @@ Note Modified Date:
   - `package.json`, `CHANGELOG.md`: Bumped version to `1.0.8` and added `v1.0.8` changelog entry.
 - **Verification (Zero Live API Spend):** Re-running `node --check`, `npm test`, `npx electron . --smoke-test`, and secret scan after final edit; Playwright Chromium against isolated server (`http://127.0.0.1:39113`, `WAVESPEED_USER_DATA_DIR` seeded with wiped `seedream-v5.5/edit` cache) verified `0` `pageerror`s, Seedream 5.5 Edit scaling `1 img = $0.0266` -> `3 img = $0.0418`, MiniMax H3 R2V scaling `$0.125` -> `$0.145` on dropped image+audio, single-image drop onto outer `#imageInputGroup`, and timeline drop opening `videoTimelineGroup`.
 - **Next Action:** Push `main` and annotated tag `v1.0.8`, confirm GitHub Release workflow completes cleanly, and restart `http://localhost:3000` (`Launch Studio.cmd`).
+
+
+# 2026-11-16T13:52:00-03:00 — Continued in PROJECT LOG V3.md
+
+- `PROJECT LOG V2.md` reached ~8,000 characters (`7,946` bytes). All subsequent updates starting at `v1.0.9` continue in [PROJECT LOG V3.md](PROJECT%20LOG%20V3.md).

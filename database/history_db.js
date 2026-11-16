@@ -82,8 +82,65 @@ function createHistoryDatabase(options = {}) {
     );
   `);
 
-  function extractPayloadColumns(modelId, payload = {}) {
+  // Safe schema migration for existing SQLite databases (preserves all prior rows)
+  try {
+    const existingCols = new Set(db.prepare('PRAGMA table_info(generations)').all().map(c => c.name));
+    if (!existingCols.has('input_sources_json')) {
+      db.exec("ALTER TABLE generations ADD COLUMN input_sources_json TEXT DEFAULT '[]';");
+    }
+    if (!existingCols.has('input_filenames')) {
+      db.exec("ALTER TABLE generations ADD COLUMN input_filenames TEXT DEFAULT '';");
+    }
+    if (!existingCols.has('input_filepaths')) {
+      db.exec("ALTER TABLE generations ADD COLUMN input_filepaths TEXT DEFAULT '';");
+    }
+  } catch (migErr) {
+    console.warn('History DB column migration warning:', migErr.message);
+  }
+
+  function normalizeInputSources(inputSources = [], fallbackPayload = {}) {
+    const clean = [];
+    if (Array.isArray(inputSources)) {
+      for (const s of inputSources) {
+        if (!s || typeof s !== 'object') continue;
+        clean.push({
+          slot: s.slot ? String(s.slot) : 'input',
+          filename: s.filename ? String(s.filename) : '',
+          filepath: s.filepath ? String(s.filepath) : '',
+          local_url: s.local_url ? String(s.local_url) : '',
+          remote_url: s.remote_url ? String(s.remote_url) : '',
+          size_bytes: Number.isFinite(Number(s.size_bytes)) ? Number(s.size_bytes) : null
+        });
+      }
+    }
+    if (clean.length === 0 && fallbackPayload && typeof fallbackPayload === 'object') {
+      const addUrl = (slot, u) => {
+        if (typeof u === 'string' && u.trim()) {
+          let fname = '';
+          try { fname = path.basename(u.split('?')[0]); } catch (e) {}
+          clean.push({ slot, filename: fname, filepath: '', local_url: u.startsWith('/outputs/') ? u : '', remote_url: u.startsWith('http') ? u : '', size_bytes: null });
+        }
+      };
+      addUrl('image', fallbackPayload.image || fallbackPayload.face_image || fallbackPayload.body_image);
+      addUrl('last_image', fallbackPayload.last_image);
+      if (Array.isArray(fallbackPayload.images)) fallbackPayload.images.forEach((u, i) => addUrl(`image_${i + 1}`, u));
+      if (Array.isArray(fallbackPayload.reference_images)) fallbackPayload.reference_images.forEach((u, i) => addUrl(`ref_image_${i + 1}`, u));
+      addUrl('video', fallbackPayload.video);
+      if (Array.isArray(fallbackPayload.reference_videos)) fallbackPayload.reference_videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
+      if (Array.isArray(fallbackPayload.videos)) fallbackPayload.videos.forEach((u, i) => addUrl(`ref_video_${i + 1}`, u));
+    }
+    const filenames = Array.from(new Set(clean.map(x => x.filename).filter(Boolean))).join(', ');
+    const filepaths = Array.from(new Set(clean.map(x => x.filepath || x.local_url || x.remote_url).filter(Boolean))).join(' | ');
+    return {
+      input_sources_json: JSON.stringify(clean),
+      input_filenames: filenames,
+      input_filepaths: filepaths
+    };
+  }
+
+  function extractPayloadColumns(modelId, payload = {}, inputSources = []) {
     const p = (payload && typeof payload === 'object') ? payload : {};
+    const srcInfo = normalizeInputSources(inputSources, p);
     const imgUrl = p.image || (Array.isArray(p.images) ? p.images[0] : null) || (Array.isArray(p.reference_images) ? p.reference_images[0] : null) || null;
     const vidUrl = p.video || (Array.isArray(p.videos) ? p.videos[0] : null) || (Array.isArray(p.reference_videos) ? p.reference_videos[0] : null) || null;
     let audioEnabled = null;
@@ -96,6 +153,9 @@ function createHistoryDatabase(options = {}) {
     return {
       prompt: typeof p.prompt === 'string' ? p.prompt : '',
       parameters_json: JSON.stringify(p),
+      input_sources_json: srcInfo.input_sources_json,
+      input_filenames: srcInfo.input_filenames,
+      input_filepaths: srcInfo.input_filepaths,
       input_image_url: typeof imgUrl === 'string' ? imgUrl : null,
       input_video_url: typeof vidUrl === 'string' ? vidUrl : null,
       resolution: p.resolution !== undefined ? String(p.resolution) : null,
@@ -110,11 +170,12 @@ function createHistoryDatabase(options = {}) {
   }
 
   function syncFtsRow(taskId) {
-    const row = db.prepare('SELECT task_id, model_id, prompt, error_message, notes FROM generations WHERE task_id = ?').get(taskId);
+    const row = db.prepare('SELECT task_id, model_id, prompt, error_message, notes, input_filenames FROM generations WHERE task_id = ?').get(taskId);
     db.prepare('DELETE FROM generations_fts WHERE task_id = ?').run(taskId);
     if (row) {
+      const notesWithInputs = [row.notes || '', row.input_filenames || ''].filter(Boolean).join(' | ');
       db.prepare('INSERT INTO generations_fts (task_id, model_id, prompt, error_message, notes) VALUES (?, ?, ?, ?, ?)')
-        .run(row.task_id, row.model_id || '', row.prompt || '', row.error_message || '', row.notes || '');
+        .run(row.task_id, row.model_id || '', row.prompt || '', row.error_message || '', notesWithInputs);
     }
   }
 
@@ -122,23 +183,27 @@ function createHistoryDatabase(options = {}) {
     const taskId = String(entry.task_id || '').trim();
     if (!taskId) return null;
     const modelId = String(entry.model_id || 'unknown');
-    const cols = extractPayloadColumns(modelId, entry.payload || {});
+    const cols = extractPayloadColumns(modelId, entry.payload || {}, entry.input_sources || []);
     const nowIso = new Date().toISOString();
     const submittedAt = entry.submitted_at || nowIso;
 
     db.prepare(`
       INSERT INTO generations (
         task_id, model_id, model_name, category, status, prompt, parameters_json,
+        input_sources_json, input_filenames, input_filepaths,
         input_image_url, input_video_url, resolution, duration, aspect_ratio, size,
         quality, audio_enabled, seed, estimated_price, is_video, submitted_at,
         source_provenance, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET
         model_id = COALESCE(excluded.model_id, generations.model_id),
         model_name = COALESCE(excluded.model_name, generations.model_name),
         category = COALESCE(excluded.category, generations.category),
         prompt = CASE WHEN excluded.prompt != '' THEN excluded.prompt ELSE generations.prompt END,
         parameters_json = CASE WHEN excluded.parameters_json != '{}' THEN excluded.parameters_json ELSE generations.parameters_json END,
+        input_sources_json = CASE WHEN excluded.input_sources_json != '[]' THEN excluded.input_sources_json ELSE generations.input_sources_json END,
+        input_filenames = CASE WHEN excluded.input_filenames != '' THEN excluded.input_filenames ELSE generations.input_filenames END,
+        input_filepaths = CASE WHEN excluded.input_filepaths != '' THEN excluded.input_filepaths ELSE generations.input_filepaths END,
         input_image_url = COALESCE(excluded.input_image_url, generations.input_image_url),
         input_video_url = COALESCE(excluded.input_video_url, generations.input_video_url),
         resolution = COALESCE(excluded.resolution, generations.resolution),
@@ -159,6 +224,9 @@ function createHistoryDatabase(options = {}) {
       entry.status || 'submitted',
       cols.prompt,
       cols.parameters_json,
+      cols.input_sources_json,
+      cols.input_filenames,
+      cols.input_filepaths,
       cols.input_image_url,
       cols.input_video_url,
       cols.resolution,
@@ -186,7 +254,10 @@ function createHistoryDatabase(options = {}) {
     const primary = items[0] || {};
     const modelId = String(entry.model_id || primary.model_id || 'unknown');
     const payload = entry.payload || primary.parameters || {};
-    const cols = extractPayloadColumns(modelId, payload);
+    const inputSources = (Array.isArray(entry.input_sources) && entry.input_sources.length > 0)
+      ? entry.input_sources
+      : (Array.isArray(primary.input_sources) ? primary.input_sources : []);
+    const cols = extractPayloadColumns(modelId, payload, inputSources);
     const nowIso = new Date().toISOString();
     const completedAt = entry.completed_at || primary.saved_at || nowIso;
     const promptVal = entry.prompt || primary.prompt || cols.prompt || '';
@@ -195,11 +266,12 @@ function createHistoryDatabase(options = {}) {
     db.prepare(`
       INSERT INTO generations (
         task_id, model_id, model_name, category, status, error_message, prompt, parameters_json,
+        input_sources_json, input_filenames, input_filepaths,
         input_image_url, input_video_url, resolution, duration, aspect_ratio, size,
         quality, audio_enabled, seed, estimated_price, is_video,
         remote_url, local_url, local_path, filename, size_bytes,
         submitted_at, completed_at, source_provenance, updated_at
-      ) VALUES (?, ?, ?, ?, 'completed', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, 'completed', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET
         model_id = CASE WHEN excluded.model_id != 'unknown' THEN excluded.model_id ELSE generations.model_id END,
         model_name = COALESCE(excluded.model_name, generations.model_name),
@@ -208,6 +280,9 @@ function createHistoryDatabase(options = {}) {
         error_message = NULL,
         prompt = CASE WHEN excluded.prompt != '' THEN excluded.prompt ELSE generations.prompt END,
         parameters_json = CASE WHEN excluded.parameters_json != '{}' THEN excluded.parameters_json ELSE generations.parameters_json END,
+        input_sources_json = CASE WHEN excluded.input_sources_json != '[]' AND (generations.input_sources_json IS NULL OR generations.input_sources_json = '[]' OR excluded.source_provenance = 'live_api') THEN excluded.input_sources_json ELSE generations.input_sources_json END,
+        input_filenames = CASE WHEN excluded.input_filenames != '' AND (generations.input_filenames IS NULL OR generations.input_filenames = '' OR excluded.source_provenance = 'live_api') THEN excluded.input_filenames ELSE generations.input_filenames END,
+        input_filepaths = CASE WHEN excluded.input_filepaths != '' AND (generations.input_filepaths IS NULL OR generations.input_filepaths = '' OR excluded.source_provenance = 'live_api') THEN excluded.input_filepaths ELSE generations.input_filepaths END,
         input_image_url = COALESCE(excluded.input_image_url, generations.input_image_url),
         input_video_url = COALESCE(excluded.input_video_url, generations.input_video_url),
         resolution = COALESCE(excluded.resolution, generations.resolution),
@@ -233,6 +308,9 @@ function createHistoryDatabase(options = {}) {
       entry.category || null,
       promptVal,
       cols.parameters_json,
+      cols.input_sources_json,
+      cols.input_filenames,
+      cols.input_filepaths,
       cols.input_image_url,
       cols.input_video_url,
       cols.resolution,
@@ -389,7 +467,12 @@ function createHistoryDatabase(options = {}) {
 
     const items = rows.map(r => {
       let parameters = {};
+      let input_sources = [];
       try { parameters = r.parameters_json ? JSON.parse(r.parameters_json) : {}; } catch (e) {}
+      try {
+        const parsedSrc = r.input_sources_json ? JSON.parse(r.input_sources_json) : [];
+        if (Array.isArray(parsedSrc)) input_sources = parsedSrc;
+      } catch (e) {}
       const fileExists = Boolean(r.local_path && fs.existsSync(r.local_path));
       return {
         ...r,
@@ -397,7 +480,8 @@ function createHistoryDatabase(options = {}) {
         is_favorite: Boolean(r.is_favorite),
         audio_enabled: r.audio_enabled === null ? null : Boolean(r.audio_enabled),
         file_exists: fileExists,
-        parameters
+        parameters,
+        input_sources
       };
     });
 
@@ -454,7 +538,7 @@ function createHistoryDatabase(options = {}) {
     const cols = [
       'task_id', 'status', 'model_id', 'is_video', 'resolution', 'duration',
       'aspect_ratio', 'size', 'quality', 'audio_enabled', 'estimated_price',
-      'prompt', 'error_message', 'input_image_url', 'input_video_url',
+      'prompt', 'error_message', 'input_filenames', 'input_filepaths', 'input_image_url', 'input_video_url',
       'local_path', 'remote_url', 'is_favorite', 'submitted_at', 'completed_at', 'source_provenance'
     ];
     const esc = (v) => {
@@ -488,6 +572,7 @@ function createHistoryDatabase(options = {}) {
             model_id: parsed.model_id,
             prompt: parsed.prompt,
             payload: parsed.parameters,
+            input_sources: parsed.input_sources || [],
             estimated_price: parsed.estimated_price,
             completed_at: parsed.saved_at,
             source_provenance: 'metadata_json',
@@ -511,6 +596,7 @@ function createHistoryDatabase(options = {}) {
             model_id: parsed.model_id,
             prompt: parsed.prompt,
             payload: parsed.parameters,
+            input_sources: parsed.input_sources || [],
             estimated_price: parsed.estimated_price,
             completed_at: parsed.saved_at,
             source_provenance: 'generations_jsonl',
@@ -549,6 +635,7 @@ function createHistoryDatabase(options = {}) {
             task_id: synthId,
             model_id: modelId,
             payload,
+            input_sources: Array.isArray(meta.input_sources) ? meta.input_sources : [],
             estimated_price: meta.estimated_price ?? null,
             submitted_at: tsIso,
             status: 'logged_uncompleted',

@@ -557,6 +557,14 @@ function getCleanModelTitle(modelId) {
     'google/nano-banana-pro/edit': 'Nano Banana Pro (Image Edit)',
     'wavespeed-ai/z-image-turbo/image-to-image': 'Z-Image Turbo (Image-to-Image)',
     'wavespeed-ai/flux-schnell': 'Flux Schnell (Image & Inpainting)',
+    'wavespeed-ai/flux-fill-dev': 'Flux Fill Dev (Precision Mask Inpaint)',
+    'bria/fibo-2.0/edit': 'Bria FIBO 2.0 (Edit & Mask)',
+    'ideogram-ai/ideogram-v3-turbo': 'Ideogram V3 Turbo (Gen & Mask)',
+    'wavespeed-ai/image-face-swap': 'Image Face Swap ($0.01)',
+    'wavespeed-ai/image-face-swap-pro': 'Image Face Swap Pro ($0.025)',
+    'wavespeed-ai/image-head-swap': 'Image Head Swap ($0.025)',
+    'wavespeed-ai/image-body-swap': 'Image Body Swap ($0.05)',
+    'wavespeed-ai/face-enhancer/image': 'Face Enhancer (Image • $0.01)',
     // Text to Image
     'wavespeed-ai/minimax-h3-image/text-to-image': 'MiniMax H3 Economy (Text-to-Image)',
     'wavespeed-ai/minimax-h3/text-to-image': 'MiniMax H3 (WaveSpeed Text-to-Image)',
@@ -726,6 +734,8 @@ async function getModels(forceRefresh = false) {
     'google/nano-banana-2.1/edit',
     'minimax/h3-image/edit',
     'openai/gpt-image-2.6-flare/edit',
+    'wavespeed-ai/flux-fill-dev',
+    'bria/fibo-2.0/edit',
     // Text-to-Video & Video Edit Top Picks
     'wavespeed-ai/minimax-h3/text-to-video',
     'alibaba/wan-3.0/video-edit',
@@ -744,7 +754,12 @@ async function getModels(forceRefresh = false) {
     'kwaivgi/kling-v4.0/reference-to-video',
     'bytedance/seedance-2.5-flash/reference-to-video',
     'minimax/h3-lite/reference-to-video',
-    // Quick Tools & Upscalers Top Picks
+    // Quick Tools, Face/Head Swap & Upscalers Top Picks
+    'wavespeed-ai/image-face-swap-pro',
+    'wavespeed-ai/image-face-swap',
+    'wavespeed-ai/image-head-swap',
+    'wavespeed-ai/image-body-swap',
+    'wavespeed-ai/face-enhancer/image',
     'wavespeed-ai/feynobg',
     'wavespeed-ai/real-esrgan',
     'wavespeed-ai/image-upscaler',
@@ -1024,6 +1039,7 @@ async function saveOutputLocally(taskId, outputUrls, taskMeta = {}) {
         model_id: modelId,
         prompt: taskMeta.payload?.prompt || taskMeta.prompt || '',
         parameters: taskMeta.payload || {},
+        input_sources: Array.isArray(taskMeta.input_sources) ? taskMeta.input_sources : [],
         estimated_price: taskMeta.estimated_price ?? null,
         is_video: isVideo,
         remote_url: remoteUrl,
@@ -1061,6 +1077,7 @@ async function saveOutputLocally(taskId, outputUrls, taskMeta = {}) {
           category: taskMeta.category || null,
           prompt: taskMeta.payload?.prompt || taskMeta.prompt || '',
           payload: taskMeta.payload || {},
+          input_sources: Array.isArray(taskMeta.input_sources) ? taskMeta.input_sources : [],
           estimated_price: taskMeta.estimated_price ?? null,
           submitted_at: taskMeta.submitted_at || now.toISOString(),
           completed_at: now.toISOString(),
@@ -1564,12 +1581,13 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/generate' && req.method === 'POST') {
       const body = await parseJsonBody(req);
-      const { model_id, model_name, category, payload, estimated_price } = body;
+      const { model_id, model_name, category, payload, estimated_price, input_sources } = body;
       if (!model_id || !payload) {
         return sendJson(res, 400, { error: 'model_id and payload are required' });
       }
+      const cleanInputSources = Array.isArray(input_sources) ? input_sources : [];
       const submittedAt = new Date().toISOString();
-      logServerEvent('INFO', `Submitting generation task to ${model_id}`, { estimated_price, payload });
+      logServerEvent('INFO', `Submitting generation task to ${model_id}`, { estimated_price, payload, input_sources: cleanInputSources });
       try {
         const taskResult = await runModel(model_id, payload);
         const taskId = taskResult.data?.id || taskResult.id;
@@ -1579,6 +1597,7 @@ const server = http.createServer(async (req, res) => {
             model_name: model_name || getCleanModelTitle(model_id),
             category: category || null,
             payload,
+            input_sources: cleanInputSources,
             estimated_price,
             submitted_at: submittedAt
           });
@@ -1590,6 +1609,7 @@ const server = http.createServer(async (req, res) => {
                 model_name: model_name || getCleanModelTitle(model_id),
                 category: category || null,
                 payload,
+                input_sources: cleanInputSources,
                 estimated_price,
                 submitted_at: submittedAt,
                 status: 'submitted'
@@ -1608,6 +1628,7 @@ const server = http.createServer(async (req, res) => {
               model_name: model_name || getCleanModelTitle(model_id),
               category: category || null,
               payload,
+              input_sources: cleanInputSources,
               estimated_price,
               submitted_at: submittedAt,
               status: 'failed'
@@ -1827,6 +1848,54 @@ const server = http.createServer(async (req, res) => {
       } finally {
         if (tmpInputPath && fs.existsSync(tmpInputPath)) {
           try { fs.unlinkSync(tmpInputPath); } catch (e) {}
+        }
+      }
+    }
+
+    if (pathname === '/api/video/filmstrip' && req.method === 'POST') {
+      const os = require('os');
+      const body = await parseJsonBody(req);
+      const rawUrl = String(body?.url || '').trim();
+      if (!rawUrl.startsWith('/outputs/')) {
+        return sendJson(res, 400, { error: 'Fast FFmpeg filmstrip supports local /outputs/ videos only.' });
+      }
+      const rel = rawUrl.replace(/^\/outputs\//, '').replace(/\//g, path.sep);
+      const resolvedRoot = path.resolve(OUTPUTS_DIR);
+      const candidate = path.resolve(resolvedRoot, rel);
+      if (!isPathInside(candidate, resolvedRoot)) {
+        return sendJson(res, 403, { error: 'Forbidden path outside outputs folder' });
+      }
+      if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
+        return sendJson(res, 404, { error: 'Video file not found in outputs folder' });
+      }
+      const dur = Math.max(0.5, Math.min(3600, Number(body?.duration) || 10));
+      const count = Math.max(2, Math.min(8, parseInt(body?.count || '8', 10) || 8));
+      const tmpPrefix = path.join(os.tmpdir(), `ws-strip-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`);
+      const framePaths = [];
+      try {
+        const frames = await Promise.all(Array.from({ length: count }, async (_, i) => {
+          const targetSec = Math.min(Math.max(0, dur - 0.05), (dur * (i + 0.5)) / count);
+          const fp = `${tmpPrefix}-${i}.jpg`;
+          framePaths.push(fp);
+          await runFfmpegExec([
+            '-y',
+            '-ss', targetSec.toFixed(3),
+            '-i', candidate,
+            '-frames:v', '1',
+            '-vf', 'scale=112:-1',
+            '-q:v', '5',
+            fp
+          ], 15000);
+          const buf = fs.readFileSync(fp);
+          return {
+            sec: Number(targetSec.toFixed(3)),
+            dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`
+          };
+        }));
+        return sendJson(res, 200, { code: 200, data: { frames } });
+      } finally {
+        for (const fp of framePaths) {
+          try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch (e) {}
         }
       }
     }

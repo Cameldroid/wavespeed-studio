@@ -624,8 +624,10 @@ async function runMockDomAppTests() {
       dispatch(evt, eventObj = {}) {
         (listeners[evt] || []).slice().forEach(fn => fn({ target: elObj, stopPropagation() {}, preventDefault() {}, ...eventObj }));
       },
+      dispatchEvent(ev) { elObj.dispatch(ev?.type || ev, ev); },
       click() { elObj.dispatch('click'); },
       focus() {},
+      remove() {},
       scrollIntoView() {},
       load() {},
       pause() {},
@@ -793,6 +795,15 @@ async function runMockDomAppTests() {
       has_formula: true, fetched_at: Date.now(), isSpicy: false,
       category: 'image-edit', isImageEdit: true, isPinned: true, pinnedRank: 3,
       schema: { required: ['prompt', 'images'], properties: { prompt: {}, images: { maxItems: 14 }, size: { default: '2048*2048', enum: ['2048*2048', '3072*3072'] } } }
+    },
+    {
+      model_id: 'wavespeed-ai/image-face-swap-pro',
+      name: 'Image Face Swap Pro ($0.025)',
+      base_price: 0.025, base_price_micro: 25000, effective_price: 0.025,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'utility', isUtility: true, isPinned: true, pinnedRank: 14,
+      schema: { required: ['image', 'face_image'], properties: { image: {}, face_image: {}, output_format: { default: 'jpeg', enum: ['jpeg', 'png'] } } }
     }
   ];
 
@@ -852,6 +863,7 @@ async function runMockDomAppTests() {
     alert: (msg) => { throw new Error('Unexpected alert: ' + msg); },
     navigator: { clipboard: { writeText() {} } },
     FileReader: function () {},
+    Event: function (type) { this.type = type; },
     URL: { createObjectURL: () => 'blob:mock', revokeObjectURL() {} },
     fetch: async (url, opts = {}) => {
       if (url === '/api/config') return { ok: true, json: async () => ({ hasApiKey: true, version: '1.0.7' }) };
@@ -976,6 +988,14 @@ async function runMockDomAppTests() {
   elementsById.get('addMultiImageUrlBtn').click();
   const sd1Price = elementsById.get('infoModelPrice').innerHTML;
   assert(sd1Price.includes('$0.0266'), `Expected Seedream 5.5 Edit 1-img price $0.0266, got ${sd1Price}`);
+  assert(elementsById.get('multiImageCostBadge').textContent.includes('+$0.0076'), `Expected Seedream per-ref cost badge +$0.0076, got ${elementsById.get('multiImageCostBadge').textContent}`);
+  assert.strictEqual(elementsById.get('maskCanvasGroup').style.display, 'flex', 'Expected Paint Region / Mask studio visible on image-edit models');
+  elementsById.get('insertFaceStudyPromptBtn').click();
+  assert(elementsById.get('promptInput').value.includes('Study all reference images'), 'Expected Face Study Prompt helper to populate prompt');
+  elementsById.get('toggleExpandGalleryBtn').click();
+  assert.strictEqual(elementsById.get('toggleExpandGalleryBtn').textContent, '🖼️ Show Viewer', 'Expected gallery expand toggle');
+  elementsById.get('toggleExpandGalleryBtn').click();
+  assert.strictEqual(elementsById.get('toggleExpandGalleryBtn').textContent, '🖼️ Expand Gallery', 'Expected gallery collapse back');
   elementsById.get('multiImageUrlInput').value = 'https://example.com/sd-ref2.png';
   elementsById.get('addMultiImageUrlBtn').click();
   elementsById.get('multiImageUrlInput').value = 'https://example.com/sd-ref3.png';
@@ -1005,18 +1025,22 @@ async function runMockDomAppTests() {
   elementsById.get('videoTimelineGroup').dispatch('drop', makeDropEvent('/outputs/videos/dropped-clip.mp4'));
   assert.strictEqual(elementsById.get('videoTimelineGroup').style.display, 'block', 'Expected dropped video on timeline to open timeline');
 
-  // 7. Switch to Tools tab -> verify video-upscaler routes here and shows target_resolution in resolutionSelect
+  // 7. Switch to Tools tab -> verify video-upscaler routes here, plus dual-slot image + face_image on image-face-swap-pro
   const toolsTab = modeBtns.find(b => b.dataset.category === 'utility');
   toolsTab.click();
   assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/video-upscaler');
   assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('resolutionCol').style.display, 'block');
   assert.strictEqual(elementsById.get('resolutionSelect').value, '1080p');
+  pickComboboxById('Image Face Swap Pro');
+  assert.strictEqual(elementsById.get('imageInputGroup').style.display, 'flex');
+  assert.strictEqual(elementsById.get('lastImageGroup').style.display, 'flex');
 
   // 8. Switch to Video & Edit tab -> verify wan-3.0/video-edit defaults to 480p and exposes Video + Ref Images + Ref Audios + ref chips + workflow advisory
   const videoGenTab = modeBtns.find(b => b.dataset.category === 'video-gen');
   videoGenTab.click();
   assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'alibaba/wan-3.0/video-edit');
+  assert(elementsById.get('multiImageCostBadge').textContent.includes('FREE'), 'Expected FREE per-ref badge on Wan 3.0 Video Edit');
   assert.strictEqual(elementsById.get('resolutionSelect').value, '480p');
   assert.strictEqual(elementsById.get('videoInputGroup').style.display, 'flex');
   assert.strictEqual(elementsById.get('multiImageGroup').style.display, 'flex');
@@ -1087,6 +1111,7 @@ async function runHistoryDatabaseTests() {
       task_id: 't-ok-1',
       model_id: 'wavespeed-ai/minimax-h3/image-to-video-spicy',
       payload: { prompt: 'beach sunset dance', image: 'https://cdn.example/a.png', resolution: '480p', duration: 10 },
+      input_sources: [{ slot: 'image', filename: 'gf_portrait_01.jpg', filepath: 'D:\\Photos\\gf_portrait_01.jpg', remote_url: 'https://cdn.example/a.png', size_bytes: 54321 }],
       estimated_price: 0.2,
       submitted_at: '2026-11-12T20:00:00Z'
     });
@@ -1094,6 +1119,7 @@ async function runHistoryDatabaseTests() {
       task_id: 't-ok-1',
       model_id: 'wavespeed-ai/minimax-h3/image-to-video-spicy',
       payload: { prompt: 'beach sunset dance', image: 'https://cdn.example/a.png', resolution: '480p', duration: 10 },
+      input_sources: [{ slot: 'image', filename: 'gf_portrait_01.jpg', filepath: 'D:\\Photos\\gf_portrait_01.jpg', remote_url: 'https://cdn.example/a.png', size_bytes: 54321 }],
       estimated_price: 0.2,
       completed_at: '2026-11-12T20:00:45Z',
       items: [{
@@ -1135,13 +1161,18 @@ async function runHistoryDatabaseTests() {
     assert.strictEqual(searchSunset.items.length, 1);
     assert.strictEqual(searchSunset.items[0].task_id, 't-ok-1');
     assert.strictEqual(searchSunset.items[0].is_favorite, true);
+    assert.strictEqual(searchSunset.items[0].input_filenames, 'gf_portrait_01.jpg');
+    assert.strictEqual(searchSunset.items[0].input_sources[0].filepath, 'D:\\Photos\\gf_portrait_01.jpg');
+
+    const searchByInputFile = hdb.queryHistory({ q: 'gf_portrait_01' });
+    assert.strictEqual(searchByInputFile.items.length, 1, 'Expected FTS5 search by original input filename to match');
 
     const failedOnly = hdb.queryHistory({ status: 'failed_group' });
     assert.strictEqual(failedOnly.items.length, 1);
     assert(failedOnly.items[0].error_message.includes('sensitive'));
 
     const csv = hdb.exportCsv({});
-    assert(csv.includes('t-ok-1') && csv.includes('t-err-1') && csv.includes('beach sunset dance'));
+    assert(csv.includes('t-ok-1') && csv.includes('t-err-1') && csv.includes('beach sunset dance') && csv.includes('gf_portrait_01.jpg'));
 
     const delRes = hdb.deleteRun({ task_id: 't-ok-1' });
     assert.strictEqual(delRes.deleted, true);

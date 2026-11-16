@@ -973,8 +973,8 @@ textarea:focus {
 
 .canvas-container {
   width: 100%;
-  height: 220px;
-  background: #000;
+  height: 240px;
+  background: #070a12;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   display: flex;
@@ -984,10 +984,24 @@ textarea:focus {
   position: relative;
 }
 
+.mask-bg-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 1;
+}
+
 #maskCanvas {
   max-width: 100%;
   max-height: 100%;
   cursor: crosshair;
+  position: relative;
+  z-index: 2;
+  mix-blend-mode: screen;
+  opacity: 0.65;
 }
 
 .canvas-toolbar {
@@ -1143,14 +1157,10 @@ input[type="number"], input[type="text"] {
   color: #a7f3d0;
 }
 
-/* Right Main Workspace Panel */
+/* Right Main Workspace Panel (inherits height & scroll from lines 416-425) */
 .workspace-panel {
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  max-height: calc(100vh - 54px);
+  padding-bottom: 40px;
+  min-height: 0;
 }
 
 /* Execution Status Card */
@@ -1245,7 +1255,7 @@ input[type="number"], input[type="text"] {
 /* Viewer Card */
 .viewer-card {
   flex: 0 0 auto;
-  height: clamp(620px, 82vh, 1080px);
+  height: clamp(540px, 74vh, 980px);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -1253,10 +1263,27 @@ input[type="number"], input[type="text"] {
   flex-direction: column;
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: height 140ms var(--ease-snappy);
+}
+
+.viewer-card.is-empty {
+  height: 185px;
 }
 
 body[data-viewer-stage="split"] .viewer-card {
-  height: clamp(460px, 60vh, 720px);
+  height: clamp(420px, 56vh, 680px);
+}
+
+body[data-viewer-stage="split"] .viewer-card.is-empty {
+  height: 175px;
+}
+
+body[data-viewer-stage="gallery"] .viewer-card {
+  display: none;
+}
+
+#outputImageViewer {
+  cursor: zoom-in;
 }
 
 .viewer-toolbar {
@@ -1384,7 +1411,7 @@ body[data-viewer-stage="split"] .viewer-card {
 
 /* History Gallery */
 .history-card {
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -3187,4 +3214,170 @@ body[data-viewer-stage="split"] .viewer-card {
   color: #e2e8f0;
   font-weight: 600;
   font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   v1.0.9 Previous Prompts Menu, Per-Ref Cost Badge, Face Study & Inspector
+   ========================================================================== */
+
+.btn-tiny.active {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: #fff;
+}
+
+.prompt-history-popover {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.18));
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 320;
+}
+
+.prompt-history-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prompt-history-head input {
+  flex: 1 1 150px;
+  min-width: 120px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+}
+
+.prompt-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.prompt-history-item {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.prompt-history-item:hover {
+  border-color: var(--accent-purple);
+}
+
+.prompt-history-text {
+  font-size: 0.77rem;
+  color: var(--text-main);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prompt-history-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.69rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.prompt-history-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ref-cost-badge {
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.ref-cost-badge.is-paid {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #fde68a;
+}
+
+.face-study-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: var(--radius-sm);
+}
+
+.face-pack-select {
+  flex: 1 1 130px;
+  min-width: 110px;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+}
+
+.active-output-inspector {
+  background: rgba(9, 11, 16, 0.55);
+  border-bottom: 1px solid var(--border-color);
+  padding: 7px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.76rem;
+}
+
+.inspector-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inspector-prompt-line {
+  color: var(--text-main);
+  line-height: 1.35;
+  max-height: 44px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+.inspector-sources-line {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+  word-break: break-word;
+}
+
+.history-db-sources {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.22);
+  padding: 5px 8px;
+  border-radius: 6px;
+  word-break: break-word;
 }

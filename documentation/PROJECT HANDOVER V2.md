@@ -5,6 +5,7 @@ Note Modified Date:
   - "2026-11-16T03:08:00-03:00"
   - "2026-11-16T04:08:00-03:00"
   - "2026-11-16T12:39:00-03:00"
+  - "2026-11-16T13:52:00-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -45,3 +46,14 @@ Note Modified Date:
   - Universal drag-and-drop (Files, URLs, and Gallery cards) across Source Image, End Frame, Multi-Reference Images, Source Video, Reference Videos, Reference Audios, and Video Timeline.
   - Clear upstream safety filter messaging clarifying `bytedance/seedream-v5.5` content flags are per-request moderation rather than API key bans.
 - **Exact Next Action:** For the next feature slice, copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/02-<your-feature>/SPEC.md` and launch a fresh chat using the kickoff prompt in [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md).
+
+
+# 2026-11-16T13:52:00-03:00 — v1.0.9 Shipped: Full Gallery View, Input Provenance DB, Paint Mask Studio, Face Study & Fast Filmstrip
+
+- **Authoritative Release:** `v1.0.9` (live on `http://localhost:3000` via `Launch Studio.cmd` and Desktop via `Launch Desktop.cmd`).
+- **Key Capabilities Added in `v1.0.9`:**
+  - Full-height expandable Gallery (`🖼️ Expand Gallery`), compact empty viewer (`185px`), click-card restore + Active Output Inspector (`Prompt`, `Copy Prompt`, `Paint-Edit`, `Face Swap Onto`, `+ Ref Study`, `📎 Inputs`), and click-to-fullscreen viewer image.
+  - SQLite input provenance (`input_sources_json`, `input_filenames`, `input_filepaths` in `studio_history.sqlite` + FTS5 filename search) without duplicating original files on disk, plus searchable **`🕒 Previous Prompts`** dropdown.
+  - Per-ref cost indicator badge (`💰 +$... / extra ref` vs `✨ Extra refs: $0.00 FREE on this model`).
+  - Interactive **Paint Region / Mask Studio** (`#maskBgImage`, Paint/Erase toggle, `⚡ Use Flux Fill Inpaint`, optional feathered local mask lock preserving raw AI files), **`🧬 Face Study Prompt`** + reusable **`👤 Saved Face Packs`**, pinned **Image Face/Head/Body Swap** models with dual `image` + `face_image`/`body_image` slots, and parallel FFmpeg **`/api/video/filmstrip`** acceleration.
+- **Exact Next Action:** Keep building isolated feature slices under `documentation/features/` using [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) and [PROJECT LOG V3.md](PROJECT%20LOG%20V3.md).

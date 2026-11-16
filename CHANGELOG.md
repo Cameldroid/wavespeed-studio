@@ -2,6 +2,28 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.0.9] - 2026-11-16
+### Added
+- **Per-Ref Pricing Transparency Badge (`#multiImageCostBadge`):**
+  - Displays live whether adding extra reference images increases cost (`💰 +$0.0076 / extra ref` on `seedream-v5.5/edit`, `+$0.01/img` on `minimax-h3`) or is included free (`✨ Extra refs: $0.00 FREE on this model` on `qwen-image/edit-plus`, `wan-3.0/video-edit`, `seedream-v5.0-flash/edit`).
+- **SQLite Input Provenance (`input_sources_json`, `input_filenames`, `input_filepaths`):**
+  - Safely migrates `studio_history.sqlite` (`generations`) without duplicating source files on disk, storing original filenames, filepaths, local/remote URLs, and sizes per run, indexing input filenames in FTS5 search, exposing `📎 Sources:` in History DB + Active Inspector, and exporting them in CSV/JSON.
+- **Previous Prompts Menu (`🕒 Previous Prompts`):**
+  - Added searchable prompt history popover beside the Prompt editor with `All` / `⭐ Favs` filters and 1-click `✓ Use`, `+ Append`, and `♻️ Setup` actions.
+- **Interactive Paint Region / Mask Studio + Native & Local Composite Lock:**
+  - Enabled `#maskCanvasGroup` across all `image-edit` and `mask_image` models with live underlying photo preview (`#maskBgImage`), `🖌️ Paint / 🧽 Erase` toggle, `⚡ Use Flux Fill Inpaint` switch (`wavespeed-ai/flux-fill-dev`, `bria/fibo-2.0/edit` pinned), and optional local feathered composite (`🔒 Lock unpainted pixels on non-mask models`) preserving the raw AI file on disk.
+- **Multi-Photo Face Study & Dedicated Face/Head/Body Swap Support:**
+  - Added `🧬 Face Study Prompt` helper and reusable `👤 Saved Face Packs` (`localStorage` identity packs for 1-click reload with zero re-upload).
+  - Pinned `wavespeed-ai/image-face-swap-pro`, `wavespeed-ai/image-face-swap`, `wavespeed-ai/image-head-swap`, `wavespeed-ai/image-body-swap`, and `wavespeed-ai/face-enhancer/image`, with dual-slot `image` + `face_image`/`body_image` UI wiring (`getSecondaryImageSchemaKey`).
+- **Fast Server-Side Parallel Video Timeline Filmstrip (`POST /api/video/filmstrip`):**
+  - Extracts 8 keyframe thumbnails in parallel via FFmpeg for `/outputs/` clips before falling back to browser `<video>` probing.
+
+### Fixed
+- **Full-Height Gallery Expansion & Click-to-View in Studio:**
+  - Removed duplicate `.workspace-panel { max-height: calc(100vh - 54px) }` CSS rule that clipped the bottom of the gallery and left empty black space below.
+  - Compacted `.viewer-card.is-empty` (`185px`), added **`🖼️ Expand Gallery`** toggle (`data-viewer-stage="gallery"`), restored viewer visibility + smooth scroll-to-top + `#activeOutputInspector` on gallery card click, added click-to-zoom on `#outputImageViewer`, and forwarded `input_sources` in `fetchSavedOutputs()`.
+  - Fixed `#promptGroup` visibility fallback when `model.schema` is initially empty, and bumped `?v=1.0.9` cache-busters on `style.css` and `app.js`.
+
 ## [1.0.8] - 2026-11-16
 ### Fixed
 - **I2I & R2V Per-Reference-Image Formula Healing & Variable Pricing:**

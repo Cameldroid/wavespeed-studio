@@ -41,8 +41,15 @@
     trimEndSec: 15,
     historyModelStats: new Map(),
     maskDataUrl: null,
+    maskBrushMode: 'paint', // 'paint' | 'erase'
     isDrawing: false,
     hasDrawnMask: false,
+    activeCompositeRawUrl: null,
+    activeCompositeMaskedUrl: null,
+    activeCompositeShowingMasked: false,
+    facePacks: [],
+    promptHistoryCache: null,
+    promptHistoryFilter: 'all', // 'all' | 'fav'
     activeLocalPath: null,
     activeLocalUrl: null,
     activeRemoteUrl: null,
@@ -333,7 +340,28 @@
     batchSeedsSelect: document.getElementById('batchSeedsSelect'),
     postChainSelect: document.getElementById('postChainSelect'),
     batchMatrixHint: document.getElementById('batchMatrixHint'),
-    studioToastContainer: document.getElementById('studioToastContainer')
+    studioToastContainer: document.getElementById('studioToastContainer'),
+    openPromptHistoryBtn: document.getElementById('openPromptHistoryBtn'),
+    promptHistoryMenu: document.getElementById('promptHistoryMenu'),
+    promptHistorySearchInput: document.getElementById('promptHistorySearchInput'),
+    promptHistoryFilterPills: document.getElementById('promptHistoryFilterPills'),
+    closePromptHistoryBtn: document.getElementById('closePromptHistoryBtn'),
+    promptHistoryList: document.getElementById('promptHistoryList'),
+    multiImageCostBadge: document.getElementById('multiImageCostBadge'),
+    faceStudyBar: document.getElementById('faceStudyBar'),
+    insertFaceStudyPromptBtn: document.getElementById('insertFaceStudyPromptBtn'),
+    saveFacePackBtn: document.getElementById('saveFacePackBtn'),
+    facePackSelect: document.getElementById('facePackSelect'),
+    deleteFacePackBtn: document.getElementById('deleteFacePackBtn'),
+    maskBgImage: document.getElementById('maskBgImage'),
+    maskBrushModeBtn: document.getElementById('maskBrushModeBtn'),
+    maskLockUnpaintedCheckbox: document.getElementById('maskLockUnpaintedCheckbox'),
+    maskLockRow: document.getElementById('maskLockRow'),
+    switchInpaintModelBtn: document.getElementById('switchInpaintModelBtn'),
+    maskCanvasSubtext: document.getElementById('maskCanvasSubtext'),
+    viewerCard: document.getElementById('viewerCard'),
+    activeOutputInspector: document.getElementById('activeOutputInspector'),
+    toggleExpandGalleryBtn: document.getElementById('toggleExpandGalleryBtn')
   };
 
   // Mask Canvas Context
@@ -347,6 +375,8 @@
     }
     loadCustomPromptChips();
     renderCustomPromptChips();
+    loadFacePacks();
+    renderFacePacksSelect();
     loadLocalHistory();
     setupCanvas();
     setupResizer();
@@ -443,7 +473,7 @@
     canvasCtx.lineWidth = parseInt(el.brushSize.value, 10);
     canvasCtx.lineCap = 'round';
     canvasCtx.lineJoin = 'round';
-    canvasCtx.strokeStyle = '#ffffff';
+    canvasCtx.strokeStyle = state.maskBrushMode === 'erase' ? '#000000' : '#ffffff';
 
     canvasCtx.lineTo(x, y);
     canvasCtx.stroke();
@@ -463,6 +493,21 @@
     canvasCtx.fillStyle = '#000000';
     canvasCtx.fillRect(0, 0, el.maskCanvas.width, el.maskCanvas.height);
     if (state.selectedModel) updateModelInfo(state.selectedModel);
+  }
+
+  function syncMaskBgPreview() {
+    if (!el.maskBgImage) return;
+    const src = (el.imagePreviewContainer && el.imagePreviewContainer.style.display !== 'none' && el.imagePreview?.src)
+      ? el.imagePreview.src
+      : (state.sourceImage?.downloadUrl || state.sourceImage?.url || state.extraImages?.[0]?.previewUrl || state.extraImages?.[0]?.downloadUrl || '');
+    if (src) {
+      el.maskBgImage.src = src;
+      el.maskBgImage.style.display = 'block';
+    } else {
+      el.maskBgImage.removeAttribute?.('src');
+      el.maskBgImage.src = '';
+      el.maskBgImage.style.display = 'none';
+    }
   }
 
   function applyOutputsDirUi(nextDir) {
@@ -623,6 +668,15 @@
     if (!props || typeof props !== 'object') return null;
     if ('image' in props && !props.image?.['x-hidden']) return 'image';
     if ('face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
+    if ('body_image' in props && !props.body_image?.['x-hidden']) return 'body_image';
+    return null;
+  }
+
+  function getSecondaryImageSchemaKey(props) {
+    if (!props || typeof props !== 'object') return null;
+    if ('last_image' in props && !props.last_image?.['x-hidden']) return 'last_image';
+    if ('image' in props && 'face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
+    if ('image' in props && 'body_image' in props && !props.body_image?.['x-hidden']) return 'body_image';
     return null;
   }
 
@@ -1647,6 +1701,7 @@
     }
 
     updateSidebarBalanceProjection(model, pricing);
+    updateMultiImageCostBadge(model);
     evaluatePreFlightSafety();
 
     el.infoModelDesc.textContent = model.description || 'No description provided by model publisher.';
@@ -1665,6 +1720,154 @@
       sp.className = 'tag-badge';
       sp.textContent = t;
       el.infoModelTags.appendChild(sp);
+    });
+  }
+
+  function updateMultiImageCostBadge(model) {
+    if (!el.multiImageCostBadge) return;
+    if (!model) {
+      el.multiImageCostBadge.textContent = '';
+      el.multiImageCostBadge.className = 'ref-cost-badge';
+      return;
+    }
+    const built = buildPricingParams(model);
+    const oneImg = calculateModelCost(model, { ...built.params, images: ['img1'], reference_images: ['img1'] });
+    const twoImgs = calculateModelCost(model, { ...built.params, images: ['img1', 'img2'], reference_images: ['img1', 'img2'] });
+    const delta = Number((twoImgs.finalPrice - oneImg.finalPrice).toFixed(4));
+    if (delta > 0.0001) {
+      el.multiImageCostBadge.textContent = `💰 +$${delta.toFixed(4)} / extra ref`;
+      el.multiImageCostBadge.className = 'ref-cost-badge is-paid';
+    } else {
+      el.multiImageCostBadge.textContent = '✨ Extra refs: $0.00 FREE on this model';
+      el.multiImageCostBadge.className = 'ref-cost-badge';
+    }
+  }
+
+  function loadFacePacks() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('wavespeed_face_packs') || '[]');
+      state.facePacks = Array.isArray(parsed) ? parsed.filter(p => p && p.name && Array.isArray(p.images) && p.images.length > 0) : [];
+    } catch (e) {
+      state.facePacks = [];
+    }
+  }
+
+  function saveFacePacks() {
+    try {
+      localStorage.setItem('wavespeed_face_packs', JSON.stringify(state.facePacks || []));
+    } catch (e) {}
+  }
+
+  function renderFacePacksSelect() {
+    if (!el.facePackSelect) return;
+    const prevVal = el.facePackSelect.value;
+    el.facePackSelect.innerHTML = '<option value="">👤 Saved Face Packs...</option>';
+    (state.facePacks || []).forEach((p, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = `👤 ${p.name} (${p.images.length} photos)`;
+      el.facePackSelect.appendChild(opt);
+    });
+    if (prevVal !== '' && Number(prevVal) < (state.facePacks || []).length) {
+      el.facePackSelect.value = prevVal;
+    }
+    if (el.deleteFacePackBtn) {
+      el.deleteFacePackBtn.style.display = (el.facePackSelect.value !== '') ? 'inline-flex' : 'none';
+    }
+  }
+
+  async function loadAndRenderPromptHistory() {
+    if (!el.promptHistoryList) return;
+    if (!state.promptHistoryCache) {
+      el.promptHistoryList.innerHTML = '<div class="combobox-empty">Loading saved prompts...</div>';
+      try {
+        const res = await fetch('/api/history?limit=150&status=all');
+        const json = await res.json();
+        state.promptHistoryCache = Array.isArray(json.items) ? json.items : [];
+      } catch (e) {
+        state.promptHistoryCache = [];
+      }
+    }
+
+    const q = (el.promptHistorySearchInput?.value || '').trim().toLowerCase();
+    const favOnly = state.promptHistoryFilter === 'fav';
+    const combined = [...(state.promptHistoryCache || []), ...(state.history || [])];
+    const seen = new Set();
+    const rows = [];
+
+    for (const item of combined) {
+      const p = String(item?.prompt || '').trim();
+      if (!p) continue;
+      if (favOnly && !item.is_favorite) continue;
+      const key = p.toLowerCase();
+      if (seen.has(key)) continue;
+      if (q && !key.includes(q) && !String(item.model_id || '').toLowerCase().includes(q)) continue;
+      seen.add(key);
+      rows.push(item);
+      if (rows.length >= 60) break;
+    }
+
+    el.promptHistoryList.innerHTML = '';
+    if (rows.length === 0) {
+      el.promptHistoryList.innerHTML = `<div class="combobox-empty">${favOnly ? 'No favorited prompts found.' : 'No matching prompts found yet.'}</div>`;
+      return;
+    }
+
+    rows.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'prompt-history-item';
+
+      const textDiv = document.createElement('div');
+      textDiv.className = 'prompt-history-text';
+      textDiv.textContent = item.prompt;
+
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'prompt-history-meta';
+      const srcNote = item.input_filenames ? ` • 📎 ${escapeHtml(item.input_filenames)}` : '';
+      metaDiv.innerHTML = `<span>${item.is_favorite ? '⭐ ' : ''}${escapeHtml(item.model_id || 'model')}${srcNote}</span>`;
+
+      const actDiv = document.createElement('div');
+      actDiv.className = 'prompt-history-actions';
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'btn-tiny';
+      useBtn.textContent = '✓ Use';
+      useBtn.addEventListener('click', () => {
+        if (el.promptInput) {
+          el.promptInput.value = item.prompt;
+          el.promptInput.dispatchEvent(new Event('input'));
+          el.promptInput.focus();
+        }
+        if (el.promptHistoryMenu) el.promptHistoryMenu.style.display = 'none';
+      });
+
+      const appBtn = document.createElement('button');
+      appBtn.type = 'button';
+      appBtn.className = 'btn-tiny';
+      appBtn.textContent = '+ Append';
+      appBtn.addEventListener('click', () => {
+        appendPromptSnippet(item.prompt);
+        if (el.promptHistoryMenu) el.promptHistoryMenu.style.display = 'none';
+      });
+
+      const setupBtn = document.createElement('button');
+      setupBtn.type = 'button';
+      setupBtn.className = 'btn-tiny';
+      setupBtn.textContent = '♻️ Setup';
+      setupBtn.addEventListener('click', () => {
+        if (el.promptHistoryMenu) el.promptHistoryMenu.style.display = 'none';
+        reuseHistoryRun(item, false);
+      });
+
+      actDiv.appendChild(useBtn);
+      actDiv.appendChild(appBtn);
+      actDiv.appendChild(setupBtn);
+      metaDiv.appendChild(actDiv);
+
+      card.appendChild(textDiv);
+      card.appendChild(metaDiv);
+      el.promptHistoryList.appendChild(card);
     });
   }
 
@@ -1732,8 +1935,10 @@
        ('images' in props && !props.images['x-hidden']))
     );
 
-    // 1. Prompt & Negative Prompt
-    if ('prompt' in props && !props.prompt['x-hidden']) {
+    // 1. Prompt & Negative Prompt (keep visible for non-utility models if schema hasn't loaded yet)
+    const hasEmptyProps = Object.keys(props).length === 0;
+    const showPromptBox = ('prompt' in props && !props.prompt['x-hidden']) || (hasEmptyProps && !model.isUtility);
+    if (showPromptBox) {
       el.promptGroup.style.display = 'flex';
       if (isR2VModel(model)) {
         el.promptInput.placeholder = 'Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1...';
@@ -1779,14 +1984,25 @@
       }
     }
 
-    // 2b. Optional End Frame (Last Image) for interpolation/I2V models
-    const hasLastImage = 'last_image' in props && !props.last_image['x-hidden'];
+    // 2b. Secondary Single Image Slot (End Frame last_image, OR Face/Body Swap source face_image/body_image)
+    const secondaryImgKey = getSecondaryImageSchemaKey(props);
+    const hasLastImage = Boolean(secondaryImgKey);
     if (el.lastImageGroup) {
       el.lastImageGroup.style.display = hasLastImage ? 'flex' : 'none';
       if (hasLastImage) {
         const lastLbl = el.lastImageGroup.querySelector('.input-header label');
-        const lastReq = (model.schema?.required || []).includes('last_image');
-        if (lastLbl) lastLbl.innerHTML = `Optional End Frame (Last Image)${lastReq ? ' <span class="required">*</span>' : ''}`;
+        const lastSub = el.lastImageGroup.querySelector('.input-header .subtext');
+        const lastReq = (model.schema?.required || []).includes(secondaryImgKey);
+        if (secondaryImgKey === 'face_image') {
+          if (lastLbl) lastLbl.innerHTML = `Source Face to Swap In (face_image)${lastReq ? ' <span class="required">*</span>' : ''}`;
+          if (lastSub) lastSub.textContent = 'Face photo to transplant onto the target photo above';
+        } else if (secondaryImgKey === 'body_image') {
+          if (lastLbl) lastLbl.innerHTML = `Source Body Reference (body_image)${lastReq ? ' <span class="required">*</span>' : ''}`;
+          if (lastSub) lastSub.textContent = 'Reference body image for swap';
+        } else {
+          if (lastLbl) lastLbl.innerHTML = `Optional End Frame (Last Image)${lastReq ? ' <span class="required">*</span>' : ''}`;
+          if (lastSub) lastSub.textContent = 'Target pose/frame to transition into by video end';
+        }
       }
     }
 
@@ -1802,6 +2018,7 @@
             : `Reference Images (Up to ${maxRefs})`;
         }
         renderExtraImagesGrid();
+        updateMultiImageCostBadge(model);
       }
     }
 
@@ -1855,10 +2072,19 @@
       }
     }
 
-    // 3. Mask Canvas for Inpainting
-    if ('mask_image' in props) {
+    // 3. Mask / Paint Region Canvas (native mask_image models + interactive composite lock for Image Edit)
+    const hasNativeMask = Boolean('mask_image' in props || 'markup_image' in props);
+    const showPaintStudio = hasNativeMask || Boolean(model.isImageEdit);
+    if (showPaintStudio) {
       el.maskCanvasGroup.style.display = 'flex';
-      clearMask();
+      if (el.maskLockRow) el.maskLockRow.style.display = hasNativeMask ? 'none' : 'flex';
+      if (el.switchInpaintModelBtn) el.switchInpaintModelBtn.style.display = hasNativeMask ? 'none' : 'inline-flex';
+      if (el.maskCanvasSubtext) {
+        el.maskCanvasSubtext.textContent = hasNativeMask
+          ? 'Brush white over ONLY the region you want edited (native server inpainting mask)'
+          : 'Paint region below to lock unpainted areas locally, or switch to Flux Fill Dev for native inpaint';
+      }
+      syncMaskBgPreview();
     } else {
       el.maskCanvasGroup.style.display = 'none';
     }
@@ -2424,19 +2650,23 @@
     const imageFileSnapshot = hasSingleImageSlot ? (state.sourceImage?.file || null) : null;
     const sourceImageObjSnapshot = hasSingleImageSlot ? state.sourceImage : null;
     const extraImagesSnapshot = Array.isArray(state.extraImages) ? state.extraImages.map(x => ({ ...x })) : [];
-    const hasLastImageInput = 'last_image' in props && !props.last_image['x-hidden'];
+    const secondaryImgKey = getSecondaryImageSchemaKey(props);
+    const hasLastImageInput = Boolean(secondaryImgKey);
     const lastImageUrlSnapshot = state.lastImage?.downloadUrl || (el.lastImageUrlInput ? el.lastImageUrlInput.value.trim() : '');
     const lastImageFileSnapshot = state.lastImage?.file || null;
     const lastImageObjSnapshot = state.lastImage;
     if (hasImageInput) {
-      const needsImg = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('images') || reqList.includes('reference_images');
+      const needsImg = reqList.includes('image') || reqList.includes('face_image') || reqList.includes('body_image') || reqList.includes('images') || reqList.includes('reference_images');
       if (!imageUrlSnapshot && !imageFileSnapshot && extraImagesSnapshot.length === 0 && needsImg) {
         alert('Please provide at least one image input for this model.');
         return;
       }
     }
-    if (hasLastImageInput && reqList.includes('last_image') && !lastImageUrlSnapshot && !lastImageFileSnapshot) {
-      alert('Please provide an end frame (last image) for this model.');
+    if (hasLastImageInput && reqList.includes(secondaryImgKey) && !lastImageUrlSnapshot && !lastImageFileSnapshot) {
+      const slotMsg = secondaryImgKey === 'face_image'
+        ? 'Please provide a Source Face image to swap in.'
+        : (secondaryImgKey === 'body_image' ? 'Please provide a Source Body reference image.' : 'Please provide an end frame (last image) for this model.');
+      alert(slotMsg);
       return;
     }
 
@@ -2559,6 +2789,16 @@
       if (runSpecs.length >= 12) break;
     }
 
+    const hasNativeMask = Boolean('mask_image' in props || 'markup_image' in props);
+    const compositeMaskDataUrl = (!hasNativeMask && model.isImageEdit && state.hasDrawnMask && el.maskLockUnpaintedCheckbox?.checked && el.maskCanvas)
+      ? el.maskCanvas.toDataURL('image/png')
+      : null;
+    const compositeSourceSrc = compositeMaskDataUrl
+      ? ((el.maskBgImage?.src && (el.maskBgImage.src.startsWith('data:') || el.maskBgImage.src.startsWith('http://localhost') || el.maskBgImage.src.startsWith('http://127.0.0.1') || el.maskBgImage.src.startsWith('/outputs/')))
+        ? el.maskBgImage.src
+        : null)
+      : null;
+
     // 3. Dispatch job(s) concurrently WITHOUT disabling Run button
     runSpecs.forEach((spec) => {
       state.jobCounter += 1;
@@ -2571,6 +2811,8 @@
         category: model.category || state.currentCategory,
         prompt: spec.promptText,
         inputImageUrl: imageUrlSnapshot || sourceImageObjSnapshot?.url || null,
+        compositeMaskDataUrl,
+        compositeSourceSrc,
         parameters: { ...spec.jobPayload },
         estimatedPrice,
         balanceBefore: state.balance,
@@ -2594,12 +2836,14 @@
         props,
         reqList,
         payload: spec.jobPayload,
+        singleImageKey,
         hasSingleImageSlot,
         hasImageInput,
         imageUrlSnapshot,
         imageFileSnapshot,
         sourceImageObjSnapshot,
         extraImagesSnapshot,
+        secondaryImgKey,
         hasLastImageInput,
         lastImageUrlSnapshot,
         lastImageFileSnapshot,
@@ -2683,6 +2927,46 @@
     return urlSnapshot;
   }
 
+  function buildInputSourcesMetadata(ctx) {
+    const sources = [];
+    const addEntry = (slot, fileObj, urlVal, fallbackName = '') => {
+      if (!fileObj && !urlVal) return;
+      const u = String(urlVal || '');
+      let fname = fileObj?.name || fallbackName || '';
+      if (!fname && u) {
+        try { fname = u.split('?')[0].split('/').pop() || ''; } catch (e) {}
+      }
+      sources.push({
+        slot,
+        filename: fname,
+        filepath: fileObj?.path || (u.startsWith('/outputs/') ? u : ''),
+        local_url: u.startsWith('/outputs/') ? u : '',
+        remote_url: /^https?:\/\//i.test(u) ? u : '',
+        size_bytes: Number.isFinite(fileObj?.size) ? fileObj.size : null
+      });
+    };
+
+    if (ctx.hasSingleImageSlot) {
+      addEntry(ctx.singleImageKey || 'image', ctx.imageFileSnapshot, ctx.sourceImageObjSnapshot?.downloadUrl || ctx.imageUrlSnapshot);
+    }
+    if (ctx.hasLastImageInput) {
+      addEntry(ctx.secondaryImgKey || 'last_image', ctx.lastImageFileSnapshot, ctx.lastImageObjSnapshot?.downloadUrl || ctx.lastImageUrlSnapshot);
+    }
+    (ctx.extraImagesSnapshot || []).forEach((ex, idx) => {
+      addEntry(`ref_image_${idx + 1}`, ex.file, ex.downloadUrl || (ex.previewUrl && !ex.previewUrl.startsWith('data:') ? ex.previewUrl : ''));
+    });
+    if (ctx.hasVideoInput) {
+      addEntry('video', ctx.videoFileSnapshot, ctx.sourceVideoObjSnapshot?.downloadUrl || ctx.videoUrlSnapshot);
+    }
+    (ctx.refVideosSnapshot || []).forEach((rv, idx) => {
+      addEntry(`ref_video_${idx + 1}`, rv.file, rv.downloadUrl || rv.url || '', rv.name || '');
+    });
+    (ctx.refAudiosSnapshot || []).forEach((ra, idx) => {
+      addEntry(`ref_audio_${idx + 1}`, ra.file, ra.downloadUrl || ra.url || '', ra.name || '');
+    });
+    return sources;
+  }
+
   async function executeConcurrentJob(job, ctx) {
     try {
       const { model, props, reqList, payload } = ctx;
@@ -2739,20 +3023,21 @@
       }
 
       if (ctx.hasLastImageInput) {
+        const secKey = ctx.secondaryImgKey || 'last_image';
         const finalLastUrl = await resolveMediaAssetUrl(
           ctx.lastImageUrlSnapshot,
           ctx.lastImageFileSnapshot,
           ctx.lastImageObjSnapshot,
-          'last_frame.png',
+          `${secKey}.png`,
           'image/png',
           job,
-          'end frame'
+          secKey === 'face_image' ? 'face photo' : (secKey === 'body_image' ? 'body photo' : 'end frame')
         );
-        if (!finalLastUrl && reqList.includes('last_image')) {
-          throw new Error('Please provide an end frame (last image) for this model.');
+        if (!finalLastUrl && reqList.includes(secKey)) {
+          throw new Error(`Please provide ${secKey} for this model.`);
         }
         if (finalLastUrl) {
-          payload.last_image = finalLastUrl;
+          payload[secKey] = finalLastUrl;
         }
       }
 
@@ -2827,6 +3112,9 @@
       job.stageText = `Submitting to ${model.model_id}...`;
       renderActiveJobs();
 
+      const inputSourcesMeta = buildInputSourcesMetadata(ctx);
+      job.inputSources = inputSourcesMeta;
+
       const submitRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2835,6 +3123,7 @@
           model_name: model.name || model.model_id,
           category: job.category,
           payload,
+          input_sources: inputSourcesMeta,
           estimated_price: job.estimatedPrice
         })
       });
@@ -3102,6 +3391,7 @@
         model_id: model.model_id,
         prompt: job ? job.prompt : el.promptInput.value,
         input_image_url: job?.inputImageUrl || saved?.input_image_url || null,
+        input_sources: job?.inputSources || saved?.input_sources || [],
         parameters: job?.parameters || saved?.parameters || null,
         price: priceUsed,
         timestamp: new Date().toISOString()
@@ -3122,12 +3412,17 @@
       model_id: model.model_id,
       prompt: job ? job.prompt : el.promptInput.value,
       input_image_url: job?.inputImageUrl || primarySaved?.input_image_url || null,
+      input_sources: job?.inputSources || primarySaved?.input_sources || [],
       parameters: job?.parameters || primarySaved?.parameters || null,
       price: priceUsed,
       timestamp: new Date().toISOString()
     };
 
     loadOutputIntoViewer(activeItemObj);
+    if (job?.compositeMaskDataUrl && job?.compositeSourceSrc && !firstIsVideo && firstLocalUrl) {
+      applyMaskCompositeToViewer(firstLocalUrl, job.compositeSourceSrc, job.compositeMaskDataUrl);
+    }
+    state.promptHistoryCache = null;
     fetchHistoryStatsForInsights();
 
     // Multi-Step Quick Chain Post-Action (stages next workflow step without auto-spending credits)
@@ -3209,6 +3504,10 @@
               existing.task_id = item.task_id;
               changed = true;
             }
+            if (Array.isArray(item.input_sources) && item.input_sources.length > 0 && (!Array.isArray(existing.input_sources) || existing.input_sources.length === 0)) {
+              existing.input_sources = item.input_sources;
+              changed = true;
+            }
           } else {
             state.history.push({
               task_id: item.task_id || null,
@@ -3220,6 +3519,7 @@
               model_id: item.model_id,
               prompt: item.prompt || '',
               input_image_url: item.input_image_url || item.parameters?.image || (Array.isArray(item.parameters?.images) ? item.parameters.images[0] : null) || null,
+              input_sources: Array.isArray(item.input_sources) ? item.input_sources : [],
               parameters: item.parameters || null,
               price: item.estimated_price || 0,
               timestamp: item.saved_at
@@ -3712,6 +4012,17 @@
         main.appendChild(pBox);
       }
 
+      const srcItems = Array.isArray(item.input_sources) ? item.input_sources : [];
+      const srcSummary = srcItems.length > 0
+        ? srcItems.map(s => `${s.slot}: ${s.filename || s.filepath || s.local_url || s.remote_url || ''}`).filter(Boolean).join(' • ')
+        : (item.input_filenames || item.input_image_url || '');
+      if (srcSummary) {
+        const sBox = document.createElement('div');
+        sBox.className = 'history-db-sources';
+        sBox.textContent = `📎 Sources: ${srcSummary}`;
+        main.appendChild(sBox);
+      }
+
       if (item.error_message) {
         const eBox = document.createElement('div');
         eBox.className = 'history-db-error';
@@ -3737,6 +4048,10 @@
             isVideo: Boolean(item.is_video),
             model_id: item.model_id,
             prompt: item.prompt || '',
+            input_sources: item.input_sources || [],
+            input_filenames: item.input_filenames || '',
+            input_image_url: item.input_image_url || null,
+            parameters: item.parameters || null,
             price: item.estimated_price || 0,
             timestamp: item.completed_at || item.submitted_at
           });
@@ -4398,6 +4713,7 @@
       rm.addEventListener('click', () => {
         state.extraImages = state.extraImages.filter(x => x.id !== entry.id);
         renderExtraImagesGrid();
+        syncMaskBgPreview();
         if (state.selectedModel) updateModelInfo(state.selectedModel);
       });
 
@@ -4406,6 +4722,7 @@
       box.appendChild(rm);
       el.multiImgGrid.appendChild(box);
     });
+    syncMaskBgPreview();
   }
 
   function addExtraImageFiles(fileList) {
@@ -4588,7 +4905,157 @@
     updateBulkDeleteUi();
   }
 
+  function renderActiveOutputInspector(item) {
+    if (!el.activeOutputInspector) return;
+    if (!item) {
+      el.activeOutputInspector.style.display = 'none';
+      el.activeOutputInspector.innerHTML = '';
+      return;
+    }
+    el.activeOutputInspector.style.display = 'flex';
+    const srcArr = Array.isArray(item.input_sources) ? item.input_sources : [];
+    const srcText = srcArr.length > 0
+      ? srcArr.map(s => `${s.slot}: ${s.filename || s.local_url || s.remote_url || ''}`).filter(Boolean).join(' • ')
+      : (item.input_filenames || (item.input_image_url ? String(item.input_image_url).split('/').pop() : ''));
+    const hasComposite = Boolean(state.activeCompositeMaskedUrl && state.activeCompositeRawUrl);
+    el.activeOutputInspector.innerHTML = `
+      <div class="inspector-top-row">
+        <span class="badge-tag">${escapeHtml(item.model_id || 'model')}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          ${item.prompt ? '<button type="button" class="btn-tiny" id="inspectorCopyPromptBtn">📋 Copy Prompt</button>' : ''}
+          ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorPaintEditBtn">🖌️ Paint-Edit</button>' : ''}
+          ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorFaceSwapBtn">🎭 Face Swap Onto</button>' : ''}
+          ${!item.isVideo ? '<button type="button" class="btn-tiny" id="inspectorAddRefBtn">+ Ref Study</button>' : ''}
+          ${hasComposite ? `<button type="button" class="btn-tiny active" id="inspectorToggleMaskCompositeBtn">${state.activeCompositeShowingMasked ? '🔒 Locked Mask (Click → Raw)' : '👁️ Raw Output (Click → Locked Mask)'}</button>` : ''}
+        </div>
+      </div>
+      ${item.prompt ? `<div class="inspector-prompt-line">${escapeHtml(item.prompt)}</div>` : ''}
+      ${srcText ? `<div class="inspector-sources-line">📎 Inputs: ${escapeHtml(srcText)}</div>` : ''}
+    `;
+
+    const copyBtn = document.getElementById('inspectorCopyPromptBtn');
+    const paintBtn = document.getElementById('inspectorPaintEditBtn');
+    const swapBtn = document.getElementById('inspectorFaceSwapBtn');
+    const addRefBtn = document.getElementById('inspectorAddRefBtn');
+    const maskToggleBtn = document.getElementById('inspectorToggleMaskCompositeBtn');
+    const bestImgUrl = item.local_url || item.remote_url || item.url;
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const ok = await copyTextSafe(item.prompt);
+        showToast(ok ? 'Prompt copied to clipboard.' : 'Copy failed.', ok ? 'good' : 'warn');
+      });
+    }
+    if (paintBtn) {
+      paintBtn.addEventListener('click', async () => {
+        el.sendToEditBtn?.click();
+        await selectModel('wavespeed-ai/flux-fill-dev', true).catch(() => {});
+        syncMaskBgPreview();
+        showToast('Loaded into Flux Fill Dev — paint over the region you want edited.', 'good', 3200);
+      });
+    }
+    if (swapBtn && bestImgUrl) {
+      swapBtn.addEventListener('click', async () => {
+        const toolsTab = document.querySelector('.mode-btn[data-category="utility"]');
+        if (toolsTab) toolsTab.click();
+        await selectModel('wavespeed-ai/image-face-swap-pro', true).catch(() => {});
+        state.sourceImage = { url: bestImgUrl, downloadUrl: bestImgUrl };
+        if (el.imageUrlInput) el.imageUrlInput.value = bestImgUrl;
+        if (el.imagePreview) el.imagePreview.src = bestImgUrl;
+        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+        const dp = document.getElementById('dropzonePrompt');
+        if (dp) dp.style.display = 'none';
+        showToast('Loaded as Target Photo — now upload Source Face to swap in.', 'good', 3200);
+      });
+    }
+    if (addRefBtn && bestImgUrl) {
+      addRefBtn.addEventListener('click', () => {
+        addExtraImageUrl(bestImgUrl);
+        showToast('Added image to multi-photo Reference / Face Study list.', 'good');
+      });
+    }
+    if (maskToggleBtn && el.outputImageViewer) {
+      maskToggleBtn.addEventListener('click', () => {
+        state.activeCompositeShowingMasked = !state.activeCompositeShowingMasked;
+        el.outputImageViewer.src = state.activeCompositeShowingMasked
+          ? state.activeCompositeMaskedUrl
+          : state.activeCompositeRawUrl;
+        renderActiveOutputInspector(state.activeOutputItem);
+      });
+    }
+  }
+
+  async function applyMaskCompositeToViewer(editedUrl, originalUrl, maskDataUrl) {
+    try {
+      const loadImg = (src) => new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = src;
+      });
+      const [editedImg, origImg, maskImg] = await Promise.all([
+        loadImg(editedUrl),
+        loadImg(originalUrl),
+        loadImg(maskDataUrl)
+      ]);
+      const w = editedImg.naturalWidth || origImg.naturalWidth || 1024;
+      const h = editedImg.naturalHeight || origImg.naturalHeight || 1024;
+
+      const alphaCanvas = document.createElement('canvas');
+      alphaCanvas.width = w;
+      alphaCanvas.height = h;
+      const aCtx = alphaCanvas.getContext('2d');
+      aCtx.filter = 'blur(8px)';
+      aCtx.drawImage(maskImg, 0, 0, w, h);
+      aCtx.filter = 'none';
+      const aData = aCtx.getImageData(0, 0, w, h);
+      const d = aData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const luma = d[i]; // white=255 -> edit, black=0 -> lock original
+        d[i + 3] = luma;
+      }
+      aCtx.putImageData(aData, 0, 0);
+
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = w;
+      overlayCanvas.height = h;
+      const oCtx = overlayCanvas.getContext('2d');
+      oCtx.drawImage(editedImg, 0, 0, w, h);
+      oCtx.globalCompositeOperation = 'destination-in';
+      oCtx.drawImage(alphaCanvas, 0, 0, w, h);
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = w;
+      outCanvas.height = h;
+      const outCtx = outCanvas.getContext('2d');
+      outCtx.drawImage(origImg, 0, 0, w, h);
+      outCtx.drawImage(overlayCanvas, 0, 0, w, h);
+
+      const compositedUrl = outCanvas.toDataURL('image/png');
+      state.activeCompositeRawUrl = editedUrl;
+      state.activeCompositeMaskedUrl = compositedUrl;
+      state.activeCompositeShowingMasked = true;
+      if (el.outputImageViewer && el.outputImageViewer.style.display !== 'none') {
+        el.outputImageViewer.src = compositedUrl;
+      }
+      renderActiveOutputInspector(state.activeOutputItem);
+      showToast('Applied local feathered mask lock to viewer (unpainted pixels locked).', 'good', 3200);
+    } catch (e) {
+      console.warn('Mask composite skipped:', e);
+    }
+  }
+
   function loadOutputIntoViewer(item) {
+    if (el.viewerCard) el.viewerCard.classList.remove('is-empty');
+    if (state.viewerStage === 'gallery') {
+      state.viewerStage = 'split';
+      localStorage.setItem('wavespeed_viewer_stage', state.viewerStage);
+      applyDesignPreferences();
+    }
+    state.activeCompositeRawUrl = null;
+    state.activeCompositeMaskedUrl = null;
+    state.activeCompositeShowingMasked = false;
+
     el.viewerPlaceholder.style.display = 'none';
     el.mediaContainer.style.display = 'flex';
     el.viewerActions.style.display = 'flex';
@@ -4678,6 +5145,8 @@
       renderLocalSaveBanner(null);
     }
     syncGalleryActiveHighlight();
+    renderActiveOutputInspector(item);
+    document.getElementById('workspacePanel')?.scrollTo?.({ top: 0, behavior: 'smooth' });
   }
 
   // Event Listeners
@@ -5042,6 +5511,7 @@
       el.imagePreviewContainer.style.display = 'flex';
       const dp = document.getElementById('dropzonePrompt');
       if (dp) dp.style.display = 'none';
+      syncMaskBgPreview();
       updateInputQualityAdvisory();
       if (state.selectedModel) updateModelInfo(state.selectedModel);
     };
@@ -5066,6 +5536,7 @@
       el.imagePreview.src = '';
       el.imagePreviewContainer.style.display = 'none';
       document.getElementById('dropzonePrompt').style.display = 'block';
+      syncMaskBgPreview();
       updateInputQualityAdvisory();
       if (state.selectedModel) updateModelInfo(state.selectedModel);
     });
@@ -5898,6 +6369,136 @@
       el.bulkDeleteSelectedBtn.addEventListener('click', () => executeBulkDelete());
     }
 
+    // Previous Prompts Menu Listeners
+    if (el.openPromptHistoryBtn && el.promptHistoryMenu) {
+      el.openPromptHistoryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = el.promptHistoryMenu.style.display !== 'none';
+        el.promptHistoryMenu.style.display = isOpen ? 'none' : 'flex';
+        if (!isOpen) loadAndRenderPromptHistory();
+      });
+    }
+    if (el.closePromptHistoryBtn && el.promptHistoryMenu) {
+      el.closePromptHistoryBtn.addEventListener('click', () => {
+        el.promptHistoryMenu.style.display = 'none';
+      });
+    }
+    if (el.promptHistorySearchInput) {
+      el.promptHistorySearchInput.addEventListener('input', () => loadAndRenderPromptHistory());
+    }
+    if (el.promptHistoryFilterPills) {
+      el.promptHistoryFilterPills.addEventListener('click', (e) => {
+        const btn = e.target.closest('.history-filter-btn');
+        if (!btn) return;
+        state.promptHistoryFilter = btn.dataset.phFilter || 'all';
+        el.promptHistoryFilterPills.querySelectorAll('.history-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+        loadAndRenderPromptHistory();
+      });
+    }
+
+    // Face Study Prompt & Saved Face Packs
+    if (el.insertFaceStudyPromptBtn) {
+      el.insertFaceStudyPromptBtn.addEventListener('click', () => {
+        const count = Math.max(2, state.extraImages?.length || 0);
+        const refsSpan = Array.from({ length: Math.min(count, 10) }, (_, i) => `Image ${i + 1}`).join(', ');
+        const studyPrefix = `Study all reference images (${refsSpan}) to lock exact facial identity (bone structure, eye shape, nose bridge, lips, skin tone, and proportions). Generate a brand new photo of this exact same person with maximum facial fidelity:`;
+        if (el.promptInput) {
+          const cur = el.promptInput.value.trim();
+          el.promptInput.value = cur ? `${studyPrefix} ${cur}` : `${studyPrefix} closeup portrait in realistic natural lighting`;
+          el.promptInput.dispatchEvent(new Event('input'));
+          el.promptInput.focus();
+        }
+        showToast('Inserted multi-photo Face Study identity template', 'good');
+      });
+    }
+    if (el.saveFacePackBtn) {
+      el.saveFacePackBtn.addEventListener('click', () => {
+        const collected = [];
+        if (state.sourceImage && (state.sourceImage.downloadUrl || state.sourceImage.url)) {
+          collected.push({
+            name: state.sourceImage.file?.name || 'Primary Ref',
+            url: state.sourceImage.downloadUrl || state.sourceImage.url
+          });
+        }
+        (state.extraImages || []).forEach((ex, i) => {
+          const u = ex.downloadUrl || (ex.previewUrl && !ex.previewUrl.startsWith('data:') ? ex.previewUrl : '');
+          if (u) {
+            collected.push({ name: ex.file?.name || `Ref ${i + 1}`, url: u });
+          } else if (ex.previewUrl) {
+            collected.push({ name: ex.file?.name || `Ref ${i + 1}`, url: ex.previewUrl });
+          }
+        });
+        if (collected.length === 0) {
+          showToast('Add at least 1 reference photo first before saving a Face Pack.', 'warn');
+          return;
+        }
+        const defaultName = `Person Pack ${((state.facePacks || []).length + 1)} (${collected.length} refs)`;
+        const packName = (typeof window.prompt === 'function' ? window.prompt('Name this Face Pack (reusable 1-click identity set):', defaultName) : defaultName) || '';
+        if (!packName.trim()) return;
+        state.facePacks.push({ name: packName.trim(), images: collected.slice(0, 14) });
+        saveFacePacks();
+        renderFacePacksSelect();
+        showToast(`Saved Face Pack "${packName.trim()}" (${collected.length} photos)`, 'good');
+      });
+    }
+    if (el.facePackSelect) {
+      el.facePackSelect.addEventListener('change', () => {
+        const idxStr = el.facePackSelect.value;
+        if (el.deleteFacePackBtn) el.deleteFacePackBtn.style.display = idxStr !== '' ? 'inline-flex' : 'none';
+        if (idxStr === '') return;
+        const pack = state.facePacks?.[parseInt(idxStr, 10)];
+        if (!pack || !Array.isArray(pack.images)) return;
+        state.extraImages = [];
+        pack.images.forEach((im) => {
+          if (im.url) addExtraImageUrl(im.url);
+        });
+        showToast(`Loaded Face Pack "${pack.name}" (${pack.images.length} photos)`, 'good');
+      });
+    }
+    if (el.deleteFacePackBtn && el.facePackSelect) {
+      el.deleteFacePackBtn.addEventListener('click', () => {
+        const idx = parseInt(el.facePackSelect.value, 10);
+        if (Number.isNaN(idx) || !state.facePacks?.[idx]) return;
+        const removed = state.facePacks.splice(idx, 1)[0];
+        saveFacePacks();
+        el.facePackSelect.value = '';
+        renderFacePacksSelect();
+        showToast(`Removed Face Pack "${removed.name}"`, 'info');
+      });
+    }
+
+    // Paint Region / Mask Brush Mode & Flux Fill Inpaint Switch
+    if (el.maskBrushModeBtn) {
+      el.maskBrushModeBtn.addEventListener('click', () => {
+        state.maskBrushMode = state.maskBrushMode === 'paint' ? 'erase' : 'paint';
+        el.maskBrushModeBtn.textContent = state.maskBrushMode === 'paint' ? '🖌️ Paint' : '🧽 Erase';
+        el.maskBrushModeBtn.classList.toggle('active', state.maskBrushMode === 'paint');
+      });
+    }
+    if (el.switchInpaintModelBtn) {
+      el.switchInpaintModelBtn.addEventListener('click', async () => {
+        const exists = state.models.some(m => m.model_id === 'wavespeed-ai/flux-fill-dev');
+        const targetId = exists ? 'wavespeed-ai/flux-fill-dev' : 'wavespeed-ai/flux-schnell';
+        await selectModel(targetId, true);
+        syncMaskBgPreview();
+        showToast(`Switched to ${targetId} (mask ready to paint & run!)`, 'good', 3200);
+      });
+    }
+
+    // Expand Gallery Toggle & Click-to-Zoom Output Viewer Image
+    if (el.toggleExpandGalleryBtn) {
+      el.toggleExpandGalleryBtn.addEventListener('click', () => {
+        state.viewerStage = state.viewerStage === 'gallery' ? 'split' : 'gallery';
+        localStorage.setItem('wavespeed_viewer_stage', state.viewerStage);
+        applyDesignPreferences();
+      });
+    }
+    if (el.outputImageViewer) {
+      el.outputImageViewer.addEventListener('click', () => {
+        if (el.fullscreenVideoBtn) el.fullscreenVideoBtn.click();
+      });
+    }
+
     // Snappy Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
       const anyModalOpen = [el.apiKeyModal, el.spendConfirmModal, el.outputsModal, el.historyDbModal, el.advisorModal, el.compareModal]
@@ -5991,6 +6592,11 @@
       el.gallerySizePills.querySelectorAll('.history-filter-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.gsize === state.gallerySize);
       });
+    }
+    if (el.toggleExpandGalleryBtn) {
+      const isGal = state.viewerStage === 'gallery';
+      el.toggleExpandGalleryBtn.classList.toggle('is-active', isGal);
+      el.toggleExpandGalleryBtn.textContent = isGal ? '🖼️ Show Viewer' : '🖼️ Expand Gallery';
     }
   }
 
@@ -6488,7 +7094,38 @@
     if (!el.timelineFilmstrip || !Number.isFinite(duration) || duration <= 0) return;
     const scanToken = (state.timelineScanToken = (state.timelineScanToken || 0) + 1);
     el.timelineFilmstrip.innerHTML = '';
-    const count = 8;
+
+    // Fast server-side FFmpeg parallel keyframe path for locally saved /outputs/ clips
+    if (String(videoSrc).startsWith('/outputs/')) {
+      try {
+        const resp = await fetch('/api/video/filmstrip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: videoSrc, duration, count: 8 })
+        });
+        const json = await resp.json();
+        if (state.timelineScanToken !== scanToken) return;
+        const frames = json?.data?.frames || [];
+        if (resp.ok && frames.length > 0) {
+          frames.forEach((f) => {
+            const img = document.createElement('img');
+            img.className = 'timeline-filmstrip-thumb';
+            img.src = f.dataUrl;
+            img.title = `Jump to ${formatTimecode(f.sec)}`;
+            img.addEventListener('click', () => {
+              if (el.timelineVideoPlayer) {
+                el.timelineVideoPlayer.pause();
+                el.timelineVideoPlayer.currentTime = f.sec;
+              }
+            });
+            el.timelineFilmstrip.appendChild(img);
+          });
+          return;
+        }
+      } catch (e) {}
+    }
+
+    const count = 6;
     const probe = document.createElement('video');
     probe.muted = true;
     probe.playsInline = true;
@@ -6890,6 +7527,7 @@
       el.imagePreview.src = e.target.result;
       el.imagePreviewContainer.style.display = 'flex';
       document.getElementById('dropzonePrompt').style.display = 'none';
+      syncMaskBgPreview();
     };
     reader.readAsDataURL(file);
   }
