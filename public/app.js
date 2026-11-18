@@ -477,7 +477,41 @@
     outputDetailsTitle: document.getElementById('outputDetailsTitle'),
     outputDetailsModelBadge: document.getElementById('outputDetailsModelBadge'),
     closeOutputDetailsModalBtn: document.getElementById('closeOutputDetailsModalBtn'),
-    outputDetailsBody: document.getElementById('outputDetailsBody')
+    outputDetailsBody: document.getElementById('outputDetailsBody'),
+    quickRunPromptBtn: document.getElementById('quickRunPromptBtn'),
+    quickRunPromptPrice: document.getElementById('quickRunPromptPrice'),
+    quickRunSourceBtn: document.getElementById('quickRunSourceBtn'),
+    quickRunSourcePrice: document.getElementById('quickRunSourcePrice'),
+    quickRunRefsBtn: document.getElementById('quickRunRefsBtn'),
+    quickRunRefsPrice: document.getElementById('quickRunRefsPrice'),
+    multiImageCountBadge: document.getElementById('multiImageCountBadge'),
+    toggleNegativePromptBtn: document.getElementById('toggleNegativePromptBtn'),
+    negativePromptBody: document.getElementById('negativePromptBody'),
+    negativePromptChevron: document.getElementById('negativePromptChevron'),
+    toggleImageInputBtn: document.getElementById('toggleImageInputBtn'),
+    imageInputBody: document.getElementById('imageInputBody'),
+    imageInputChevron: document.getElementById('imageInputChevron'),
+    toggleLastImageBtn: document.getElementById('toggleLastImageBtn'),
+    lastImageBody: document.getElementById('lastImageBody'),
+    lastImageChevron: document.getElementById('lastImageChevron'),
+    toggleMultiImageBtn: document.getElementById('toggleMultiImageBtn'),
+    multiImageBody: document.getElementById('multiImageBody'),
+    multiImageChevron: document.getElementById('multiImageChevron'),
+    toggleMaskCanvasBtn: document.getElementById('toggleMaskCanvasBtn'),
+    maskCanvasBody: document.getElementById('maskCanvasBody'),
+    maskCanvasChevron: document.getElementById('maskCanvasChevron'),
+    toggleVideoInputBtn: document.getElementById('toggleVideoInputBtn'),
+    videoInputBody: document.getElementById('videoInputBody'),
+    videoInputChevron: document.getElementById('videoInputChevron'),
+    toggleRefVideosBtn: document.getElementById('toggleRefVideosBtn'),
+    refVideosBody: document.getElementById('refVideosBody'),
+    refVideosChevron: document.getElementById('refVideosChevron'),
+    toggleRefAudiosBtn: document.getElementById('toggleRefAudiosBtn'),
+    refAudiosBody: document.getElementById('refAudiosBody'),
+    refAudiosChevron: document.getElementById('refAudiosChevron'),
+    toggleSettingsSectionBtn: document.getElementById('toggleSettingsSectionBtn'),
+    settingsSectionBody: document.getElementById('settingsSectionBody'),
+    settingsSectionChevron: document.getElementById('settingsSectionChevron')
   };
 
   // Mask Canvas Context
@@ -827,6 +861,53 @@
     if ('image' in props && 'face_image' in props && !props.face_image?.['x-hidden']) return 'face_image';
     if ('image' in props && 'body_image' in props && !props.body_image?.['x-hidden']) return 'body_image';
     return null;
+  }
+
+  function getMultiImageSchemaKey(props, model = state.selectedModel) {
+    if (!props || typeof props !== 'object') return null;
+    if ('images' in props && !props.images?.['x-hidden']) return 'images';
+    if ('reference_images' in props && !props.reference_images?.['x-hidden']) return 'reference_images';
+    if (isR2VModel(model) && 'reference_files' in props && !props.reference_files?.['x-hidden']) {
+      return 'reference_files';
+    }
+    return null;
+  }
+
+  function getLastImageSchemaKey(props) {
+    return getSecondaryImageSchemaKey(props);
+  }
+
+  function normalizeUsableMediaUrl(rawUrlOrPath) {
+    const raw = String(rawUrlOrPath || '').trim();
+    if (!raw) return '';
+    let s = raw;
+    if (/^file:\/\//i.test(s)) {
+      s = s.replace(/^file:\/\/\/?/i, '');
+      if (!/^[a-zA-Z]:/.test(s) && !s.startsWith('/')) s = '/' + s;
+      try { s = decodeURIComponent(s); } catch (e) {}
+    }
+    if (s.startsWith('/outputs/') || s.startsWith('/api/local-file') || /^(https?:\/\/|data:|blob:)/i.test(s)) {
+      return s;
+    }
+    if (/^[a-zA-Z]:[\\/]/.test(s) || s.startsWith('\\\\') || (s.startsWith('/') && !s.startsWith('/outputs/') && !s.startsWith('/api/'))) {
+      return `/api/local-file?path=${encodeURIComponent(s)}`;
+    }
+    return s;
+  }
+
+  function setCollapsibleGroupOpen(groupEl, bodyEl, btnEl, chevronEl, isOpen) {
+    const open = Boolean(isOpen);
+    if (bodyEl) bodyEl.style.display = open ? 'flex' : 'none';
+    if (btnEl) btnEl.setAttribute('aria-expanded', String(open));
+    if (chevronEl) chevronEl.textContent = open ? '▲' : '▼';
+    if (groupEl && groupEl.classList) groupEl.classList.toggle('is-collapsed', !open);
+  }
+
+  function syncQuickRunPriceBadges(priceBadgeText) {
+    const txt = priceBadgeText || '• $0.000';
+    if (el.quickRunPromptPrice) el.quickRunPromptPrice.textContent = txt;
+    if (el.quickRunSourcePrice) el.quickRunSourcePrice.textContent = txt;
+    if (el.quickRunRefsPrice) el.quickRunRefsPrice.textContent = txt;
   }
 
   // Fetch Models
@@ -1921,6 +2002,7 @@
       el.infoModelDesc.textContent = 'No model selected';
       el.infoModelTags.innerHTML = '';
       el.btnPriceBadge.textContent = '• $0.00';
+      syncQuickRunPriceBadges('• $0.00');
       return;
     }
 
@@ -1951,6 +2033,7 @@
         ? `• $${totalPlannedCost} (${pricing.batchCount}× $${pricing.finalPrice})`
         : `• $${pricing.finalPrice}`;
     }
+    syncQuickRunPriceBadges(el.btnPriceBadge.textContent);
 
     if (el.batchMatrixHint) {
       if (pricing.batchCount > 1) {
@@ -2401,6 +2484,7 @@
 
     // 3. Mask / Paint Region Canvas (native mask_image models + interactive composite lock for Image Edit)
     const hasNativeMask = Boolean('mask_image' in props || 'markup_image' in props);
+    const reqMask = Boolean((model.schema?.required || []).includes('mask_image') || (model.schema?.required || []).includes('markup_image'));
     const showPaintStudio = hasNativeMask || Boolean(model.isImageEdit);
     if (showPaintStudio) {
       el.maskCanvasGroup.style.display = 'flex';
@@ -2411,6 +2495,7 @@
           ? 'Brush white over ONLY the region you want edited (native server inpainting mask)'
           : 'Paint region below to lock unpainted areas locally, or switch to Flux Fill Dev for native inpaint';
       }
+      setCollapsibleGroupOpen(el.maskCanvasGroup, el.maskCanvasBody, el.toggleMaskCanvasBtn, el.maskCanvasChevron, reqMask || Boolean(state.hasDrawnMask));
       syncMaskBgPreview();
     } else {
       el.maskCanvasGroup.style.display = 'none';
@@ -2970,6 +3055,9 @@
       // Never block concurrent runs — always stay clickable!
       el.generateBtn.disabled = false;
     }
+    [el.quickRunPromptBtn, el.quickRunSourceBtn, el.quickRunRefsBtn].forEach(b => {
+      if (b) b.disabled = false;
+    });
   }
 
   // Execute Generation (Immediate Parallel Dispatch — No Queue Blocking)
@@ -3268,13 +3356,21 @@
   }
 
   async function resolveMediaAssetUrl(urlSnapshot, fileSnapshot, targetObj, defaultName, defaultMime, job, label) {
-    if (urlSnapshot && urlSnapshot.startsWith('/outputs/')) {
+    if (urlSnapshot && (urlSnapshot.startsWith('/outputs/') || urlSnapshot.startsWith('/api/local-file') || urlSnapshot.startsWith('data:'))) {
       job.stageText = `Uploading local ${label} to WaveSpeed...`;
       renderActiveJobs();
       const resp = await fetch(urlSnapshot);
       if (!resp.ok) throw new Error(`Failed to read local ${label} for upload`);
       const blob = await resp.blob();
-      const fName = urlSnapshot.split('/').pop() || defaultName;
+      let fName = defaultName;
+      if (urlSnapshot.startsWith('/api/local-file')) {
+        try {
+          const pVal = new URL(urlSnapshot, 'http://localhost').searchParams.get('path') || '';
+          fName = pVal.split(/[\\/]/).pop() || defaultName;
+        } catch (e) {}
+      } else if (urlSnapshot.startsWith('/outputs/')) {
+        fName = urlSnapshot.split('/').pop() || defaultName;
+      }
       const localFile = new File([blob], fName, { type: blob.type || defaultMime });
       const uploaded = await uploadFileDirect(localFile);
       if (targetObj) targetObj.downloadUrl = uploaded;
@@ -3360,15 +3456,16 @@
           job.stageText = `Uploading ${ctx.extraImagesSnapshot.length} reference image(s)...`;
           renderActiveJobs();
           for (const extra of ctx.extraImagesSnapshot) {
-            if (extra.downloadUrl && !extra.downloadUrl.startsWith('/outputs/')) {
-              uploadedExtras.push(extra.downloadUrl);
-            } else if (extra.downloadUrl || extra.file) {
+            const extraUrl = extra.downloadUrl || (extra.previewUrl && extra.previewUrl.startsWith('data:') ? extra.previewUrl : '');
+            if (extraUrl && !extraUrl.startsWith('/outputs/') && !extraUrl.startsWith('/api/local-file') && !extraUrl.startsWith('data:')) {
+              uploadedExtras.push(extraUrl);
+            } else if (extraUrl || extra.file) {
               const url = await resolveMediaAssetUrl(
-                extra.downloadUrl,
+                extraUrl,
                 extra.file,
                 extra,
-                'ref.png',
-                'image/png',
+                extra.name || 'ref.png',
+                extra.file?.type || 'image/png',
                 job,
                 'reference image'
               );
@@ -3876,6 +3973,18 @@
               existing.input_sources = item.input_sources;
               changed = true;
             }
+            if (item.parameters && typeof item.parameters === 'object' && Object.keys(item.parameters).length > 0 && (!existing.parameters || Object.keys(existing.parameters).length === 0)) {
+              existing.parameters = item.parameters;
+              changed = true;
+            }
+            if (item.prompt && !existing.prompt) {
+              existing.prompt = item.prompt;
+              changed = true;
+            }
+            if (item.input_image_url && !existing.input_image_url) {
+              existing.input_image_url = item.input_image_url;
+              changed = true;
+            }
           } else {
             state.history.push({
               task_id: item.task_id || null,
@@ -4011,32 +4120,148 @@
     }
   }
 
-  function useImageAsInput(urlOrPath, meta = {}) {
-    const raw = String(urlOrPath || '').trim();
-    if (!raw) return;
-    const cleanUrl = raw.startsWith('file://') ? raw.replace(/^file:\/\//, '') : raw;
-    const activeModel = state.selectedModel;
-    const props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
-    const singleKey = getSingleImageSchemaKey(props);
-    const hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
-    const multiKey = getMultiImageSchemaKey(props);
-    const hasMulti = Boolean(multiKey);
+  function inferMediaName(rawUrl, meta = {}) {
+    const explicit = meta.origin_filename || meta.filename || meta.name;
+    if (explicit) return String(explicit);
+    const fpath = meta.filepath || meta.origin_filepath || meta.local_path || '';
+    if (fpath) {
+      const base = String(fpath).split(/[\\/]/).pop();
+      if (base) return base;
+    }
+    const u = String(rawUrl || '');
+    if (u.startsWith('data:')) return 'input_image.png';
+    if (u.startsWith('/api/local-file')) {
+      try {
+        const pVal = new URL(u, 'http://localhost').searchParams.get('path') || '';
+        const base = pVal.split(/[\\/]/).pop();
+        if (base) return base;
+      } catch (e) {}
+    }
+    try {
+      return decodeURIComponent(u.split('?')[0].split('#')[0].split('/').pop() || 'input_image');
+    } catch (e) {
+      return 'input_image';
+    }
+  }
 
-    const name = meta.origin_filename || meta.filename || meta.name || (cleanUrl.startsWith('data:') ? 'input_image' : decodeURIComponent(cleanUrl.split('?')[0].split('#')[0].split('/').pop() || 'input_image'));
+  function applySingleSourceMediaObj(mediaObj) {
+    state.sourceImage = mediaObj;
+    state.sourceImageDimensions = null;
+    if (el.imageUrlInput) el.imageUrlInput.value = mediaObj.url || mediaObj.downloadUrl || '';
+    if (el.imagePreview) {
+      el.imagePreview.onload = () => {
+        if (el.imagePreview.naturalWidth && el.imagePreview.naturalHeight) {
+          state.sourceImageDimensions = {
+            width: el.imagePreview.naturalWidth,
+            height: el.imagePreview.naturalHeight
+          };
+          updateInputQualityAdvisory();
+        }
+      };
+      el.imagePreview.src = mediaObj.previewUrl || mediaObj.url || mediaObj.downloadUrl || '';
+    }
+    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+    const dp = document.getElementById('dropzonePrompt');
+    if (dp) dp.style.display = 'none';
+    setCollapsibleGroupOpen(el.imageInputGroup, el.imageInputBody, el.toggleImageInputBtn, el.imageInputChevron, true);
+  }
+
+  function clearAllSourceImageSlots() {
+    state.sourceImage = null;
+    state.sourceImageDimensions = null;
+    state.lastImage = null;
+    state.extraImages = [];
+    if (el.imageUrlInput) el.imageUrlInput.value = '';
+    if (el.imagePreview) el.imagePreview.src = '';
+    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'none';
+    const dp = document.getElementById('dropzonePrompt');
+    if (dp) dp.style.display = 'block';
+    if (el.lastImageUrlInput) el.lastImageUrlInput.value = '';
+    if (el.lastImagePreview) el.lastImagePreview.src = '';
+    if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'none';
+    if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'block';
+    renderExtraImagesGrid();
+  }
+
+  async function useImageAsInput(urlOrPath, meta = {}) {
+    const raw = String(urlOrPath || '').trim();
+    if (!raw) {
+      showToast('No image URL or path found to load', 'warn');
+      return;
+    }
+    const cleanUrl = normalizeUsableMediaUrl(raw);
+    if (!cleanUrl) return;
+
+    if (el.outputDetailsModal) el.outputDetailsModal.style.display = 'none';
+    if (el.historyDbModal) el.historyDbModal.style.display = 'none';
+    if (el.outputsModal) el.outputsModal.style.display = 'none';
+    if (el.compareModal) el.compareModal.style.display = 'none';
+
+    const name = inferMediaName(cleanUrl, meta);
     const checksum = meta.checksum || meta.file_hash || meta.hash || '';
     const filepath = meta.filepath || meta.origin_filepath || meta.local_path || (cleanUrl.startsWith('/outputs/') ? cleanUrl : '');
 
+    if (state.currentCategory === 'pipeline') {
+      setPipelinePresetFromAsset({
+        name,
+        url: cleanUrl,
+        downloadUrl: cleanUrl,
+        previewUrl: cleanUrl,
+        origin_filename: meta.origin_filename || ''
+      });
+      showToast(`Loaded "${name}" into Pipeline Subject / Face Preset`, 'good');
+      return;
+    }
+
+    let activeModel = state.selectedModel;
+    let props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+    let singleKey = getSingleImageSchemaKey(props);
+    let hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+    let multiKey = getMultiImageSchemaKey(props, activeModel);
+    let hasMulti = Boolean(multiKey);
+
+    // If on Text-to-Image or a model without image slots, auto-switch to Image Edit
+    if (!hasSingle && !hasMulti) {
+      const preferredEditId = ['bytedance/seedream-v5.5/edit', 'wavespeed-ai/qwen-image/edit-plus', 'wavespeed-ai/minimax-h3-image/edit']
+        .find(id => state.models.some(m => m.model_id === id))
+        || state.models.find(m => m.isImageEdit)?.model_id;
+      if (preferredEditId) {
+        await selectModel(preferredEditId, true);
+      } else {
+        const editTabBtn = document.querySelector('.mode-btn[data-category="image-edit"]');
+        if (editTabBtn) editTabBtn.click();
+      }
+      activeModel = state.selectedModel;
+      props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+      singleKey = getSingleImageSchemaKey(props);
+      hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+      multiKey = getMultiImageSchemaKey(props, activeModel);
+      hasMulti = Boolean(multiKey);
+    }
+
+    const secondaryKey = getSecondaryImageSchemaKey(props);
+    const hasSecondarySwap = Boolean(secondaryKey && secondaryKey !== 'last_image');
+    const hasSinglePopulated = Boolean(state.sourceImage && (state.sourceImage.downloadUrl || state.sourceImage.file || state.sourceImage.url));
+
     // Case 1: Model only has multi-image array (like Seedream 5.5 Edit, Qwen Edit Plus, Minimax H3 Edit)
     if (!hasSingle && hasMulti) {
-      addExtraImageUrl(cleanUrl, { name, checksum, filepath, origin_filename: meta.origin_filename, origin_filepath: meta.origin_filepath, origin_url: meta.origin_url });
-      showToast(`Added to reference images (#${state.extraImages.length})`, 'good');
-      if (el.multiImageGroup) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      addExtraImageUrl(cleanUrl, {
+        name,
+        checksum,
+        filepath,
+        origin_filename: meta.origin_filename || '',
+        origin_filepath: meta.origin_filepath || '',
+        origin_url: meta.origin_url || ''
+      });
+      setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
+      showToast(`Added "${name}" to Reference Images (#${state.extraImages.length})`, 'good');
+      if (el.multiImageGroup?.scrollIntoView) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
     // Case 2: Model has single image slot and it is currently empty
-    if (hasSingle && (!state.sourceImage || !state.sourceImage.downloadUrl)) {
-      state.sourceImage = {
+    if (hasSingle && !hasSinglePopulated) {
+      applySingleSourceMediaObj({
         downloadUrl: cleanUrl,
         previewUrl: cleanUrl,
         url: cleanUrl,
@@ -4046,29 +4271,54 @@
         origin_filename: meta.origin_filename || '',
         origin_filepath: meta.origin_filepath || '',
         origin_url: meta.origin_url || ''
-      };
-      if (el.imageUrlInput) el.imageUrlInput.value = cleanUrl;
-      if (el.imagePreview) el.imagePreview.src = cleanUrl;
-      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-      const dp = document.getElementById('dropzonePrompt');
-      if (dp) dp.style.display = 'none';
+      });
       syncMaskBgPreview();
+      updateInputQualityAdvisory();
       if (state.selectedModel) updateModelInfo(state.selectedModel);
-      showToast('Loaded as main source image', 'good');
-      if (el.imageInputGroup) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      showToast(`Loaded "${name}" as main Source Image`, 'good');
+      if (el.imageInputGroup?.scrollIntoView) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
-    // Case 3: Single slot is filled, but model also accepts multi-image references
+    // Case 3: Face/Body swap model with primary slot filled and secondary face/body slot empty
+    if (hasSingle && hasSecondarySwap && !state.lastImage) {
+      state.lastImage = {
+        downloadUrl: cleanUrl,
+        previewUrl: cleanUrl,
+        url: cleanUrl,
+        name,
+        checksum,
+        filepath
+      };
+      if (el.lastImageUrlInput) el.lastImageUrlInput.value = cleanUrl;
+      if (el.lastImagePreview) el.lastImagePreview.src = cleanUrl;
+      if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
+      if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
+      setCollapsibleGroupOpen(el.lastImageGroup, el.lastImageBody, el.toggleLastImageBtn, el.lastImageChevron, true);
+      if (state.selectedModel) updateModelInfo(state.selectedModel);
+      showToast(`Loaded "${name}" into ${secondaryKey}`, 'good');
+      if (el.lastImageGroup?.scrollIntoView) el.lastImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
+    // Case 4: Single slot is filled, and model also accepts multi-image references
     if (hasMulti) {
-      addExtraImageUrl(cleanUrl, { name, checksum, filepath, origin_filename: meta.origin_filename, origin_filepath: meta.origin_filepath, origin_url: meta.origin_url });
-      showToast(`Added as reference image (#${state.extraImages.length})`, 'good');
-      if (el.multiImageGroup) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      addExtraImageUrl(cleanUrl, {
+        name,
+        checksum,
+        filepath,
+        origin_filename: meta.origin_filename || '',
+        origin_filepath: meta.origin_filepath || '',
+        origin_url: meta.origin_url || ''
+      });
+      setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
+      showToast(`Added "${name}" as Reference Image (#${state.extraImages.length})`, 'good');
+      if (el.multiImageGroup?.scrollIntoView) el.multiImageGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
-    // Case 4: Single slot only, overwrite with new image
-    state.sourceImage = {
+    // Case 5: Single slot only, overwrite with new image
+    applySingleSourceMediaObj({
       downloadUrl: cleanUrl,
       previewUrl: cleanUrl,
       url: cleanUrl,
@@ -4078,16 +4328,12 @@
       origin_filename: meta.origin_filename || '',
       origin_filepath: meta.origin_filepath || '',
       origin_url: meta.origin_url || ''
-    };
-    if (el.imageUrlInput) el.imageUrlInput.value = cleanUrl;
-    if (el.imagePreview) el.imagePreview.src = cleanUrl;
-    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-    const dp = document.getElementById('dropzonePrompt');
-    if (dp) dp.style.display = 'none';
+    });
     syncMaskBgPreview();
+    updateInputQualityAdvisory();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
-    showToast('Replaced main source image', 'good');
-    if (el.imageInputGroup) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast(`Replaced main Source Image with "${name}"`, 'good');
+    if (el.imageInputGroup?.scrollIntoView) el.imageInputGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function extractImagesFromItem(item) {
@@ -4097,10 +4343,11 @@
 
     const addImg = (candidate) => {
       if (!candidate) return;
-      const url = String(candidate.url || candidate.downloadUrl || candidate.local_url || candidate.remote_url || candidate.origin_url || candidate.filepath || candidate.origin_filepath || '').trim();
+      const rawUrl = String(candidate.url || candidate.downloadUrl || candidate.local_url || candidate.origin_url || candidate.remote_url || candidate.filepath || candidate.origin_filepath || '').trim();
+      const url = normalizeUsableMediaUrl(rawUrl);
       if (!url || seen.has(url)) return;
       seen.add(url);
-      const name = candidate.origin_filename || candidate.filename || candidate.name || (url.startsWith('data:') ? 'image' : decodeURIComponent(url.split('?')[0].split('#')[0].split('/').pop() || 'image'));
+      const name = inferMediaName(url, candidate);
       images.push({
         url,
         downloadUrl: url,
@@ -4111,6 +4358,8 @@
         origin_filename: candidate.origin_filename || '',
         origin_filepath: candidate.origin_filepath || '',
         origin_url: candidate.origin_url || '',
+        remote_url: candidate.remote_url || '',
+        local_url: candidate.local_url || '',
         slot: candidate.slot || ''
       });
     };
@@ -4132,12 +4381,18 @@
       }
     }
 
-    const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
+    let params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : null;
+    if (!params && typeof item.parameters_json === 'string' && item.parameters_json.trim()) {
+      try { params = JSON.parse(item.parameters_json); } catch (e) {}
+    }
+    params = params || {};
     if (Array.isArray(params.images)) params.images.forEach(u => addImg({ url: u }));
     if (Array.isArray(params.reference_images)) params.reference_images.forEach(u => addImg({ url: u }));
     if (params.image) addImg({ url: params.image, slot: 'image' });
-    if (params.face_image) addImg({ url: params.face_image, slot: 'face_image' });
     if (params.target_image) addImg({ url: params.target_image, slot: 'target_image' });
+    if (params.face_image) addImg({ url: params.face_image, slot: 'face_image' });
+    if (params.source_image) addImg({ url: params.source_image, slot: 'source_image' });
+    if (params.body_image) addImg({ url: params.body_image, slot: 'body_image' });
     if (params.last_image) addImg({ url: params.last_image, slot: 'last_image' });
     if (item.input_image_url) addImg({ url: item.input_image_url, slot: 'input_image' });
 
@@ -4353,17 +4608,49 @@
 
   async function reuseHistoryRun(item, onlyInputMedia = false) {
     if (!item) return;
-    if (!onlyInputMedia && item.model_id && state.models.some(m => m.model_id === item.model_id)) {
-      await selectModel(item.model_id, true);
+
+    let targetItem = { ...item };
+    const hasMissingParams = !targetItem.parameters || Object.keys(targetItem.parameters).length === 0;
+    const hasMissingSources = (!Array.isArray(targetItem.input_sources) || targetItem.input_sources.length === 0) && !targetItem.input_image_url;
+    if (targetItem.task_id && (hasMissingParams || hasMissingSources)) {
+      try {
+        const res = await fetch(`/api/history?q=${encodeURIComponent(targetItem.task_id)}&limit=5`);
+        if (res && res.ok) {
+          const j = await res.json();
+          const match = Array.isArray(j?.items) ? j.items.find(r => r.task_id === targetItem.task_id) : null;
+          if (match) {
+            targetItem = {
+              ...targetItem,
+              ...match,
+              parameters: (match.parameters && Object.keys(match.parameters).length > 0) ? match.parameters : targetItem.parameters,
+              input_sources: (Array.isArray(match.input_sources) && match.input_sources.length > 0) ? match.input_sources : targetItem.input_sources
+            };
+          }
+        }
+      } catch (e) {}
     }
 
-    const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
+    if (!onlyInputMedia && targetItem.model_id && state.models.some(m => m.model_id === targetItem.model_id)) {
+      await selectModel(targetItem.model_id, true);
+    }
+
+    let params = (targetItem.parameters && typeof targetItem.parameters === 'object') ? targetItem.parameters : null;
+    if (!params && typeof targetItem.parameters_json === 'string' && targetItem.parameters_json.trim()) {
+      try { params = JSON.parse(targetItem.parameters_json); } catch (e) {}
+    }
+    params = params || {};
+
     if (!onlyInputMedia) {
-      if (item.prompt && el.promptInput) {
-        el.promptInput.value = item.prompt;
+      if (targetItem.prompt !== undefined && el.promptInput) {
+        el.promptInput.value = targetItem.prompt || '';
       }
-      if (params.negative_prompt !== undefined && el.negativePromptInput) {
-        el.negativePromptInput.value = params.negative_prompt || '';
+      if (el.negativePromptInput) {
+        if (params.negative_prompt !== undefined && params.negative_prompt) {
+          el.negativePromptInput.value = params.negative_prompt;
+          setCollapsibleGroupOpen(el.negativePromptGroup, el.negativePromptBody, el.toggleNegativePromptBtn, el.negativePromptChevron, true);
+        } else if (params.negative_prompt !== undefined) {
+          el.negativePromptInput.value = '';
+        }
       }
       const resVal = params.resolution || params.target_resolution;
       if (resVal && el.resolutionSelect && Array.from(el.resolutionSelect.options).some(o => o.value === resVal)) {
@@ -4404,30 +4691,88 @@
           el.audioCheckbox.checked = Boolean(params[savedAudioKey]);
         }
       }
+      if (params.movement_amplitude && el.movementAmpSelect && Array.from(el.movementAmpSelect.options).some(o => o.value === params.movement_amplitude)) {
+        el.movementAmpSelect.value = params.movement_amplitude;
+      }
+      if (params.shot_type && el.shotTypeSelect && Array.from(el.shotTypeSelect.options).some(o => o.value === params.shot_type)) {
+        el.shotTypeSelect.value = params.shot_type;
+      }
+      if (params.preset && el.presetSelect && Array.from(el.presetSelect.options).some(o => o.value === params.preset)) {
+        el.presetSelect.value = params.preset;
+      }
+      if (params.camera_fixed !== undefined && el.cameraFixedCheckbox) {
+        el.cameraFixedCheckbox.checked = Boolean(params.camera_fixed);
+      }
+      if (params.horizontal_angle !== undefined && el.horizontalAngleSlider) {
+        el.horizontalAngleSlider.value = String(params.horizontal_angle);
+        if (el.horizontalAngleValue) el.horizontalAngleValue.textContent = `${params.horizontal_angle}°`;
+        if (el.horizontalAnglePills) {
+          el.horizontalAnglePills.querySelectorAll('.ratio-pill').forEach(b => {
+            b.classList.toggle('active', Number(b.dataset.hangle) === Number(params.horizontal_angle));
+          });
+        }
+      }
+      if (params.vertical_angle !== undefined && el.verticalAngleSelect) {
+        el.verticalAngleSelect.value = String(params.vertical_angle);
+      }
+      if (params.distance !== undefined && el.cameraDistanceSelect) {
+        el.cameraDistanceSelect.value = String(params.distance);
+      }
+      updateAngleReadout();
     }
 
     // Determine target model schema & input capability
-    const activeModel = state.selectedModel;
-    const props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
-    const singleKey = getSingleImageSchemaKey(props);
-    const hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
-    const multiKey = getMultiImageSchemaKey(props);
-    const hasMulti = Boolean(multiKey);
-    const lastKey = getLastImageSchemaKey(props);
-    const hasLast = Boolean(lastKey);
+    let activeModel = state.selectedModel;
+    let props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+    let singleKey = getSingleImageSchemaKey(props);
+    let hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+    let multiKey = getMultiImageSchemaKey(props, activeModel);
+    let hasMulti = Boolean(multiKey);
+    let lastKey = getLastImageSchemaKey(props);
+    let hasLast = Boolean(lastKey);
 
-    const extractedImages = extractImagesFromItem(item);
+    const extractedImages = extractImagesFromItem(targetItem);
+
+    // If reusing inputs while on Text-to-Image (no image slots), switch to Image Edit automatically
+    if (onlyInputMedia && !hasSingle && !hasMulti) {
+      const preferredEditId = ['bytedance/seedream-v5.5/edit', 'wavespeed-ai/qwen-image/edit-plus', 'wavespeed-ai/minimax-h3-image/edit']
+        .find(id => state.models.some(m => m.model_id === id))
+        || state.models.find(m => m.isImageEdit)?.model_id;
+      if (preferredEditId) {
+        await selectModel(preferredEditId, true);
+      } else {
+        const editTabBtn = document.querySelector('.mode-btn[data-category="image-edit"]');
+        if (editTabBtn) editTabBtn.click();
+      }
+      activeModel = state.selectedModel;
+      props = (activeModel && activeModel.schema && activeModel.schema.properties) ? activeModel.schema.properties : {};
+      singleKey = getSingleImageSchemaKey(props);
+      hasSingle = Boolean(singleKey || activeModel?.isImageToVideo);
+      multiKey = getMultiImageSchemaKey(props, activeModel);
+      hasMulti = Boolean(multiKey);
+      lastKey = getLastImageSchemaKey(props);
+      hasLast = Boolean(lastKey);
+    }
+
+    // If "Reuse Input Image(s)" is clicked on an item with no recorded input images, fall back cleanly to loading its output image
+    if (onlyInputMedia && extractedImages.length === 0) {
+      const fallbackOut = targetItem.local_url || targetItem.url || targetItem.remote_url || '';
+      if (fallbackOut && !targetItem.isVideo && !targetItem.is_video) {
+        await useImageAsInput(fallbackOut, targetItem);
+        return;
+      }
+      if (el.historyDbModal) el.historyDbModal.style.display = 'none';
+      if (el.outputDetailsModal) el.outputDetailsModal.style.display = 'none';
+      showToast('No input images recorded for this run', 'warn');
+      return;
+    }
+
+    // Reset stale image slots before loading the reused run's images
+    clearAllSourceImageSlots();
 
     if (extractedImages.length > 0) {
       if (!hasSingle && hasMulti) {
         // Pure multi-image model (e.g. Seedream 5.5 Edit, Qwen Edit Plus, Minimax H3 Image Edit)
-        state.sourceImage = null;
-        state.lastImage = null;
-        state.extraImages = [];
-        if (el.imageUrlInput) el.imageUrlInput.value = '';
-        if (el.imagePreview) el.imagePreview.src = '';
-        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'none';
-
         extractedImages.forEach((imgObj, idx) => {
           addExtraImageUrl(imgObj.url, {
             name: imgObj.name || `image_${idx + 1}`,
@@ -4438,12 +4783,10 @@
             origin_url: imgObj.origin_url || ''
           });
         });
-        renderExtraImagesGrid();
+        setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
       } else if (hasSingle) {
-        // Model with primary image slot
-        state.extraImages = [];
         const primary = extractedImages[0];
-        state.sourceImage = {
+        applySingleSourceMediaObj({
           downloadUrl: primary.url,
           previewUrl: primary.url,
           url: primary.url,
@@ -4453,14 +4796,9 @@
           origin_filename: primary.origin_filename || '',
           origin_filepath: primary.origin_filepath || '',
           origin_url: primary.origin_url || ''
-        };
-        if (el.imageUrlInput) el.imageUrlInput.value = primary.url;
-        if (el.imagePreview) el.imagePreview.src = primary.url;
-        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-        const dp = document.getElementById('dropzonePrompt');
-        if (dp) dp.style.display = 'none';
+        });
 
-        let extraSlice = extractedImages.slice(1);
+        const extraSlice = extractedImages.slice(1);
         if (hasLast && extraSlice.length > 0) {
           const secondary = extraSlice.shift();
           state.lastImage = {
@@ -4474,6 +4812,8 @@
           if (el.lastImageUrlInput) el.lastImageUrlInput.value = secondary.url;
           if (el.lastImagePreview) el.lastImagePreview.src = secondary.url;
           if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
+          if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
+          setCollapsibleGroupOpen(el.lastImageGroup, el.lastImageBody, el.toggleLastImageBtn, el.lastImageChevron, true);
         }
 
         if (hasMulti && extraSlice.length > 0) {
@@ -4487,8 +4827,8 @@
               origin_url: imgObj.origin_url || ''
             });
           });
+          setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
         }
-        renderExtraImagesGrid();
       } else {
         const primary = extractedImages[0];
         state.sourceImage = {
@@ -4502,11 +4842,13 @@
       }
     }
 
-    const vidInputUrl = item.input_video_url || params.video;
+    const vidInputUrl = targetItem.input_video_url || params.video;
     if (vidInputUrl && el.videoUrlInput) {
-      state.sourceVideo = { url: vidInputUrl, downloadUrl: vidInputUrl };
-      el.videoUrlInput.value = vidInputUrl;
+      const normVid = normalizeUsableMediaUrl(vidInputUrl);
+      state.sourceVideo = { url: normVid, downloadUrl: normVid };
+      el.videoUrlInput.value = normVid;
       if (el.openSourceVideoTimelineBtn) el.openSourceVideoTimelineBtn.style.display = 'inline-flex';
+      setCollapsibleGroupOpen(el.videoInputGroup, el.videoInputBody, el.toggleVideoInputBtn, el.videoInputChevron, true);
     }
 
     const restoredRefVids = params.reference_videos || params.videos || params.ref_videos;
@@ -4522,6 +4864,7 @@
         duration: null
       }));
       renderRefVideosList();
+      setCollapsibleGroupOpen(el.refVideosGroup, el.refVideosBody, el.toggleRefVideosBtn, el.refVideosChevron, true);
     }
 
     const restoredAuds = params.reference_audios || params.audios || (params.audio ? [params.audio] : []);
@@ -4534,24 +4877,26 @@
         duration: null
       }));
       renderRefAudiosList();
+      setCollapsibleGroupOpen(el.refAudiosGroup, el.refAudiosBody, el.toggleRefAudiosBtn, el.refAudiosChevron, true);
     }
 
     syncMaskBgPreview();
+    updateInputQualityAdvisory();
     if (state.selectedModel) updateModelInfo(state.selectedModel);
 
     if (el.historyDbModal) el.historyDbModal.style.display = 'none';
     if (el.outputDetailsModal) el.outputDetailsModal.style.display = 'none';
 
     if (onlyInputMedia) {
-      showToast(extractedImages.length > 0 ? `Restored ${extractedImages.length} input image(s)` : 'No input images found for this run', extractedImages.length > 0 ? 'good' : 'warn');
+      showToast(`Restored ${extractedImages.length} input image(s)`, 'good');
     } else {
-      showToast(`Loaded recipe from ${item.model_id || 'history'} (${extractedImages.length} image(s))`, 'good');
+      showToast(`Loaded recipe from ${targetItem.model_id || 'history'} (${extractedImages.length} image(s))`, 'good');
     }
 
     const scrollTarget = (el.multiImageGroup && el.multiImageGroup.style.display !== 'none')
       ? el.multiImageGroup
       : (el.imageInputGroup && el.imageInputGroup.style.display !== 'none' ? el.imageInputGroup : el.promptInput);
-    if (scrollTarget) {
+    if (scrollTarget?.scrollIntoView) {
       scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
@@ -4660,23 +5005,44 @@
       if (srcItems.length > 0) {
         const sBox = document.createElement('div');
         sBox.className = 'history-db-sources';
-        sBox.innerHTML = `
-          <div style="font-weight:600;margin-bottom:3px;">📎 Input Sources (${srcItems.length}):</div>
-          <div class="history-source-item-row">
-            ${srcItems.map(s => {
-              const fname = s.origin_filename || s.filename || 'source';
-              const fpath = s.filepath || s.origin_filepath || '';
-              const cs = s.checksum ? `SHA:${s.checksum.slice(0,6)}` : '';
-              return `
-                <span class="badge-tag" style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;">
-                  ${escapeHtml(fname)} ${cs ? `<span class="source-checksum-badge">${escapeHtml(cs)}</span>` : ''}
-                  ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" style="padding:0 3px;" title="Open folder">📂</button>` : ''}
-                  <button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(s.local_url || s.origin_url || s.remote_url || s.filepath)}', { origin_filename: '${escapeHtml(s.origin_filename||'')}', filename: '${escapeHtml(s.filename||'')}', checksum: '${escapeHtml(s.checksum||'')}', filepath: '${escapeHtml(fpath)}' })" style="padding:0 3px;" title="Load into Studio inputs">➕</button>
-                </span>
-              `;
-            }).join('')}
-          </div>
-        `;
+        const headerDiv = document.createElement('div');
+        headerDiv.style.cssText = 'font-weight:600;margin-bottom:3px;';
+        headerDiv.textContent = `📎 Input Sources (${srcItems.length}):`;
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'history-source-item-row';
+        srcItems.forEach((s) => {
+          const fname = s.origin_filename || s.filename || 'source';
+          const fpath = s.filepath || s.origin_filepath || '';
+          const cs = s.checksum ? `SHA:${s.checksum.slice(0, 6)}` : '';
+          const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || '';
+          const chip = document.createElement('span');
+          chip.className = 'badge-tag';
+          chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;';
+          chip.innerHTML = `${escapeHtml(fname)} ${cs ? `<span class="source-checksum-badge">${escapeHtml(cs)}</span>` : ''}`;
+          if (fpath) {
+            const fBtn = document.createElement('button');
+            fBtn.type = 'button';
+            fBtn.className = 'btn-tiny';
+            fBtn.style.padding = '0 3px';
+            fBtn.title = 'Open folder';
+            fBtn.textContent = '📂';
+            fBtn.addEventListener('click', () => openLocalFolder(fpath));
+            chip.appendChild(fBtn);
+          }
+          if (loadUrl) {
+            const uBtn = document.createElement('button');
+            uBtn.type = 'button';
+            uBtn.className = 'btn-tiny';
+            uBtn.style.padding = '0 3px';
+            uBtn.title = 'Load into Studio inputs';
+            uBtn.textContent = '➕';
+            uBtn.addEventListener('click', () => useImageAsInput(loadUrl, s));
+            chip.appendChild(uBtn);
+          }
+          rowDiv.appendChild(chip);
+        });
+        sBox.appendChild(headerDiv);
+        sBox.appendChild(rowDiv);
         main.appendChild(sBox);
       } else if (item.input_filenames || item.input_image_url) {
         const sBox = document.createElement('div');
@@ -4737,6 +5103,16 @@
         reuseImgBtn.textContent = '🖼️ Reuse Input Image(s)';
         reuseImgBtn.addEventListener('click', () => reuseHistoryRun(item, true));
         actions.appendChild(reuseImgBtn);
+      }
+
+      if (isOk && !item.is_video && outputSrc) {
+        const useOutBtn = document.createElement('button');
+        useOutBtn.type = 'button';
+        useOutBtn.className = 'btn-action-tool';
+        useOutBtn.textContent = '➕ Use Output';
+        useOutBtn.title = 'Load this generated output image into active Studio inputs';
+        useOutBtn.addEventListener('click', () => useImageAsInput(outputSrc, item));
+        actions.appendChild(useOutBtn);
       }
 
       const detailsBtn = document.createElement('button');
@@ -5135,7 +5511,7 @@
 
   function getItemSourceIdentity(item) {
     if (!item) {
-      return { key: 'none', label: '✍️ Text-to-Image', filename: '', checksum: '', filepath: '', local_url: '' };
+      return { key: 'none', label: '✍️ Text-to-Image', filename: '', checksum: '', filepath: '', local_url: '', remote_url: '', url: '' };
     }
     let sources = [];
     if (Array.isArray(item.input_sources) && item.input_sources.length > 0) {
@@ -5148,8 +5524,12 @@
     }
 
     if (sources.length === 0) {
-      const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
-      const fallbackUrl = item.input_image_url || params.image || (Array.isArray(params.images) ? params.images[0] : null);
+      let params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : null;
+      if (!params && typeof item.parameters_json === 'string' && item.parameters_json.trim()) {
+        try { params = JSON.parse(item.parameters_json); } catch (e) {}
+      }
+      params = params || {};
+      const fallbackUrl = item.input_image_url || params.image || params.target_image || (Array.isArray(params.images) ? params.images[0] : null) || (Array.isArray(params.reference_images) ? params.reference_images[0] : null);
       if (fallbackUrl) {
         const fname = String(fallbackUrl).split('?')[0].split('/').pop() || 'input_image';
         return {
@@ -5158,7 +5538,9 @@
           filename: fname,
           checksum: '',
           filepath: fallbackUrl.startsWith('/outputs/') ? fallbackUrl : '',
-          local_url: fallbackUrl
+          local_url: fallbackUrl.startsWith('/outputs/') ? fallbackUrl : '',
+          remote_url: /^https?:\/\//i.test(fallbackUrl) ? fallbackUrl : '',
+          url: fallbackUrl
         };
       }
       return {
@@ -5167,7 +5549,9 @@
         filename: '',
         checksum: '',
         filepath: '',
-        local_url: ''
+        local_url: '',
+        remote_url: '',
+        url: ''
       };
     }
 
@@ -5176,6 +5560,7 @@
     const fname = primary.origin_filename || primary.filename || '';
     const key = checksum ? `hash:${checksum}` : (fname ? `name:${fname.toLowerCase()}` : 'none');
     const label = fname ? `🖼️ ${fname}` : (checksum ? `SHA: ${checksum.slice(0, 8)}...` : 'Unknown Source');
+    const bestUrl = primary.local_url || primary.origin_url || primary.remote_url || primary.filepath || '';
 
     return {
       key,
@@ -5183,7 +5568,9 @@
       filename: fname,
       checksum,
       filepath: primary.filepath || primary.origin_filepath || '',
-      local_url: primary.local_url || primary.origin_url || ''
+      local_url: primary.local_url || primary.origin_url || '',
+      remote_url: primary.remote_url || '',
+      url: bestUrl
     };
   }
 
@@ -5542,6 +5929,9 @@
       }
       el.multiImgGrid.appendChild(box);
     });
+    if (el.multiImageCountBadge) {
+      el.multiImageCountBadge.textContent = `${state.extraImages.length} loaded`;
+    }
     syncMaskBgPreview();
   }
 
@@ -5565,10 +5955,10 @@
   }
 
   function addExtraImageUrl(url, meta = {}) {
-    const clean = String(url || '').trim();
+    const clean = normalizeUsableMediaUrl(url);
     if (!clean) return;
     const id = `ref-url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const inferredName = clean.startsWith('data:') ? '' : decodeURIComponent(clean.split('?')[0].split('#')[0].split('/').pop() || '');
+    const inferredName = inferMediaName(clean, meta);
     state.extraImages.push({
       id,
       file: null,
@@ -5810,7 +6200,7 @@
           useInputBtn.textContent = '➕ Use as Input';
           useInputBtn.title = 'Load this source image into active Studio inputs';
           useInputBtn.addEventListener('click', () => {
-            useImageAsInput(group.ident.local_url || group.ident.filepath, {
+            useImageAsInput(group.ident.url || group.ident.local_url || group.ident.remote_url || group.ident.filepath, {
               origin_filename: group.ident.filename,
               filename: group.ident.filename,
               checksum: group.ident.checksum,
@@ -5859,7 +6249,9 @@
     const preferredUrl = item.local_url || item.url || item.remote_url || '';
     const isVideo = Boolean(item.isVideo || item.is_video);
     const params = (item.parameters && typeof item.parameters === 'object') ? item.parameters : {};
-    const sources = Array.isArray(item.input_sources) ? item.input_sources : [];
+    const sources = (Array.isArray(item.input_sources) && item.input_sources.length > 0)
+      ? item.input_sources
+      : extractImagesFromItem(item);
     const localPath = item.local_path || (preferredUrl.startsWith('/outputs/') ? preferredUrl : '');
 
     if (el.outputDetailsTitle) {
@@ -5885,11 +6277,11 @@
           </h4>
           <div class="source-provenance-list">
             ${sources.map((s, idx) => {
-              const fname = s.origin_filename || s.filename || `source_${idx + 1}`;
-              const origTag = (s.origin_filename && s.origin_filename !== s.filename) ? ` <span class="badge-tag" style="font-size:0.62rem;">origin: ${escapeHtml(s.origin_filename)}</span>` : '';
+              const fname = s.origin_filename || s.filename || s.name || `source_${idx + 1}`;
+              const origTag = (s.origin_filename && s.filename && s.origin_filename !== s.filename) ? ` <span class="badge-tag" style="font-size:0.62rem;">origin: ${escapeHtml(s.origin_filename)}</span>` : '';
               const checksumTag = s.checksum ? `<span class="source-checksum-badge" title="SHA-256 Checksum: ${escapeHtml(s.checksum)}">SHA: ${escapeHtml(s.checksum.slice(0, 10))}...</span>` : '';
               const fpath = s.filepath || s.origin_filepath || s.local_url || '';
-              const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || '';
+              const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || s.url || '';
               return `
                 <div class="source-provenance-card">
                   <div class="source-provenance-header">
@@ -5898,8 +6290,8 @@
                     </span>
                     <div style="display:flex;align-items:center;gap:4px;">
                       ${checksumTag}
-                      ${loadUrl ? `<button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(loadUrl)}', { origin_filename: '${escapeHtml(s.origin_filename || '')}', filename: '${escapeHtml(s.filename || '')}', checksum: '${escapeHtml(s.checksum || '')}', filepath: '${escapeHtml(fpath)}' })" title="Load into Studio inputs">➕ Use as Source</button>` : ''}
-                      ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" title="Open folder containing this source">📂 Folder</button>` : ''}
+                      ${loadUrl ? `<button type="button" class="btn-tiny" data-det-use-src="${idx}" title="Load into Studio inputs">➕ Use as Source</button>` : ''}
+                      ${fpath ? `<button type="button" class="btn-tiny" data-det-folder-src="${idx}" title="Open folder containing this source">📂 Folder</button>` : ''}
                     </div>
                   </div>
                   ${fpath ? `<div class="source-folder-path" title="${escapeHtml(fpath)}">📁 ${escapeHtml(fpath)}</div>` : ''}
@@ -5933,7 +6325,7 @@
           <div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
               <strong style="font-size:0.78rem;color:var(--text-muted);">PROMPT</strong>
-              ${item.prompt ? `<button type="button" class="btn-tiny" onclick="window.wsAppCopyText(${JSON.stringify(item.prompt)})">📋 Copy</button>` : ''}
+              ${item.prompt ? `<button type="button" class="btn-tiny" id="detailsCopyPromptBtn">📋 Copy</button>` : ''}
             </div>
             <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:8px 10px;border-radius:6px;font-size:0.78rem;line-height:1.4;max-height:120px;overflow-y:auto;word-break:break-word;">
               ${escapeHtml(item.prompt || 'No prompt recorded')}
@@ -5962,8 +6354,8 @@
             <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;">
               <span style="color:var(--text-muted);white-space:nowrap;">Output Path:</span>
               <span class="source-folder-path" style="flex:1;" title="${escapeHtml(localPath)}">${escapeHtml(localPath)}</span>
-              <button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(localPath)}')">📂 Open</button>
-              <button type="button" class="btn-tiny" onclick="window.wsAppCopyText('${escapeHtml(localPath)}')">📋 Copy</button>
+              <button type="button" class="btn-tiny" id="detailsOpenOutFolderBtn">📂 Open</button>
+              <button type="button" class="btn-tiny" id="detailsCopyOutPathBtn">📋 Copy</button>
             </div>
           ` : ''}
 
@@ -5978,6 +6370,37 @@
         <button type="button" class="btn-secondary-sm" id="detailsCompareBtn">⚖️ Pin Compare</button>
       </div>
     `;
+
+    const detCopyPrompt = document.getElementById('detailsCopyPromptBtn');
+    if (detCopyPrompt && item.prompt) {
+      detCopyPrompt.addEventListener('click', () => {
+        copyTextSafe(item.prompt).then(ok => { if (ok) showToast('Prompt copied to clipboard', 'good'); });
+      });
+    }
+    const detOpenOut = document.getElementById('detailsOpenOutFolderBtn');
+    if (detOpenOut && localPath) detOpenOut.addEventListener('click', () => openLocalFolder(localPath));
+    const detCopyOut = document.getElementById('detailsCopyOutPathBtn');
+    if (detCopyOut && localPath) {
+      detCopyOut.addEventListener('click', () => {
+        copyTextSafe(localPath).then(ok => { if (ok) showToast('Copied path to clipboard', 'good'); });
+      });
+    }
+    if (typeof el.outputDetailsBody.querySelectorAll === 'function') {
+      el.outputDetailsBody.querySelectorAll('[data-det-use-src]').forEach(btn => {
+        const idx = parseInt(btn.dataset.detUseSrc, 10);
+        const s = sources[idx];
+        if (!s) return;
+        const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || s.url || '';
+        btn.addEventListener('click', () => useImageAsInput(loadUrl, s));
+      });
+      el.outputDetailsBody.querySelectorAll('[data-det-folder-src]').forEach(btn => {
+        const idx = parseInt(btn.dataset.detFolderSrc, 10);
+        const s = sources[idx];
+        if (!s) return;
+        const fpath = s.filepath || s.origin_filepath || s.local_url || '';
+        btn.addEventListener('click', () => openLocalFolder(fpath));
+      });
+    }
 
     const reuseSetupBtn = document.getElementById('detailsReuseSetupBtn');
     if (reuseSetupBtn) reuseSetupBtn.addEventListener('click', () => reuseHistoryRun(item, false));
@@ -5999,12 +6422,14 @@
       return;
     }
     el.activeOutputInspector.style.display = 'flex';
-    const srcArr = Array.isArray(item.input_sources) ? item.input_sources : [];
+    const srcArr = (Array.isArray(item.input_sources) && item.input_sources.length > 0)
+      ? item.input_sources
+      : extractImagesFromItem(item);
     const srcText = srcArr.length > 0
       ? srcArr.map(s => {
-          const namePart = s.filename || s.local_url || s.remote_url || '';
+          const namePart = s.filename || s.name || s.local_url || s.remote_url || '';
           const origPart = s.origin_filename && s.origin_filename !== s.filename ? ` (from ${s.origin_filename})` : '';
-          return namePart ? `${s.slot}: ${namePart}${origPart}` : '';
+          return namePart ? `${s.slot || 'input'}: ${namePart}${origPart}` : '';
         }).filter(Boolean).join(' • ')
       : (item.input_filenames || (item.input_image_url ? String(item.input_image_url).split('/').pop() : ''));
     const hasComposite = Boolean(state.activeCompositeMaskedUrl && state.activeCompositeRawUrl);
@@ -6028,21 +6453,39 @@
       ${srcText ? `<div class="inspector-sources-line">📎 Inputs: ${escapeHtml(srcText)}</div>` : ''}
       ${srcArr.length > 0 ? `
         <div class="history-source-item-row" style="margin-top:2px;">
-          ${srcArr.map(s => {
-            const fname = s.origin_filename || s.filename || 'source';
+          ${srcArr.map((s, idx) => {
+            const fname = s.origin_filename || s.filename || s.name || 'source';
             const fpath = s.filepath || s.origin_filepath || '';
             const cs = s.checksum ? `SHA:${s.checksum.slice(0,6)}` : '';
+            const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || s.url || '';
             return `
               <span class="badge-tag" style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;">
                 ${escapeHtml(fname)} ${cs ? `<span class="source-checksum-badge">${escapeHtml(cs)}</span>` : ''}
-                ${fpath ? `<button type="button" class="btn-tiny" onclick="window.wsAppOpenFolder('${escapeHtml(fpath)}')" style="padding:0 3px;" title="Open folder">📂</button>` : ''}
-                <button type="button" class="btn-tiny" onclick="window.wsAppUseInput('${escapeHtml(s.local_url || s.origin_url || s.remote_url || s.filepath)}', { origin_filename: '${escapeHtml(s.origin_filename||'')}', filename: '${escapeHtml(s.filename||'')}', checksum: '${escapeHtml(s.checksum||'')}', filepath: '${escapeHtml(fpath)}' })" style="padding:0 3px;" title="Load into Studio inputs">➕</button>
+                ${fpath ? `<button type="button" class="btn-tiny" data-insp-folder-src="${idx}" style="padding:0 3px;" title="Open folder">📂</button>` : ''}
+                ${loadUrl ? `<button type="button" class="btn-tiny" data-insp-use-src="${idx}" style="padding:0 3px;" title="Load into Studio inputs">➕</button>` : ''}
               </span>
             `;
           }).join('')}
         </div>
       ` : ''}
     `;
+
+    if (typeof el.activeOutputInspector.querySelectorAll === 'function') {
+      el.activeOutputInspector.querySelectorAll('[data-insp-use-src]').forEach(btn => {
+        const idx = parseInt(btn.dataset.inspUseSrc, 10);
+        const s = srcArr[idx];
+        if (!s) return;
+        const loadUrl = s.local_url || s.origin_url || s.remote_url || s.filepath || s.url || '';
+        btn.addEventListener('click', () => useImageAsInput(loadUrl, s));
+      });
+      el.activeOutputInspector.querySelectorAll('[data-insp-folder-src]').forEach(btn => {
+        const idx = parseInt(btn.dataset.inspFolderSrc, 10);
+        const s = srcArr[idx];
+        if (!s) return;
+        const fpath = s.filepath || s.origin_filepath || s.local_url || '';
+        btn.addEventListener('click', () => openLocalFolder(fpath));
+      });
+    }
 
     const detailsBtn = document.getElementById('inspectorDetailsBtn');
     const openFldrBtn = document.getElementById('inspectorOpenFolderBtn');
@@ -6077,6 +6520,7 @@
         el.sendToEditBtn?.click();
         await selectModel('wavespeed-ai/flux-fill-dev', true).catch(() => {});
         syncMaskBgPreview();
+        setCollapsibleGroupOpen(el.maskCanvasGroup, el.maskCanvasBody, el.toggleMaskCanvasBtn, el.maskCanvasChevron, true);
         showToast('Loaded into Flux Fill Dev — paint over the region you want edited.', 'good', 3200);
       });
     }
@@ -7158,19 +7602,17 @@
     }
 
     // Send to Edit Button
-    el.sendToEditBtn.addEventListener('click', () => {
+    el.sendToEditBtn.addEventListener('click', async () => {
       const currentImgUrl = el.outputImageViewer.src;
       if (!currentImgUrl) return;
       const preferredPayloadUrl = state.activeLocalUrl || state.activeRemoteUrl || currentImgUrl;
 
-      const editBtn = document.querySelector('.mode-btn[data-category="image-edit"]');
-      if (editBtn) editBtn.click();
-
-      state.sourceImage = { url: currentImgUrl, downloadUrl: preferredPayloadUrl };
-      el.imagePreview.src = currentImgUrl;
-      el.imagePreviewContainer.style.display = 'flex';
-      document.getElementById('dropzonePrompt').style.display = 'none';
-      el.imageUrlInput.value = preferredPayloadUrl;
+      if (!state.selectedModel?.isImageEdit) {
+        const editBtn = document.querySelector('.mode-btn[data-category="image-edit"]');
+        if (editBtn) editBtn.click();
+      }
+      clearAllSourceImageSlots();
+      await useImageAsInput(preferredPayloadUrl, state.activeOutputItem || {});
     });
 
     // Download Output Button
@@ -7826,9 +8268,37 @@
         const targetId = exists ? 'wavespeed-ai/flux-fill-dev' : 'wavespeed-ai/flux-schnell';
         await selectModel(targetId, true);
         syncMaskBgPreview();
+        setCollapsibleGroupOpen(el.maskCanvasGroup, el.maskCanvasBody, el.toggleMaskCanvasBtn, el.maskCanvasChevron, true);
         showToast(`Switched to ${targetId} (mask ready to paint & run!)`, 'good', 3200);
       });
     }
+
+    // Quick-Run Generation Shortcut Buttons (near Prompt, Source Image & Reference Images)
+    [el.quickRunPromptBtn, el.quickRunSourceBtn, el.quickRunRefsBtn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => runGeneration());
+      }
+    });
+
+    // Collapsible Input & Settings Section Toggles
+    const collapsibleConfigs = [
+      [el.negativePromptGroup, el.negativePromptBody, el.toggleNegativePromptBtn, el.negativePromptChevron],
+      [el.imageInputGroup, el.imageInputBody, el.toggleImageInputBtn, el.imageInputChevron],
+      [el.lastImageGroup, el.lastImageBody, el.toggleLastImageBtn, el.lastImageChevron],
+      [el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron],
+      [el.maskCanvasGroup, el.maskCanvasBody, el.toggleMaskCanvasBtn, el.maskCanvasChevron],
+      [el.videoInputGroup, el.videoInputBody, el.toggleVideoInputBtn, el.videoInputChevron],
+      [el.refVideosGroup, el.refVideosBody, el.toggleRefVideosBtn, el.refVideosChevron],
+      [el.refAudiosGroup, el.refAudiosBody, el.toggleRefAudiosBtn, el.refAudiosChevron],
+      [el.settingsSection, el.settingsSectionBody, el.toggleSettingsSectionBtn, el.settingsSectionChevron]
+    ];
+    collapsibleConfigs.forEach(([groupEl, bodyEl, btnEl, chevEl]) => {
+      if (!btnEl || !bodyEl) return;
+      btnEl.addEventListener('click', () => {
+        const isOpen = bodyEl.style.display !== 'none';
+        setCollapsibleGroupOpen(groupEl, bodyEl, btnEl, chevEl, !isOpen);
+      });
+    });
 
     // Expand Gallery Toggle & Click-to-Zoom Output Viewer Image
     if (el.toggleExpandGalleryBtn) {
@@ -8022,14 +8492,34 @@
       const tabBtn = document.querySelector(`.mode-btn[data-category="${targetCategory}"]`);
       if (tabBtn) tabBtn.click();
 
-      state.sourceImage = { file, url: dataUrl, downloadUrl: null };
-      state.sourceImageDimensions = { width: w, height: h };
-      if (el.imagePreview) el.imagePreview.src = dataUrl;
-      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-      const dp = document.getElementById('dropzonePrompt');
-      if (dp) dp.style.display = 'none';
-      if (el.imageUrlInput) el.imageUrlInput.value = '';
-      updateInputQualityAdvisory();
+      const activeModel = state.selectedModel;
+      const props = activeModel?.schema?.properties || {};
+      const hasSingle = Boolean(getSingleImageSchemaKey(props) || activeModel?.isImageToVideo);
+      const hasMulti = Boolean(getMultiImageSchemaKey(props, activeModel));
+
+      if (!hasSingle && hasMulti) {
+        const id = `ref-frame-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+        state.extraImages = [{
+          id,
+          file,
+          previewUrl: dataUrl,
+          downloadUrl: null,
+          name: fname,
+          role: 'Face ID'
+        }];
+        renderExtraImagesGrid();
+        setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
+      } else {
+        state.sourceImage = { file, url: dataUrl, downloadUrl: null, name: fname };
+        state.sourceImageDimensions = { width: w, height: h };
+        if (el.imagePreview) el.imagePreview.src = dataUrl;
+        if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+        const dp = document.getElementById('dropzonePrompt');
+        if (dp) dp.style.display = 'none';
+        if (el.imageUrlInput) el.imageUrlInput.value = '';
+        updateInputQualityAdvisory();
+        setCollapsibleGroupOpen(el.imageInputGroup, el.imageInputBody, el.toggleImageInputBtn, el.imageInputChevron, true);
+      }
       if (state.selectedModel) updateModelInfo(state.selectedModel);
 
       showToast(
@@ -8728,40 +9218,54 @@
     const file = new File([blob], `timeline-${tLabel}.png`, { type: 'image/png' });
 
     if (targetSlot === 'last') {
-      state.lastImage = { file, url: dataUrl, downloadUrl: null };
+      state.lastImage = { file, url: dataUrl, downloadUrl: null, name: file.name };
       if (el.lastImagePreview) el.lastImagePreview.src = dataUrl;
       if (el.lastImagePreviewContainer) el.lastImagePreviewContainer.style.display = 'flex';
       if (el.lastDropzonePrompt) el.lastDropzonePrompt.style.display = 'none';
       if (el.lastImageUrlInput) el.lastImageUrlInput.value = '';
+      setCollapsibleGroupOpen(el.lastImageGroup, el.lastImageBody, el.toggleLastImageBtn, el.lastImageChevron, true);
       showToast(`Loaded frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) as End Frame`, 'good');
       return;
     }
     if (targetSlot === 'ref') {
       const id = `ref-tl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-      state.extraImages.push({ id, file, previewUrl: dataUrl, downloadUrl: null });
+      state.extraImages.push({ id, file, previewUrl: dataUrl, downloadUrl: null, name: file.name, role: 'Face ID' });
       renderExtraImagesGrid();
+      setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
       if (state.selectedModel) updateModelInfo(state.selectedModel);
       showToast(`Added frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) to Reference Images`, 'good');
       return;
     }
 
     // Default: Source Image (switch to I2V only if current model has no image input at all)
-    const curProps = state.selectedModel?.schema?.properties || {};
-    const curAcceptsSingleImg = Boolean('image' in curProps || state.selectedModel?.isImageToVideo);
-    if (!curAcceptsSingleImg) {
+    let curProps = state.selectedModel?.schema?.properties || {};
+    let curAcceptsSingleImg = Boolean(getSingleImageSchemaKey(curProps) || state.selectedModel?.isImageToVideo);
+    let curAcceptsMultiImg = Boolean(getMultiImageSchemaKey(curProps, state.selectedModel));
+    if (!curAcceptsSingleImg && !curAcceptsMultiImg) {
       const i2vBtn = document.querySelector('.mode-btn[data-category="image-to-video"]');
       if (i2vBtn) i2vBtn.click();
+      curProps = state.selectedModel?.schema?.properties || {};
+      curAcceptsSingleImg = Boolean(getSingleImageSchemaKey(curProps) || state.selectedModel?.isImageToVideo);
+      curAcceptsMultiImg = Boolean(getMultiImageSchemaKey(curProps, state.selectedModel));
     }
-    state.sourceImage = { file, url: dataUrl, downloadUrl: null };
-    state.sourceImageDimensions = { width: w, height: h };
-    if (el.imagePreview) el.imagePreview.src = dataUrl;
-    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-    const dp = document.getElementById('dropzonePrompt');
-    if (dp) dp.style.display = 'none';
-    if (el.imageUrlInput) el.imageUrlInput.value = '';
-    updateInputQualityAdvisory();
+    if (!curAcceptsSingleImg && curAcceptsMultiImg) {
+      const id = `ref-tl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      state.extraImages = [{ id, file, previewUrl: dataUrl, downloadUrl: null, name: file.name, role: 'Face ID' }];
+      renderExtraImagesGrid();
+      setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
+    } else {
+      state.sourceImage = { file, url: dataUrl, downloadUrl: null, name: file.name };
+      state.sourceImageDimensions = { width: w, height: h };
+      if (el.imagePreview) el.imagePreview.src = dataUrl;
+      if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
+      const dp = document.getElementById('dropzonePrompt');
+      if (dp) dp.style.display = 'none';
+      if (el.imageUrlInput) el.imageUrlInput.value = '';
+      updateInputQualityAdvisory();
+      setCollapsibleGroupOpen(el.imageInputGroup, el.imageInputBody, el.toggleImageInputBtn, el.imageInputChevron, true);
+    }
     if (state.selectedModel) updateModelInfo(state.selectedModel);
-    showToast(`Extracted frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) into Source Image ($0.00)`, 'good');
+    showToast(`Extracted frame @ ${formatTimecode(v.currentTime)} (${w}×${h}) into Source ($0.00)`, 'good');
   }
 
   function parseTargetShortEdge(resStr) {
@@ -10573,21 +11077,33 @@
   }
 
   function applyCroppedAsSourceImage(saved) {
-    state.sourceImage = {
-      url: saved.local_url,
-      downloadUrl: saved.local_url,
-      name: saved.filename,
-      origin_filename: saved.origin_filename || '',
-      origin_filepath: saved.origin_filepath || '',
-      origin_url: saved.origin_url || ''
-    };
-    if (el.imageUrlInput) el.imageUrlInput.value = saved.local_url;
-    if (el.imagePreview) el.imagePreview.src = saved.local_url;
-    if (el.imagePreviewContainer) el.imagePreviewContainer.style.display = 'flex';
-    const dp = document.getElementById('dropzonePrompt');
-    if (dp) dp.style.display = 'none';
-    syncMaskBgPreview();
-    showToast(`Set ${saved.filename} as Source Image (origin: ${saved.origin_filename || 'crop'})`, 'good');
+    const activeModel = state.selectedModel;
+    const props = activeModel?.schema?.properties || {};
+    const hasSingle = Boolean(getSingleImageSchemaKey(props) || activeModel?.isImageToVideo);
+    const hasMulti = Boolean(getMultiImageSchemaKey(props, activeModel));
+    if (!hasSingle && hasMulti) {
+      state.extraImages = [];
+      addExtraImageUrl(saved.local_url, {
+        name: saved.filename,
+        origin_filename: saved.origin_filename || '',
+        origin_filepath: saved.origin_filepath || '',
+        origin_url: saved.origin_url || ''
+      });
+      setCollapsibleGroupOpen(el.multiImageGroup, el.multiImageBody, el.toggleMultiImageBtn, el.multiImageChevron, true);
+      showToast(`Set ${saved.filename} as Reference Image (origin: ${saved.origin_filename || 'crop'})`, 'good');
+    } else {
+      applySingleSourceMediaObj({
+        url: saved.local_url,
+        downloadUrl: saved.local_url,
+        name: saved.filename,
+        origin_filename: saved.origin_filename || '',
+        origin_filepath: saved.origin_filepath || '',
+        origin_url: saved.origin_url || ''
+      });
+      syncMaskBgPreview();
+      showToast(`Set ${saved.filename} as Source Image (origin: ${saved.origin_filename || 'crop'})`, 'good');
+    }
+    if (state.selectedModel) updateModelInfo(state.selectedModel);
   }
 
   async function saveCurrentCropToServer() {

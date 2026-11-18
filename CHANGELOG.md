@@ -2,6 +2,25 @@
 
 All notable changes to **WaveSpeed Studio** are documented here.
 
+## [1.3.1] - 2026-11-18
+### Fixed
+- **Source Insertion, Gallery Cards & Reuse Setup Fixes (`useImageAsInput` / `reuseHistoryRun`):**
+  - Defined missing `getMultiImageSchemaKey` and `getLastImageSchemaKey` helpers in `public/app.js` that previously threw uncaught `ReferenceError` failures when clicking `➕ Use as Source`, `🔁 Reuse Setup`, or `🖼️ Reuse Input Image(s)`.
+  - Made `useImageAsInput` cleanly auto-switch out of Text-to-Image (`image-gen`) into `bytedance/seedream-v5.5/edit` when no image input slot is present on the current model, close any open modals, insert single vs multi-image array assets reliably, and unfold the target input section.
+  - Updated `reuseHistoryRun` to clear stale slots (`clearAllSourceImageSlots()`), query `/api/history` as fallback when an item lacks full parameters, restore multi-image arrays, 3D angles, and motion parameters accurately, and avoid wiping an active edit model in `Send to Edit` (`sendToEditBtn`).
+  - Added `/api/local-file` serving (extension-guarded to image/video/audio media) plus local/Ditto disk-path handling in `server.js` (`extractLocalMediaDiskPath`, `resolveLocalMediaUrl`, `resolvePayloadMedia` including `target_image`, `source_image`, and `body_image`), and enriched `listSavedOutputs()` with SQLite metadata.
+  - Replaced unsafe inline `onclick="..."` string attributes with `data-*` attributes and delegated/explicit DOM click listeners in `#historyDbModal` and `#outputDetailsModal` so Windows backslashes and quoted prompts never corrupt event handlers.
+  - Fixed `.multi-img-thumb` fixed-height CSS clipping so role dropdowns and `from <origin_filename>` labels display cleanly.
+
+### Added
+- **Foldable Input & Parameter Sections (`#toggle*Btn`) + Mask Reordering:**
+  - Moved `#maskCanvasGroup` ("Paint Region / Inpaint Mask") below `#multiImageGroup` ("Reference Images") instead of appearing directly under the Prompt box, and defaulted it to folded unless a model requires `mask_image` (e.g. `wavespeed-ai/flux-fill-dev`).
+  - Added `▲`/`▼` collapse toggles on Negative Prompt, Source Image, Secondary Image, Reference Images, Paint Region, Source Video, Reference Videos, Reference Audios, and Generation Parameters (`#settingsSection`).
+- **Quick-Run Shortcut Buttons (`⚡ Run • $price`):**
+  - Added live-priced Quick-Run buttons in the Prompt (`#quickRunPromptBtn`), Source Image (`#quickRunSourceBtn`), and Reference Images (`#quickRunRefsBtn`) headers so generations can be dispatched without scrolling to the footer.
+- **Unconfigured AppData Runtime Unification:**
+  - `server.js` (`resolveDefaultUserDataDir`) now auto-resolves unconfigured script runs (`node server.js`, `Launch Studio.cmd`, `npm start`) to `%APPDATA%\wavespeed-studio` on Windows (and `%XDG_CONFIG_HOME%\wavespeed-studio` / `~/.config/wavespeed-studio` elsewhere) unless mock key `wsk_mock_*` is active, keeping browser studio (`localhost:3000`) and Electron desktop unified on one SQLite DB and `D:\wvst` outputs folder.
+
 ## [1.3.0] - 2026-11-16
 ### Fixed
 - **Source Image Reuse Restoration Bug:**

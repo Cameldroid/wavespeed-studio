@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WaveSpeed Studio — AI Image & Video Studio</title>
   <link rel="icon" type="image/png" href="/assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=1.3.0">
+  <link rel="stylesheet" href="style.css?v=1.3.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -207,9 +207,10 @@
           <!-- Text Prompt -->
           <div class="input-group" id="promptGroup" style="position: relative;">
             <div class="input-header">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
                 <label for="promptInput">Prompt <span class="required">*</span></label>
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <button type="button" class="btn-tiny btn-quick-run" id="quickRunPromptBtn" title="Run generation now (Ctrl+Enter)">⚡ Run <span class="quick-run-price" id="quickRunPromptPrice">• $0.000</span></button>
                   <button type="button" class="btn-tiny" id="openFacePromptsBtn" title="Browse &amp; save specialized Face Study prompts (Anatomy, Lighting, Expressions, Angles)">📚 Study Prompts</button>
                   <button type="button" class="btn-tiny" id="openPromptHistoryBtn" title="Browse &amp; reuse previous prompts from your database">🕒 Previous Prompts</button>
                 </div>
@@ -267,110 +268,85 @@
           <!-- Negative Prompt (for Wan / V2V / models exposing negative_prompt) -->
           <div class="input-group" id="negativePromptGroup" style="display: none;">
             <div class="input-header">
-              <label for="negativePromptInput">Negative Prompt</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label for="negativePromptInput">Negative Prompt</label>
+                <button type="button" class="group-collapse-btn" id="toggleNegativePromptBtn" aria-expanded="true" title="Fold / expand Negative Prompt">
+                  <span id="negativePromptChevron">▲</span>
+                </button>
+              </div>
               <span class="subtext">What to avoid (blur, morphing, extra limbs...)</span>
             </div>
-            <textarea id="negativePromptInput" rows="2" placeholder="Optional things to avoid in generation..."></textarea>
+            <div class="collapsible-group-body" id="negativePromptBody">
+              <textarea id="negativePromptInput" rows="2" placeholder="Optional things to avoid in generation..."></textarea>
+            </div>
           </div>
 
           <!-- Image Upload / Edit Target -->
           <div class="input-group" id="imageInputGroup">
             <div class="input-header">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
                 <label>Source Image <span id="imgRequiredBadge" class="required">*</span></label>
-                <button type="button" class="btn-tiny" id="cropSourceImageBtn" title="Crop face/region locally &amp; save to cropped_imgs folder ($0.00)">✂️ Crop Face</button>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                  <button type="button" class="btn-tiny btn-quick-run" id="quickRunSourceBtn" title="Run generation now (Ctrl+Enter)">⚡ Run <span class="quick-run-price" id="quickRunSourcePrice">• $0.000</span></button>
+                  <button type="button" class="btn-tiny" id="cropSourceImageBtn" title="Crop face/region locally &amp; save to cropped_imgs folder ($0.00)">✂️ Crop Face</button>
+                  <button type="button" class="group-collapse-btn" id="toggleImageInputBtn" aria-expanded="true" title="Fold / expand Source Image">
+                    <span id="imageInputChevron">▲</span>
+                  </button>
+                </div>
               </div>
               <span class="subtext">Upload, drag & drop, or paste image URL</span>
             </div>
 
-            <div class="upload-dropzone" id="imageDropzone">
-              <input type="file" id="imageFileInput" accept="image/*" class="file-hidden">
-              <div class="dropzone-content" id="dropzonePrompt">
-                <span class="drop-icon">📁</span>
-                <p>Drag & drop image here, or <span class="browse-link">browse</span></p>
-                <small>Supports PNG, JPG, WEBP</small>
+            <div class="collapsible-group-body" id="imageInputBody">
+              <div class="upload-dropzone" id="imageDropzone">
+                <input type="file" id="imageFileInput" accept="image/*" class="file-hidden">
+                <div class="dropzone-content" id="dropzonePrompt">
+                  <span class="drop-icon">📁</span>
+                  <p>Drag & drop image here, or <span class="browse-link">browse</span></p>
+                  <small>Supports PNG, JPG, WEBP</small>
+                </div>
+                <div class="dropzone-preview" id="imagePreviewContainer" style="display: none;">
+                  <img id="imagePreview" alt="Upload preview">
+                  <button type="button" class="remove-upload-btn" id="removeImageBtn">✕</button>
+                </div>
               </div>
-              <div class="dropzone-preview" id="imagePreviewContainer" style="display: none;">
-                <img id="imagePreview" alt="Upload preview">
-                <button type="button" class="remove-upload-btn" id="removeImageBtn">✕</button>
-              </div>
-            </div>
 
-            <div class="url-input-row">
-              <input type="text" id="imageUrlInput" placeholder="Or paste direct image URL...">
-              <button type="button" class="btn-sm" id="loadUrlBtn">Load</button>
+              <div class="url-input-row">
+                <input type="text" id="imageUrlInput" placeholder="Or paste direct image URL...">
+                <button type="button" class="btn-sm" id="loadUrlBtn">Load</button>
+              </div>
             </div>
           </div>
 
-          <!-- Optional Last Frame Image (End Frame for I2V / Interpolation models) -->
+          <!-- Optional Last Frame Image (End Frame for I2V / Interpolation / Swap Face models) -->
           <div class="input-group" id="lastImageGroup" style="display: none;">
             <div class="input-header">
-              <label>Optional End Frame (Last Image)</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label>Optional End Frame (Last Image)</label>
+                <button type="button" class="group-collapse-btn" id="toggleLastImageBtn" aria-expanded="true" title="Fold / expand Secondary Image">
+                  <span id="lastImageChevron">▲</span>
+                </button>
+              </div>
               <span class="subtext">Target pose/frame to transition into by video end</span>
             </div>
 
-            <div class="upload-dropzone upload-dropzone-compact" id="lastImageDropzone">
-              <input type="file" id="lastImageFileInput" accept="image/*" class="file-hidden">
-              <div class="dropzone-content" id="lastDropzonePrompt">
-                <span class="drop-icon">🏁</span>
-                <p>Optional end-frame image, or <span class="browse-link">browse</span></p>
-              </div>
-              <div class="dropzone-preview" id="lastImagePreviewContainer" style="display: none;">
-                <img id="lastImagePreview" alt="End frame preview">
-                <button type="button" class="remove-upload-btn" id="removeLastImageBtn">✕</button>
-              </div>
-            </div>
-
-            <div class="url-input-row">
-              <input type="text" id="lastImageUrlInput" placeholder="Or paste end-frame image URL...">
-              <button type="button" class="btn-sm" id="loadLastUrlBtn">Load</button>
-            </div>
-          </div>
-
-          <!-- Inpainting / Paint Region Mask Canvas Editor -->
-          <div class="input-group" id="maskCanvasGroup" style="display: none;">
-            <div class="input-header">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                <label>🖌️ Paint Region / Mask to Edit</label>
-                <button type="button" class="btn-tiny" id="switchInpaintModelBtn" title="Switch to Flux Fill Dev for native precision mask inpainting">⚡ Use Flux Fill Inpaint</button>
-              </div>
-              <span class="subtext" id="maskCanvasSubtext">Paint over only the region you want edited (white highlight = edit zone)</span>
-            </div>
-            <div class="canvas-wrapper">
-              <div class="canvas-container" id="canvasContainer">
-                <img id="maskBgImage" class="mask-bg-image" alt="Paint guide" style="display: none;">
-                <canvas id="maskCanvas"></canvas>
-              </div>
-              <div class="canvas-toolbar">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                  <button type="button" class="btn-tiny active" id="maskBrushModeBtn" title="Toggle between Paint and Erase">🖌️ Paint</button>
-                  <label>Size: <input type="range" id="brushSize" min="6" max="80" value="28"></label>
+            <div class="collapsible-group-body" id="lastImageBody">
+              <div class="upload-dropzone upload-dropzone-compact" id="lastImageDropzone">
+                <input type="file" id="lastImageFileInput" accept="image/*" class="file-hidden">
+                <div class="dropzone-content" id="lastDropzonePrompt">
+                  <span class="drop-icon">🏁</span>
+                  <p>Optional end-frame image, or <span class="browse-link">browse</span></p>
                 </div>
-                <button type="button" class="btn-sm" id="clearMaskBtn">Clear Mask</button>
+                <div class="dropzone-preview" id="lastImagePreviewContainer" style="display: none;">
+                  <img id="lastImagePreview" alt="End frame preview">
+                  <button type="button" class="remove-upload-btn" id="removeLastImageBtn">✕</button>
+                </div>
               </div>
-              <label class="checkbox-label" id="maskLockRow" style="display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--text-muted); cursor: pointer;">
-                <input type="checkbox" id="maskLockUnpaintedCheckbox" checked>
-                <span>🔒 Lock unpainted pixels on non-mask models (feathered local composite)</span>
-              </label>
-            </div>
-          </div>
 
-          <!-- Video Upload / Target (for Video Edit / Extend / Video Upscaler models) -->
-          <div class="input-group" id="videoInputGroup" style="display: none;">
-            <div class="input-header">
-              <label>Source Video <span class="required">*</span></label>
-              <span class="subtext">Upload MP4/WEBM/MOV or paste video URL</span>
-            </div>
-            <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="file-hidden">
-            <div class="upload-dropzone" id="videoDropzone">
-              <span class="drop-icon">🎥</span>
-              <p>Click or drag video file here</p>
-              <small>Supports MP4, WEBM, MOV</small>
-            </div>
-            <div class="url-input-row">
-              <input type="text" id="videoUrlInput" placeholder="Or paste video URL...">
-              <button type="button" class="btn-secondary-sm" id="openSourceVideoTimelineBtn" title="Open loaded Source Video in the Frame Timeline Picker" style="display: none;">🎞️ Timeline</button>
-              <button type="button" class="btn-secondary-sm" id="clearSourceVideoBtn" title="Clear loaded Source Video and reset duration pricing" style="display: none;">✕ Clear</button>
+              <div class="url-input-row">
+                <input type="text" id="lastImageUrlInput" placeholder="Or paste end-frame image URL...">
+                <button type="button" class="btn-sm" id="loadLastUrlBtn">Load</button>
+              </div>
             </div>
           </div>
 
@@ -378,76 +354,160 @@
           <div class="input-group" id="multiImageGroup" style="display: none;">
             <div class="input-header">
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
-                <label>Reference Images (Up to 10)</label>
-                <span class="ref-cost-badge" id="multiImageCostBadge"></span>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <label>Reference Images (Up to 10)</label>
+                  <span class="ref-count-pill" id="multiImageCountBadge">0 loaded</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span class="ref-cost-badge" id="multiImageCostBadge"></span>
+                  <button type="button" class="btn-tiny btn-quick-run" id="quickRunRefsBtn" title="Run generation now (Ctrl+Enter)">⚡ Run <span class="quick-run-price" id="quickRunRefsPrice">• $0.000</span></button>
+                  <button type="button" class="group-collapse-btn" id="toggleMultiImageBtn" aria-expanded="true" title="Fold / expand Reference Images">
+                    <span id="multiImageChevron">▲</span>
+                  </button>
+                </div>
               </div>
               <span class="subtext">Drag &amp; drop, browse, or paste URLs — referenced as Image 1, Image 2...</span>
             </div>
-            <div class="face-study-bar" id="faceStudyBar">
-              <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill model-aware multi-photo Face Study prompt (&lt;Picture N&gt; for MiniMax H3, Image N for Seedream/Qwen)">🧬 Face Study Prompt</button>
-              <button type="button" class="btn-tiny" id="openSavedCropsBtn" title="Open Face Crop Studio &amp; browse saved crops in cropped_imgs">✂️ Crop / Saved Crops</button>
-              <button type="button" class="btn-tiny" id="buildFaceSheetBtn" title="Locally stitch attached photos into one 2x2 / 3x2 reference sheet ($0.00 Canvas — saves 46% on Seedream 5.5)">🧩 $0.00 Face Sheet</button>
-              <button type="button" class="btn-tiny" id="preUploadFacePackBtn" title="Cache local files onto WaveSpeed CDN once ($0.00) before saving Face Pack">☁️ Cache URLs ($0)</button>
-              <button type="button" class="btn-tiny" id="saveFacePackBtn" title="Save current uploaded reference photos as a reusable Face Pack (1-click load, $0 re-upload)">👤 Save Face Pack</button>
-              <select id="facePackSelect" class="face-pack-select" title="Load a saved multi-photo Face / Character Pack">
-                <option value="">👤 Saved Face Packs...</option>
-              </select>
-              <button type="button" class="btn-tiny" id="deleteFacePackBtn" title="Delete selected Face Pack" style="display: none;">🗑️</button>
-              <button type="button" class="btn-tiny" id="sendRefsToPipelineBtn" title="Send current reference photos / Face Pack to Pipeline tab">⛓️ → Pipeline</button>
+            <div class="collapsible-group-body" id="multiImageBody">
+              <div class="face-study-bar" id="faceStudyBar">
+                <button type="button" class="btn-tiny" id="insertFaceStudyPromptBtn" title="Pre-fill model-aware multi-photo Face Study prompt (&lt;Picture N&gt; for MiniMax H3, Image N for Seedream/Qwen)">🧬 Face Study Prompt</button>
+                <button type="button" class="btn-tiny" id="openSavedCropsBtn" title="Open Face Crop Studio &amp; browse saved crops in cropped_imgs">✂️ Crop / Saved Crops</button>
+                <button type="button" class="btn-tiny" id="buildFaceSheetBtn" title="Locally stitch attached photos into one 2x2 / 3x2 reference sheet ($0.00 Canvas — saves 46% on Seedream 5.5)">🧩 $0.00 Face Sheet</button>
+                <button type="button" class="btn-tiny" id="preUploadFacePackBtn" title="Cache local files onto WaveSpeed CDN once ($0.00) before saving Face Pack">☁️ Cache URLs ($0)</button>
+                <button type="button" class="btn-tiny" id="saveFacePackBtn" title="Save current uploaded reference photos as a reusable Face Pack (1-click load, $0 re-upload)">👤 Save Face Pack</button>
+                <select id="facePackSelect" class="face-pack-select" title="Load a saved multi-photo Face / Character Pack">
+                  <option value="">👤 Saved Face Packs...</option>
+                </select>
+                <button type="button" class="btn-tiny" id="deleteFacePackBtn" title="Delete selected Face Pack" style="display: none;">🗑️</button>
+                <button type="button" class="btn-tiny" id="sendRefsToPipelineBtn" title="Send current reference photos / Face Pack to Pipeline tab">⛓️ → Pipeline</button>
+              </div>
+              <div class="upload-dropzone upload-dropzone-compact" id="multiImageDropzone">
+                <span class="drop-icon">🖼️</span>
+                <p>Drag &amp; drop reference image(s) here, or <span class="browse-link">browse</span></p>
+                <small>Supports PNG, JPG, WEBP — drop multiple files or drag from gallery</small>
+              </div>
+              <div class="multi-img-grid" id="multiImgGrid"></div>
+              <div class="url-input-row">
+                <input type="text" id="multiImageUrlInput" placeholder="Paste reference image URL...">
+                <button type="button" class="btn-secondary-sm" id="addMultiImageUrlBtn">Add URL</button>
+                <button type="button" class="btn-secondary-sm" id="addMoreImagesBtn">+ Upload Image(s)</button>
+              </div>
+              <input type="file" id="multiFileInput" accept="image/*" multiple class="file-hidden">
             </div>
-            <div class="upload-dropzone upload-dropzone-compact" id="multiImageDropzone">
-              <span class="drop-icon">🖼️</span>
-              <p>Drag &amp; drop reference image(s) here, or <span class="browse-link">browse</span></p>
-              <small>Supports PNG, JPG, WEBP — drop multiple files or drag from gallery</small>
+          </div>
+
+          <!-- Inpainting / Paint Region Mask Canvas Editor (Positioned below Source/Reference Images & foldable) -->
+          <div class="input-group" id="maskCanvasGroup" style="display: none;">
+            <div class="input-header">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="timeline-collapse-btn mask-collapse-btn" id="toggleMaskCanvasBtn" aria-expanded="false" style="flex: 1; padding: 2px 0;">
+                  <span>🖌️ Paint Region / Mask to Edit <small class="timeline-free-pill">Optional</small></span>
+                  <span id="maskCanvasChevron">▼</span>
+                </button>
+                <button type="button" class="btn-tiny" id="switchInpaintModelBtn" title="Switch to Flux Fill Dev for native precision mask inpainting">⚡ Use Flux Fill Inpaint</button>
+              </div>
+              <span class="subtext" id="maskCanvasSubtext">Paint over only the region you want edited (white highlight = edit zone)</span>
             </div>
-            <div class="multi-img-grid" id="multiImgGrid"></div>
-            <div class="url-input-row">
-              <input type="text" id="multiImageUrlInput" placeholder="Paste reference image URL...">
-              <button type="button" class="btn-secondary-sm" id="addMultiImageUrlBtn">Add URL</button>
-              <button type="button" class="btn-secondary-sm" id="addMoreImagesBtn">+ Upload Image(s)</button>
+            <div class="collapsible-group-body" id="maskCanvasBody" style="display: none;">
+              <div class="canvas-wrapper">
+                <div class="canvas-container" id="canvasContainer">
+                  <img id="maskBgImage" class="mask-bg-image" alt="Paint guide" style="display: none;">
+                  <canvas id="maskCanvas"></canvas>
+                </div>
+                <div class="canvas-toolbar">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn-tiny active" id="maskBrushModeBtn" title="Toggle between Paint and Erase">🖌️ Paint</button>
+                    <label>Size: <input type="range" id="brushSize" min="6" max="80" value="28"></label>
+                  </div>
+                  <button type="button" class="btn-sm" id="clearMaskBtn">Clear Mask</button>
+                </div>
+                <label class="checkbox-label" id="maskLockRow" style="display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--text-muted); cursor: pointer;">
+                  <input type="checkbox" id="maskLockUnpaintedCheckbox" checked>
+                  <span>🔒 Lock unpainted pixels on non-mask models (feathered local composite)</span>
+                </label>
+              </div>
             </div>
-            <input type="file" id="multiFileInput" accept="image/*" multiple class="file-hidden">
+          </div>
+
+          <!-- Video Upload / Target (for Video Edit / Extend / Video Upscaler models) -->
+          <div class="input-group" id="videoInputGroup" style="display: none;">
+            <div class="input-header">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label>Source Video <span class="required">*</span></label>
+                <button type="button" class="group-collapse-btn" id="toggleVideoInputBtn" aria-expanded="true" title="Fold / expand Source Video">
+                  <span id="videoInputChevron">▲</span>
+                </button>
+              </div>
+              <span class="subtext">Upload MP4/WEBM/MOV or paste video URL</span>
+            </div>
+            <div class="collapsible-group-body" id="videoInputBody">
+              <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" class="file-hidden">
+              <div class="upload-dropzone" id="videoDropzone">
+                <span class="drop-icon">🎥</span>
+                <p>Click or drag video file here</p>
+                <small>Supports MP4, WEBM, MOV</small>
+              </div>
+              <div class="url-input-row">
+                <input type="text" id="videoUrlInput" placeholder="Or paste video URL...">
+                <button type="button" class="btn-secondary-sm" id="openSourceVideoTimelineBtn" title="Open loaded Source Video in the Frame Timeline Picker" style="display: none;">🎞️ Timeline</button>
+                <button type="button" class="btn-secondary-sm" id="clearSourceVideoBtn" title="Clear loaded Source Video and reset duration pricing" style="display: none;">✕ Clear</button>
+              </div>
+            </div>
           </div>
 
           <!-- Reference Videos (Self-upload + URLs for R2V models: Wan 3.0, Seedance 2.5, Kling 4.0, MiniMax H3) -->
           <div class="input-group" id="refVideosGroup" style="display: none;">
             <div class="input-header">
-              <label id="refVideosLabel">Reference Videos (Up to 5)</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label id="refVideosLabel">Reference Videos (Up to 5)</label>
+                <button type="button" class="group-collapse-btn" id="toggleRefVideosBtn" aria-expanded="true" title="Fold / expand Reference Videos">
+                  <span id="refVideosChevron">▲</span>
+                </button>
+              </div>
               <span class="subtext">Upload MP4/WEBM/MOV clips or paste URLs — refer to them as Video 1, Video 2...</span>
             </div>
-            <input type="file" id="refVideoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple class="file-hidden">
-            <div class="upload-dropzone upload-dropzone-compact" id="refVideoDropzone">
-              <span class="drop-icon">🎞️</span>
-              <p>Drag &amp; drop reference video clip(s), or <span class="browse-link">browse from PC</span></p>
-              <small>Supports MP4, WEBM, MOV — auto-uploads on Run</small>
+            <div class="collapsible-group-body" id="refVideosBody">
+              <input type="file" id="refVideoFileInput" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple class="file-hidden">
+              <div class="upload-dropzone upload-dropzone-compact" id="refVideoDropzone">
+                <span class="drop-icon">🎞️</span>
+                <p>Drag &amp; drop reference video clip(s), or <span class="browse-link">browse from PC</span></p>
+                <small>Supports MP4, WEBM, MOV — auto-uploads on Run</small>
+              </div>
+              <div class="url-input-row">
+                <input type="text" id="refVideoUrlInput" placeholder="Or paste reference video URL...">
+                <button type="button" class="btn-sm" id="addRefVideoUrlBtn">Add</button>
+                <button type="button" class="btn-secondary-sm" id="useActiveRefVideoBtn" title="Attach currently playing output video as a Reference Video" style="display: none;">🎬 Use Active Output</button>
+              </div>
+              <div class="ref-media-list" id="refVideosList"></div>
+              <textarea id="refVideosInput" rows="2" style="display: none;" placeholder="Paste reference video URL(s), one per line..."></textarea>
             </div>
-            <div class="url-input-row">
-              <input type="text" id="refVideoUrlInput" placeholder="Or paste reference video URL...">
-              <button type="button" class="btn-sm" id="addRefVideoUrlBtn">Add</button>
-              <button type="button" class="btn-secondary-sm" id="useActiveRefVideoBtn" title="Attach currently playing output video as a Reference Video" style="display: none;">🎬 Use Active Output</button>
-            </div>
-            <div class="ref-media-list" id="refVideosList"></div>
-            <textarea id="refVideosInput" rows="2" style="display: none;" placeholder="Paste reference video URL(s), one per line..."></textarea>
           </div>
 
           <!-- Reference Audios (for R2V / Video Edit models with reference_audios / audios) -->
           <div class="input-group" id="refAudiosGroup" style="display: none;">
             <div class="input-header">
-              <label id="refAudiosLabel">Reference Audio(s)</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label id="refAudiosLabel">Reference Audio(s)</label>
+                <button type="button" class="group-collapse-btn" id="toggleRefAudiosBtn" aria-expanded="true" title="Fold / expand Reference Audios">
+                  <span id="refAudiosChevron">▲</span>
+                </button>
+              </div>
               <span class="subtext">Drag &amp; drop audio clip(s) or paste URL (Audio 1, Audio 2...)</span>
             </div>
-            <input type="file" id="refAudioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple class="file-hidden">
-            <div class="upload-dropzone upload-dropzone-compact" id="refAudioDropzone">
-              <span class="drop-icon">🎵</span>
-              <p>Drag &amp; drop audio file(s) here, or <span class="browse-link">browse from PC</span></p>
-              <small>Supports MP3, WAV, M4A, AAC, OGG — auto-uploads on Run</small>
+            <div class="collapsible-group-body" id="refAudiosBody">
+              <input type="file" id="refAudioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple class="file-hidden">
+              <div class="upload-dropzone upload-dropzone-compact" id="refAudioDropzone">
+                <span class="drop-icon">🎵</span>
+                <p>Drag &amp; drop audio file(s) here, or <span class="browse-link">browse from PC</span></p>
+                <small>Supports MP3, WAV, M4A, AAC, OGG — auto-uploads on Run</small>
+              </div>
+              <div class="url-input-row">
+                <input type="text" id="refAudioUrlInput" placeholder="Paste audio URL or click Upload Audio...">
+                <button type="button" class="btn-sm" id="addRefAudioUrlBtn">Add</button>
+                <button type="button" class="btn-secondary-sm" id="uploadRefAudioBtn">🎵 Upload Audio</button>
+              </div>
+              <div class="ref-media-list" id="refAudiosList"></div>
             </div>
-            <div class="url-input-row">
-              <input type="text" id="refAudioUrlInput" placeholder="Paste audio URL or click Upload Audio...">
-              <button type="button" class="btn-sm" id="addRefAudioUrlBtn">Add</button>
-              <button type="button" class="btn-secondary-sm" id="uploadRefAudioBtn">🎵 Upload Audio</button>
-            </div>
-            <div class="ref-media-list" id="refAudiosList"></div>
           </div>
 
           <!-- Local Video Timeline & Frame Extractor ($0.00 local canvas capture) -->
@@ -512,13 +572,19 @@
         <!-- Generation Settings Section -->
         <section class="section-box" id="settingsSection">
           <div class="section-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-            <h3>Parameters</h3>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <h3>Parameters</h3>
+              <button type="button" class="group-collapse-btn" id="toggleSettingsSectionBtn" aria-expanded="true" title="Fold / expand Parameters">
+                <span id="settingsSectionChevron">▲</span>
+              </button>
+            </div>
             <label class="economy-toggle-pill" title="Defaults Image-to-Video, Image Edit, and Video Edit to smallest resolution/size/quality and silent audio so you can afford more video seconds">
               <input type="checkbox" id="economyDefaultsCheckbox" checked>
               <span>💸 Cheapest Non-Duration Defaults</span>
             </label>
           </div>
-          <small id="economyModeHint" style="display: block; color: var(--accent-emerald); font-size: 0.72rem; margin-bottom: 10px;">Auto-selecting lowest resolution/size/quality & silent audio on Video/Edit models (you control seconds).</small>
+          <div class="collapsible-group-body" id="settingsSectionBody">
+          <small id="economyModeHint" style="display: block; color: var(--accent-emerald); font-size: 0.72rem; margin-bottom: 4px;">Auto-selecting lowest resolution/size/quality & silent audio on Video/Edit models (you control seconds).</small>
 
           <!-- Aspect Ratio Picker -->
           <div class="param-row" id="aspectRatioRow">
@@ -709,6 +775,7 @@
             </div>
           </div>
           <small id="batchMatrixHint" style="display: none; color: var(--accent-cyan); font-size: 0.72rem; margin-top: 4px;"></small>
+          </div>
         </section>
 
         <!-- Big Launch Button & Live Affordability + Pre-Flight Safety Shield -->
@@ -1214,6 +1281,6 @@
   </div>
 
   <div class="studio-toast-container" id="studioToastContainer" aria-live="polite"></div>
-  <script src="app.js?v=1.3.0"></script>
+  <script src="app.js?v=1.3.1"></script>
 </body>
 </html>

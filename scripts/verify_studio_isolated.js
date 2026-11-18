@@ -440,6 +440,19 @@ async function runMockOutputAndServerTests() {
     });
     assert.strictEqual(traversalEncStatus, 403, 'Expected 403 on encoded traversal /outputs/..%2fserver.js');
 
+    // 3b. Test GET /api/local-file serving, extension check & missing path guard
+    const localFileResp = await realFetch(`http://127.0.0.1:${appPort}/api/local-file?path=${encodeURIComponent(savedImg[0].local_path)}`);
+    assert.strictEqual(localFileResp.status, 200);
+    assert.strictEqual(localFileResp.headers.get('content-type'), 'image/png');
+    const localFileBytes = Buffer.from(await localFileResp.arrayBuffer());
+    assert(localFileBytes.equals(tinyPng), 'Downloaded PNG bytes via /api/local-file did not match original');
+
+    const localBadExtResp = await realFetch(`http://127.0.0.1:${appPort}/api/local-file?path=${encodeURIComponent(path.join(ROOT, 'server.js'))}`);
+    assert.strictEqual(localBadExtResp.status, 403, 'Expected 403 on non-media /api/local-file extension');
+
+    const localMissingQueryResp = await realFetch(`http://127.0.0.1:${appPort}/api/local-file`);
+    assert.strictEqual(localMissingQueryResp.status, 400, 'Expected 400 when /api/local-file omits path');
+
     // 4. Test resolveLocalMediaUrl() & resolvePayloadMedia() with intercepted upload ticket (zero WaveSpeed calls!)
     global.fetch = async (url, opts) => {
       if (String(url).endsWith('/api/v3/media/uploads')) {
@@ -466,6 +479,9 @@ async function runMockOutputAndServerTests() {
     assert.strictEqual(resolvedDirect, `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
     assert.strictEqual(uploadedPayloads.length, 1);
     assert(uploadedPayloads[0].equals(tinyPng));
+
+    const resolvedViaLocalFileApi = await srvMod.resolveLocalMediaUrl(`/api/local-file?path=${encodeURIComponent(savedImg[0].local_path)}`);
+    assert.strictEqual(resolvedViaLocalFileApi, `http://127.0.0.1:${mockPort}/uploaded/mock-resolved.png`);
 
     const payload = {
       image: `http://localhost:3000${savedImg[0].local_url}`,
@@ -932,6 +948,15 @@ async function runMockDomAppTests() {
       formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
       category: 'utility', isUtility: true, isFaceOrSwap: true, isPinned: true, pinnedRank: 18,
       schema: { required: ['source_image', 'target_image'], properties: { source_image: {}, target_image: {} } }
+    },
+    {
+      model_id: 'wavespeed-ai/flux-fill-dev',
+      name: 'FLUX Fill Dev Inpaint ($0.05)',
+      base_price: 0.05, base_price_micro: 50000, effective_price: 0.05,
+      discount_rate: 100, discount_percent: 0,
+      formula: '', has_formula: true, fetched_at: Date.now(), isSpicy: false,
+      category: 'image-edit', isImageEdit: true, isPinned: false, pinnedRank: 50,
+      schema: { required: ['prompt', 'image', 'mask_image'], properties: { prompt: { type: 'string' }, image: { type: 'string' }, mask_image: { type: 'string' } } }
     }
   ];
 
@@ -1315,7 +1340,65 @@ async function runMockDomAppTests() {
   elementsById.get('galleryGroupBySourceBtn').click();
   assert(elementsById.get('galleryGroupBySourceBtn').textContent.includes('Group by Source'), 'Expected toggle click to restore Group by Source');
 
-  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, Study Prompts & Crop Modal, Pipeline 2+ steps, and Gallery source filtering & details modal)');
+  // 12. Verify Mask Placement, Collapsible Sections, Quick-Run Shortcuts, wsAppUseInput & sendToEditBtn
+  assert(
+    html.indexOf('id="multiImageGroup"') < html.indexOf('id="maskCanvasGroup"'),
+    'Expected #maskCanvasGroup to appear below #multiImageGroup in public/index.html'
+  );
+
+  while (elementsById.get('multiImgGrid').children.length > 0) {
+    elementsById.get('multiImgGrid').children[0].children[2].click();
+  }
+  elementsById.get('batchSeedsSelect').value = '1';
+  elementsById.get('batchSeedsSelect').dispatch('change');
+  elementsById.get('promptInput').value = 'single prompt';
+
+  t2iTab.click();
+  assert(
+    elementsById.get('quickRunPromptPrice').textContent.includes('$0.02') &&
+    elementsById.get('quickRunPromptPrice').textContent === elementsById.get('btnPriceBadge').textContent,
+    `Expected #quickRunPromptPrice to match #btnPriceBadge with $0.02 on H3 T2I, got ${elementsById.get('quickRunPromptPrice').textContent}`
+  );
+  await sandbox.window.wsAppUseInput('https://example.com/from-gallery.png', { filename: 'from-gallery.png' });
+  await new Promise(r => setTimeout(r, 25));
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'bytedance/seedream-v5.5/edit');
+  assert.strictEqual(elementsById.get('multiImgGrid').children.length, 1);
+  assert.strictEqual(elementsById.get('multiImageBody').style.display, 'flex');
+
+  assert.strictEqual(elementsById.get('maskCanvasBody').style.display, 'none', 'Expected mask canvas to start collapsed on Seedream Edit');
+  elementsById.get('toggleMaskCanvasBtn').click();
+  assert.strictEqual(elementsById.get('maskCanvasBody').style.display, 'flex');
+  elementsById.get('toggleMaskCanvasBtn').click();
+  assert.strictEqual(elementsById.get('maskCanvasBody').style.display, 'none');
+
+  elementsById.get('toggleSettingsSectionBtn').click();
+  assert.strictEqual(elementsById.get('settingsSectionBody').style.display, 'none');
+  elementsById.get('toggleSettingsSectionBtn').click();
+  assert.strictEqual(elementsById.get('settingsSectionBody').style.display, 'flex');
+
+  assert(
+    elementsById.get('quickRunPromptPrice').textContent.includes('$0.0266') &&
+    elementsById.get('quickRunRefsPrice').textContent.includes('$0.0266'),
+    `Expected quick-run price badges to show $0.0266, got ${elementsById.get('quickRunRefsPrice').textContent}`
+  );
+  elementsById.get('promptInput').value = 'quick run test';
+  const prevGenCalls = generateCalls;
+  elementsById.get('quickRunRefsBtn').click();
+  await new Promise(r => setTimeout(r, 30));
+  assert.strictEqual(generateCalls, prevGenCalls + 1, 'Expected #quickRunRefsBtn to dispatch generation');
+  elementsById.get('cancelTaskBtn').click();
+
+  elementsById.get('outputImageViewer').src = 'https://example.com/viewer-output.png';
+  elementsById.get('sendToEditBtn').click();
+  await new Promise(r => setTimeout(r, 25));
+  assert.strictEqual(elementsById.get('multiImgGrid').children.length, 1, 'Expected #sendToEditBtn to populate #multiImgGrid on Seedream Edit');
+
+  elementsById.get('switchInpaintModelBtn').click();
+  await new Promise(r => setTimeout(r, 25));
+  assert.strictEqual(elementsById.get('modelAutocompleteInput').value, 'wavespeed-ai/flux-fill-dev');
+  assert.strictEqual(elementsById.get('maskCanvasBody').style.display, 'flex', 'Expected mask canvas to unfold automatically on Flux Fill Dev');
+
+  console.log('[PASS] Simulated DOM integration test passed (defaults, Economy non-duration defaults, Spicy chip, Spend Guard cancel, R2V Ref Video/Audio upload & pricing, Wan 3.0 Video-Edit zero-spend payload + Ref Images + no default presets, face_image/source_image swap slots, batch prompt matrix, Faces & Swaps mixing guide, 3D angles, <Picture 1> syntax, Study Prompts & Crop Modal, Pipeline 2+ steps, Gallery source filtering & details modal, collapsible inputs, mask reorder, quick-run buttons & wsAppUseInput)');
 }
 
 async function runHistoryDatabaseTests() {

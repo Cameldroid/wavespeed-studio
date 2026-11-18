@@ -6,6 +6,7 @@ Note Modified Date:
   - "2026-11-16T15:05:00-03:00"
   - "2026-11-16T17:25:30-03:00"
   - "2026-11-16T19:58:43-03:00"
+  - "2026-11-18T11:17:54-03:00"
 ---
 
 # 2026-11-16T13:52:00-03:00 — Project Log V3 (Continuation — `v1.0.9`)
@@ -92,3 +93,8 @@ Note Modified Date:
   - `npm test` passed with `ALL_ISOLATED_TESTS_PASSED`.
   - Re-running final `npm test`, `npx electron . --smoke-test`, and secret scan before pushing `v1.3.0`.
 - **Next Action:** Push `main` + annotated tag `v1.3.0`, confirm GitHub Release build passes, and restart `http://localhost:3000`.
+
+
+# 2026-11-18T11:17:54-03:00 — Continued in V4
+
+`PROJECT LOG V3.md` exceeded the 8,000-character continuation threshold and is continued cleanly in [PROJECT LOG V4.md](PROJECT%20LOG%20V4.md).

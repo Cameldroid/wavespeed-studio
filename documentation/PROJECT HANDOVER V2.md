@@ -9,6 +9,7 @@ Note Modified Date:
   - "2026-11-16T15:05:00-03:00"
   - "2026-11-16T17:25:30-03:00"
   - "2026-11-16T19:58:43-03:00"
+  - "2026-11-18T11:17:54-03:00"
 ---
 
 # 2026-11-16T03:08:00-03:00 — Project Handover V2 (Current Authoritative State)
@@ -91,3 +92,8 @@ Note Modified Date:
   - **SHA-256 Source Checksum Identity & Group by Source:** Web Crypto SHA-256 hashes generated on upload, drag, and crop decoupling identity from volatile clipboard temp folders (`AppData\Local\Temp\Ditto\...`), backed by `#gallerySourceFilterSelect` and `🗂️ Group by Source` (`#galleryGroupBySourceBtn`) with header shortcuts.
   - **History Completeness & Predecessor Merge:** Verified all 82 generations from `D:\Cocoding\Aimagen Nsfw\database\studio_history.sqlite` exist in current 220-task database, and merged 79 missing historical generation records into `wavespeed-studio\logs\generations.jsonl`.
 - **Exact Next Action:** Copy [features/_TEMPLATE/SPEC.md](features/_TEMPLATE/SPEC.md) into `documentation/features/05-<next-feature>/SPEC.md` per [FEATURE PIPELINE.md](FEATURE%20PIPELINE.md) when starting the next feature slice.
+
+
+# 2026-11-18T11:17:54-03:00 — Continued in V3
+
+`PROJECT HANDOVER V2.md` exceeded the 8,000-character continuation threshold and is continued cleanly in [PROJECT HANDOVER V3.md](PROJECT%20HANDOVER%20V3.md).

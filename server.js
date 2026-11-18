@@ -8,9 +8,26 @@ const BASE_API = 'https://api.wavespeed.ai';
 const APP_RESOURCES_DIR = process.env.WAVESPEED_RESOURCES_DIR
   ? path.resolve(process.env.WAVESPEED_RESOURCES_DIR)
   : __dirname;
-const USER_DATA_DIR = process.env.WAVESPEED_USER_DATA_DIR
-  ? path.resolve(process.env.WAVESPEED_USER_DATA_DIR)
-  : (process.env.WAVESPEED_STUDIO_ROOT ? path.resolve(process.env.WAVESPEED_STUDIO_ROOT) : __dirname);
+function resolveDefaultUserDataDir() {
+  if (process.env.WAVESPEED_USER_DATA_DIR) {
+    return path.resolve(process.env.WAVESPEED_USER_DATA_DIR);
+  }
+  if (process.env.WAVESPEED_STUDIO_ROOT) {
+    return path.resolve(process.env.WAVESPEED_STUDIO_ROOT);
+  }
+  const isMockRun = String(process.env.WAVESPEED_API_KEY || '').startsWith('wsk_mock_');
+  if (!isMockRun && process.env.APPDATA) {
+    const appDataDir = path.join(process.env.APPDATA, 'wavespeed-studio');
+    const hasConfig = fs.existsSync(path.join(appDataDir, '.studio-config.json'));
+    const hasDb = fs.existsSync(path.join(appDataDir, 'database', 'studio_history.sqlite'));
+    if (hasConfig || hasDb) {
+      return path.resolve(appDataDir);
+    }
+  }
+  return __dirname;
+}
+
+const USER_DATA_DIR = resolveDefaultUserDataDir();
 const PROJECT_ROOT = USER_DATA_DIR;
 const ENV_FILE = path.join(PROJECT_ROOT, '.env');
 const STUDIO_CONFIG_FILE = path.join(PROJECT_ROOT, '.studio-config.json');
@@ -1160,12 +1177,27 @@ function listSavedOutputs() {
         const raw = fs.readFileSync(path.join(OUTPUTS_META_DIR, f), 'utf8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.local_path && fs.existsSync(parsed.local_path)) {
-          if ((!parsed.input_sources || parsed.input_sources.length === 0) && historyDb && parsed.task_id) {
+          if (historyDb && parsed.task_id) {
             try {
-              const row = historyDb.db.prepare('SELECT input_sources_json FROM generations WHERE task_id = ?').get(parsed.task_id);
-              if (row && row.input_sources_json) {
-                const parsedSrc = JSON.parse(row.input_sources_json);
-                if (Array.isArray(parsedSrc) && parsedSrc.length > 0) parsed.input_sources = parsedSrc;
+              const row = historyDb.db.prepare(
+                'SELECT prompt, parameters_json, input_sources_json, input_image_url, input_video_url FROM generations WHERE task_id = ?'
+              ).get(parsed.task_id);
+              if (row) {
+                if (!parsed.prompt && row.prompt) parsed.prompt = row.prompt;
+                if ((!parsed.parameters || Object.keys(parsed.parameters).length === 0) && row.parameters_json) {
+                  try {
+                    const parsedParams = JSON.parse(row.parameters_json);
+                    if (parsedParams && typeof parsedParams === 'object') parsed.parameters = parsedParams;
+                  } catch (e) {}
+                }
+                if (!parsed.input_image_url && row.input_image_url) parsed.input_image_url = row.input_image_url;
+                if (!parsed.input_video_url && row.input_video_url) parsed.input_video_url = row.input_video_url;
+                if ((!parsed.input_sources || parsed.input_sources.length === 0) && row.input_sources_json) {
+                  try {
+                    const parsedSrc = JSON.parse(row.input_sources_json);
+                    if (Array.isArray(parsedSrc) && parsedSrc.length > 0) parsed.input_sources = parsedSrc;
+                  } catch (e) {}
+                }
               }
             } catch (e) {}
           }
@@ -1229,34 +1261,79 @@ async function uploadToWavespeed(filename, mimeType, buffer) {
   };
 }
 
-// Automatically upload any local /outputs/..., localhost URLs, or local files inside OUTPUTS_DIR before sending to WaveSpeed Cloud API
-async function resolveLocalMediaUrl(val) {
-  if (!val || typeof val !== 'string') return val;
+const ALLOWED_LOCAL_MEDIA_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.webp', '.gif',
+  '.mp4', '.webm', '.mov',
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg'
+]);
+
+function extractLocalMediaDiskPath(val) {
+  if (!val || typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+
+  // Check /api/local-file?path=... or http://localhost:3000/api/local-file?path=...
+  let localQueryPath = null;
+  try {
+    if (trimmed.startsWith('/api/local-file?')) {
+      const u = new URL(trimmed, 'http://localhost');
+      localQueryPath = u.searchParams.get('path');
+    } else if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/api\/local-file\?/i.test(trimmed)) {
+      const u = new URL(trimmed);
+      localQueryPath = u.searchParams.get('path');
+    }
+  } catch (e) {}
+
+  if (localQueryPath) {
+    const resolved = path.resolve(localQueryPath);
+    const ext = path.extname(resolved).toLowerCase();
+    if (ALLOWED_LOCAL_MEDIA_EXTS.has(ext) && fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+      return resolved;
+    }
+    return null;
+  }
+
+  // Check /outputs/... relative URL or localhost /outputs/... URL
   const resolvedOutputsDir = path.resolve(OUTPUTS_DIR);
   let rel = null;
   try {
-    if (val.startsWith('/outputs/')) {
-      rel = decodeURIComponent(val.replace(/^\/outputs\//, ''));
-    } else if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/outputs\//i.test(val)) {
-      const u = new URL(val);
+    if (trimmed.startsWith('/outputs/')) {
+      rel = decodeURIComponent(trimmed.replace(/^\/outputs\//, ''));
+    } else if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/outputs\//i.test(trimmed)) {
+      const u = new URL(trimmed);
       rel = decodeURIComponent(u.pathname.replace(/^\/outputs\//, ''));
-    } else if (path.isAbsolute(val) && isPathInside(val, resolvedOutputsDir)) {
-      rel = path.relative(resolvedOutputsDir, path.resolve(val));
     }
-  } catch (e) {
-    return val;
-  }
-  if (!rel) return val;
+  } catch (e) {}
 
-  const localPath = path.resolve(OUTPUTS_DIR, rel);
-  if (!isPathInside(localPath, resolvedOutputsDir) || !fs.existsSync(localPath)) {
-    return val;
+  if (rel) {
+    const candidate = path.resolve(resolvedOutputsDir, rel);
+    if (isPathInside(candidate, resolvedOutputsDir) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+    return null;
   }
+
+  // Check absolute disk path with allowed media extension
+  if (path.isAbsolute(trimmed)) {
+    const candidate = path.resolve(trimmed);
+    const ext = path.extname(candidate).toLowerCase();
+    if (ALLOWED_LOCAL_MEDIA_EXTS.has(ext) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+// Automatically upload any local /outputs/..., /api/local-file?path=..., localhost URLs, or local media files before sending to WaveSpeed Cloud API
+async function resolveLocalMediaUrl(val) {
+  if (!val || typeof val !== 'string') return val;
+  const localPath = extractLocalMediaDiskPath(val);
+  if (!localPath) return val;
   const buffer = fs.readFileSync(localPath);
   const ext = path.extname(localPath).toLowerCase();
   const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
   const uploaded = await uploadToWavespeed(path.basename(localPath), mimeType, buffer);
-  logServerEvent('INFO', `Auto-uploaded local output asset to WaveSpeed storage: ${localPath}`, {
+  logServerEvent('INFO', `Auto-uploaded local asset to WaveSpeed storage: ${localPath}`, {
     download_url: uploaded.download_url
   });
   return uploaded.download_url;
@@ -1264,7 +1341,7 @@ async function resolveLocalMediaUrl(val) {
 
 async function resolvePayloadMedia(payload) {
   if (!payload || typeof payload !== 'object') return payload;
-  const singleKeys = ['image', 'mask_image', 'markup_image', 'video', 'audio', 'last_image', 'face_image'];
+  const singleKeys = ['image', 'mask_image', 'markup_image', 'video', 'audio', 'last_image', 'face_image', 'target_image', 'source_image', 'body_image'];
   for (const k of singleKeys) {
     if (typeof payload[k] === 'string' && payload[k]) {
       payload[k] = await resolveLocalMediaUrl(payload[k]);
@@ -1626,6 +1703,28 @@ const server = http.createServer(async (req, res) => {
         explorer_launched: explorerLaunched,
         explorer_error: explorerError
       });
+    }
+
+    if (pathname === '/api/local-file' && req.method === 'GET') {
+      const rawPath = parsedUrl.searchParams.get('path') || '';
+      if (!rawPath.trim()) {
+        return sendJson(res, 400, { error: 'path query parameter is required' });
+      }
+      const resolved = path.resolve(rawPath.trim());
+      const ext = path.extname(resolved).toLowerCase();
+      if (!ALLOWED_LOCAL_MEDIA_EXTS.has(ext)) {
+        return sendJson(res, 403, { error: 'Forbidden: unsupported file extension' });
+      }
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+        return sendJson(res, 404, { error: 'File not found' });
+      }
+      res.writeHead(200, {
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'private, max-age=300'
+      });
+      fs.createReadStream(resolved).pipe(res);
+      return;
     }
 
     if (pathname === '/api/upload' && req.method === 'POST') {
